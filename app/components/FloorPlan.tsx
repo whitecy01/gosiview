@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { User, Calendar, X } from "lucide-react";
-import { generateRoomsForFloor, Room } from "./floor-plans/shared";
+import { getRoomsByFloor, type FloorNumber, type Room } from "../lib/mock-data";
 import Floor1 from "./floor-plans/Floor1";
 import Floor2 from "./floor-plans/Floor2";
 import Floor3 from "./floor-plans/Floor3";
@@ -11,16 +11,7 @@ import Floor4 from "./floor-plans/Floor4";
 import Floor5 from "./floor-plans/Floor5";
 import Floor6 from "./floor-plans/Floor6";
 
-const ALL_MOCK_ROOMS = {
-  1: generateRoomsForFloor(1),
-  2: generateRoomsForFloor(2),
-  3: generateRoomsForFloor(3),
-  4: generateRoomsForFloor(4),
-  5: generateRoomsForFloor(5),
-  6: generateRoomsForFloor(6),
-};
-
-const REAL_FLOOR_PLANS: Partial<Record<1 | 2 | 3 | 4 | 5 | 6, { src: string; alt: string }>> = {
+const REAL_FLOOR_PLANS: Partial<Record<FloorNumber, { src: string; alt: string }>> = {
   1: {
     src: "/floor-plans/1f-plan.png",
     alt: "1층 실제 도면",
@@ -49,8 +40,8 @@ const REAL_FLOOR_PLANS: Partial<Record<1 | 2 | 3 | 4 | 5 | 6, { src: string; alt
 const FLOOR_PLAN_PDF_SRC = "/floor-plans/spacehorim-floorplan.pdf";
 
 export default function FloorPlan() {
-  const [currentFloor, setCurrentFloor] = useState<1|2|3|4|5|6>(1);
-  const rooms = ALL_MOCK_ROOMS[currentFloor];
+  const [currentFloor, setCurrentFloor] = useState<FloorNumber>(1);
+  const rooms = getRoomsByFloor(currentFloor);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [isRealPlanOpen, setIsRealPlanOpen] = useState(false);
   const currentRealPlan = REAL_FLOOR_PLANS[currentFloor];
@@ -97,7 +88,7 @@ export default function FloorPlan() {
               <button
                 key={floor}
                 onClick={() => {
-                  setCurrentFloor(floor as 1|2|3|4|5|6);
+                  setCurrentFloor(floor as FloorNumber);
                   setSelectedRoom(null); // Reset selection on floor change
                 }}
                 className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${

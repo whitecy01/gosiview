@@ -1,7 +1,10 @@
 import FloorPlan from "./components/FloorPlan";
+import { getDashboardStats } from "./lib/mock-data";
 // import LedgerList from "./components/LedgerList";
 
 export default function Home() {
+  const stats = getDashboardStats();
+
   return (
     <main className="w-full">
       <div className="mb-6 flex flex-col items-start justify-between sm:flex-row sm:items-center">
@@ -18,10 +21,11 @@ export default function Home() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { title: "총 입실자 수", value: "42명", subtitle: "85% 입실률" },
+          { title: "총 입실자 수", value: `${stats.occupiedRooms}명`, subtitle: `${stats.occupancyRate}% 입실률` },
           /* { title: "이번 달 총 매출", value: "₩12.5M", subtitle: "당월 기준" },
           { title: "이번 달 미납 현황", value: "3건", subtitle: "총 ₩1.2M 미납" }, */
-          { title: "현재 공실", value: "8개", subtitle: "즉시 입실 가능" },
+          { title: "현재 공실", value: `${stats.vacantRooms}개`, subtitle: "즉시 입실 가능" },
+          { title: "유지보수", value: `${stats.maintenanceRooms}개`, subtitle: "점검 필요 방" },
         ].map((stat, idx) => (
           <div key={idx} className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400">{stat.title}</h3>

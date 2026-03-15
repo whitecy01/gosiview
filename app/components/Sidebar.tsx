@@ -1,4 +1,4 @@
-import { Building2, LayoutDashboard, Settings, Users, LogOut, BookOpen } from 'lucide-react';
+import { Building2, LayoutDashboard, Settings, Users, LogOut } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Sidebar() {
