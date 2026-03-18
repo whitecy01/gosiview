@@ -146,9 +146,22 @@ export default function FloorPlan() {
                   <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gray-800">
                     <User className="h-5 w-5 text-gray-400" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm text-gray-400">입실자</p>
-                    <p className="font-medium text-white">{selectedRoom.resident}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="font-medium text-white">{selectedRoom.resident}</p>
+                      {selectedRoom.gender && (
+                        <span
+                          className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                          style={{
+                            backgroundColor: selectedRoom.gender === '남' ? 'rgba(96,165,250,0.2)' : 'rgba(244,114,182,0.2)',
+                            color: selectedRoom.gender === '남' ? '#93c5fd' : '#f9a8d4',
+                          }}
+                        >
+                          {selectedRoom.gender}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -162,6 +175,16 @@ export default function FloorPlan() {
                     <Calendar className="h-4 w-4 text-gray-500" />
                     <span className="text-gray-400 w-24">퇴실일:</span>
                     <span className="text-white font-medium">{selectedRoom.moveOutDate}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <User className="h-4 w-4 text-gray-500" />
+                    <span className="text-gray-400 w-24">나이:</span>
+                    <span className="text-white font-medium">{selectedRoom.age}세</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="h-4 w-4 flex items-center justify-center text-gray-500 text-xs">₩</span>
+                    <span className="text-gray-400 w-24">월세:</span>
+                    <span className="text-white font-medium">{selectedRoom.monthlyRent}</span>
                   </div>
                 </div>
 

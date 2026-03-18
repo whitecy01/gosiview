@@ -8,6 +8,8 @@ export type Room = {
   floor: FloorNumber;
   status: RoomStatus;
   resident: string | null;
+  gender: '남' | '여' | null;
+  age: number | null;
   moveInDate: string | null;
   moveOutDate: string | null;
   monthlyRent: string | null;
@@ -126,6 +128,8 @@ function buildRoom(id: string, occupiedIndex: number): Room {
       floor,
       status,
       resident: null,
+      gender: null,
+      age: null,
       moveInDate: null,
       moveOutDate: null,
       monthlyRent: null,
@@ -148,6 +152,8 @@ function buildRoom(id: string, occupiedIndex: number): Room {
     floor,
     status,
     resident: getResidentName(occupiedIndex),
+    gender: occupiedIndex % 2 === 0 ? '남' : '여',
+    age: 20 + ((roomNumber * 3 + occupiedIndex * 7) % 16),
     moveInDate: `2025-${moveInMonth}-${moveInDay}`,
     moveOutDate: `2026-${moveOutMonth}-${moveOutDay === "00" ? "01" : moveOutDay}`,
     monthlyRent: getMonthlyRent(roomNumber),
