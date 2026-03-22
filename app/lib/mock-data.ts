@@ -1,12 +1,105 @@
 export type FloorNumber = 1 | 2 | 3 | 4 | 5 | 6;
 export type RoomStatus = "occupied" | "vacant" | "maintenance";
 export type PaymentStatus = "paid" | "upcoming" | "overdue";
+export type RoomType = "Cozy" | "Standard A-1" | "Standard A-1 +" | "Standard A-2" | "Standard A-2 +" | "Standard A-2 (넓은 사이즈)" | "Standard A-3" | "Standard B-1" | "Standard B-2" | "Deluxe A" | "Deluxe B";
+
+const ROOM_TYPE_BY_ID: Record<string, RoomType> = {
+  "101": "Standard A-1", "102": "Standard A-1", "103": "Standard A-1", "104": "Standard A-1", "105": "Standard A-1",
+  "201": "Standard A-1 +", "202": "Standard A-1", "203": "Standard A-1", "204": "Standard A-1", "205": "Standard A-1",
+  "206": "Standard A-1", "207": "Standard A-2 (넓은 사이즈)", "208": "Standard A-2", "209": "Standard A-2", "210": "Standard A-2",
+  "211": "Standard A-2 +", "212": "Standard A-3", "213": "Standard A-2 (넓은 사이즈)",
+  "301": "Standard A-1 +", "302": "Standard A-1", "303": "Standard A-1", "304": "Standard A-1", "305": "Standard A-1",
+  "306": "Standard A-1", "307": "Standard A-2 (넓은 사이즈)", "308": "Standard A-2", "309": "Standard A-2", "310": "Standard A-2",
+  "311": "Standard A-2 +", "312": "Standard A-3", "313": "Standard A-2 (넓은 사이즈)",
+  "401": "Standard B-1", "402": "Standard B-1", "403": "Standard B-1", "404": "Standard B-2", "405": "Standard B-2",
+  "406": "Standard B-2", "407": "Deluxe B", "408": "Standard B-2",
+  "501": "Standard A-3", "502": "Standard A-3", "503": "Standard A-3", "504": "Standard A-3", "505": "Standard A-3",
+  "506": "Deluxe A", "507": "Standard A-3",
+  "601": "Cozy", "602": "Cozy", "603": "Cozy", "604": "Cozy", "605": "Cozy", "606": "Standard A-3", "607": "Standard A-3",
+};
+
+export type RoomTypeInfo = {
+  price: number;
+  amenities: string[];
+  illustration: string | null;
+};
+
+export const ROOM_TYPE_INFO: Record<RoomType, RoomTypeInfo> = {
+  "Cozy": {
+    price: 650000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: null,
+  },
+  "Standard A-1": {
+    price: 700000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/standard-a.png",
+  },
+  "Standard A-1 +": {
+    price: 700000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/standard-a.png",
+  },
+  "Standard A-2": {
+    price: 720000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/standard-a.png",
+  },
+  "Standard A-2 +": {
+    price: 720000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/standard-a.png",
+  },
+  "Standard A-2 (넓은 사이즈)": {
+    price: 720000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/standard-a.png",
+  },
+  "Standard A-3": {
+    price: 850000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/standard-a.png",
+  },
+  "Standard B-1": {
+    price: 780000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/standard-b.png",
+  },
+  "Standard B-2": {
+    price: 850000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/standard-b.png",
+  },
+  "Deluxe A": {
+    price: 850000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/deluxe-a.png",
+  },
+  "Deluxe B": {
+    price: 850000,
+    amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
+    illustration: "/room-types/deluxe-b.png",
+  },
+};
+
+const ROOM_TYPE_PRICE: Record<RoomType, number> = Object.fromEntries(
+  Object.entries(ROOM_TYPE_INFO).map(([k, v]) => [k, v.price])
+) as Record<RoomType, number>;
+
+export type PaymentHistoryEntry = {
+  month: string;       // "2025-10"
+  paidAt: string | null; // "2025-10-05" or null
+  amount: string;
+  status: PaymentStatus;
+};
 
 export type Room = {
   id: string;
   name: string;
   floor: FloorNumber;
   status: RoomStatus;
+  roomType: RoomType;
+  roomPrice: string;
   resident: string | null;
   gender: '남' | '여' | null;
   age: number | null;
@@ -17,6 +110,7 @@ export type Room = {
   paidAt: string | null;
   paymentStatus: PaymentStatus | null;
   rentStatus: string;
+  paymentHistory: PaymentHistoryEntry[];
 };
 
 const FLOOR_ROOM_IDS: Record<FloorNumber, string[]> = {
@@ -95,10 +189,6 @@ function getResidentName(index: number) {
   return RESIDENT_NAMES[index % RESIDENT_NAMES.length];
 }
 
-function getMonthlyRent(roomNumber: number) {
-  const amount = 390000 + (roomNumber % 5) * 20000;
-  return `₩${amount.toLocaleString("ko-KR")}`;
-}
 
 function getPaymentStatus(roomNumber: number): PaymentStatus {
   if (roomNumber % 11 === 0) return "overdue";
@@ -106,14 +196,44 @@ function getPaymentStatus(roomNumber: number): PaymentStatus {
   return "paid";
 }
 
-function getPaidMonth(paymentStatus: PaymentStatus) {
-  return paymentStatus === "upcoming" ? "2026년 4월" : "2026년 3월";
+function getPaidMonth(paymentStatus: PaymentStatus, roomNumber: number) {
+  const day = String((roomNumber % 20) + 1).padStart(2, "0");
+  return paymentStatus === "upcoming" ? `2026-04-${day}` : `2026-03-${day}`;
 }
 
 function getPaidAt(paymentStatus: PaymentStatus, roomNumber: number) {
   if (paymentStatus === "overdue") return "미납";
-  if (paymentStatus === "upcoming") return `예정: 2026-03-${String((roomNumber % 9) + 20).padStart(2, "0")}`;
+  if (paymentStatus === "upcoming") return `2026-03-${String((roomNumber % 9) + 20).padStart(2, "0")}`;
   return `2026-03-${String((roomNumber % 9) + 1).padStart(2, "0")}`;
+}
+
+const HISTORY_MONTHS = [
+  { year: 2025, month: 10 },
+  { year: 2025, month: 11 },
+  { year: 2025, month: 12 },
+  { year: 2026, month: 1 },
+  { year: 2026, month: 2 },
+  { year: 2026, month: 3 },
+];
+
+function buildPaymentHistory(roomNumber: number, monthlyRent: string, currentStatus: PaymentStatus): PaymentHistoryEntry[] {
+  const payDay = String((roomNumber % 9) + 1).padStart(2, "0");
+  return HISTORY_MONTHS.map(({ year, month }, i) => {
+    const monthStr = String(month).padStart(2, "0");
+    const isLast = i === HISTORY_MONTHS.length - 1;
+    let status: PaymentStatus;
+    if (isLast) {
+      status = currentStatus;
+    } else {
+      status = (roomNumber * 7 + i * 3) % 17 === 0 ? "overdue" : "paid";
+    }
+    return {
+      month: `${year}-${monthStr}`,
+      paidAt: status === "paid" ? `${year}-${monthStr}-${payDay}` : null,
+      amount: monthlyRent,
+      status,
+    };
+  });
 }
 
 function buildRoom(id: string, occupiedIndex: number): Room {
@@ -121,12 +241,17 @@ function buildRoom(id: string, occupiedIndex: number): Room {
   const roomNumber = Number(id);
   const status = getStatus(id);
 
+  const roomType = ROOM_TYPE_BY_ID[id] ?? "Standard A-1";
+  const roomPrice = `₩${ROOM_TYPE_PRICE[roomType].toLocaleString("ko-KR")}`;
+
   if (status !== "occupied") {
     return {
       id,
       name: `${floor}층 ${id.slice(1)}호`,
       floor,
       status,
+      roomType,
+      roomPrice,
       resident: null,
       gender: null,
       age: null,
@@ -137,6 +262,7 @@ function buildRoom(id: string, occupiedIndex: number): Room {
       paidAt: null,
       paymentStatus: null,
       rentStatus: status === "maintenance" ? "maintenance" : "vacant",
+      paymentHistory: [],
     };
   }
 
@@ -151,16 +277,19 @@ function buildRoom(id: string, occupiedIndex: number): Room {
     name: `${floor}층 ${id.slice(1)}호`,
     floor,
     status,
+    roomType,
+    roomPrice,
     resident: getResidentName(occupiedIndex),
     gender: occupiedIndex % 2 === 0 ? '남' : '여',
     age: 20 + ((roomNumber * 3 + occupiedIndex * 7) % 16),
     moveInDate: `2025-${moveInMonth}-${moveInDay}`,
     moveOutDate: `2026-${moveOutMonth}-${moveOutDay === "00" ? "01" : moveOutDay}`,
-    monthlyRent: getMonthlyRent(roomNumber),
-    paidMonth: getPaidMonth(paymentStatus),
+    monthlyRent: roomPrice,
+    paidMonth: getPaidMonth(paymentStatus, roomNumber),
     paidAt: getPaidAt(paymentStatus, roomNumber),
     paymentStatus,
     rentStatus: paymentStatus === "overdue" ? "overdue" : "paid",
+    paymentHistory: buildPaymentHistory(roomNumber, roomPrice, paymentStatus),
   };
 }
 
@@ -195,6 +324,7 @@ export function getDashboardStats() {
   const maintenanceRooms = ALL_ROOMS.filter((room) => room.status === "maintenance").length;
 
   return {
+    totalRooms: ALL_ROOMS.length,
     occupiedRooms,
     vacantRooms,
     maintenanceRooms,

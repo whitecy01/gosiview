@@ -1,11 +1,14 @@
-import { Bell, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
+'use client';
+
+import { Bell, PanelLeftClose, PanelLeftOpen, Search, UserPlus } from 'lucide-react';
 
 interface HeaderProps {
   collapsed: boolean;
   onToggle: () => void;
+  onNewResident: () => void;
 }
 
-export default function Header({ collapsed, onToggle }: HeaderProps) {
+export default function Header({ collapsed, onToggle, onNewResident }: HeaderProps) {
   return (
     <header className={`fixed top-0 z-30 border-b border-[#2A2A2A] bg-[#0A0A0A]/80 backdrop-blur-md transition-all duration-300 ${collapsed ? 'left-16' : 'left-64'} right-0`}>
       <div className="flex h-16 items-center justify-between px-4 lg:px-6">
@@ -41,6 +44,14 @@ export default function Header({ collapsed, onToggle }: HeaderProps) {
 
         {/* Right actions */}
         <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={onNewResident}
+            className="hidden sm:flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-sm font-medium text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+          >
+            <UserPlus className="h-4 w-4" />
+            신규 입실자 등록
+          </button>
           <button
             type="button"
             className="rounded-full p-2 text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors"

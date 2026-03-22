@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { User, Calendar, X } from "lucide-react";
-import { getRoomsByFloor, type FloorNumber, type Room } from "../lib/mock-data";
+import { Building2, User, Calendar, X } from "lucide-react";
+import { getRoomsByFloor, ROOM_TYPE_INFO, type FloorNumber, type Room } from "../lib/mock-data";
+import { useNewResident } from "./NewResidentContext";
 import Floor1 from "./floor-plans/Floor1";
 import Floor2 from "./floor-plans/Floor2";
 import Floor3 from "./floor-plans/Floor3";
@@ -40,6 +41,7 @@ const REAL_FLOOR_PLANS: Partial<Record<FloorNumber, { src: string; alt: string }
 const FLOOR_PLAN_PDF_SRC = "/floor-plans/spacehorim-floorplan.pdf";
 
 export default function FloorPlan() {
+  const openNewResident = useNewResident();
   const [currentFloor, setCurrentFloor] = useState<FloorNumber>(1);
   const rooms = getRoomsByFloor(currentFloor);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
@@ -59,9 +61,9 @@ export default function FloorPlan() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex flex-col lg:flex-row gap-6 items-start">
       {/* Interactive Floor Plan Area */}
-      <div className="flex-1 rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm overflow-hidden flex flex-col">
+      <div className="flex-1 rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm overflow-hidden flex flex-col lg:min-h-[640px]">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-white">{currentFloor}층 도면</h2>
@@ -78,7 +80,7 @@ export default function FloorPlan() {
               download
               className="rounded-md border border-[#3A3A3A] bg-[#1A1A1A] px-3 py-1.5 text-sm text-gray-200 transition-colors hover:border-indigo-500/50 hover:bg-[#222]"
             >
-              PDF 다운로드
+              도면 전체 PDF 다운로드
             </a>
           </div>
           
@@ -126,9 +128,10 @@ export default function FloorPlan() {
       </div>
 
       {/* Detail Panel */}
-      <div className="w-full lg:w-80 rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm flex flex-col h-full lg:min-h-[600px]">
+      <div className="w-full lg:w-80 rounded-xl border border-[#2A2A2A] bg-[#111] shadow-sm flex flex-col self-start">
+        <div className="p-6">
         {selectedRoom ? (
-          <div className="flex-1 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#2A2A2A]">
               <h3 className="text-2xl font-bold text-white">{selectedRoom.name}</h3>
               <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
@@ -139,6 +142,39 @@ export default function FloorPlan() {
                 {selectedRoom.status === 'occupied' ? '입실 중' : selectedRoom.status === 'vacant' ? '공실' : '유지보수'}
               </span>
             </div>
+
+            {(() => {
+              const typeInfo = ROOM_TYPE_INFO[selectedRoom.roomType];
+              return (
+                <>
+                  {typeInfo.illustration ? (
+                    <div className="mb-4 rounded-lg overflow-hidden border border-[#2A2A2A] bg-white">
+                      <Image
+                        src={typeInfo.illustration}
+                        alt={`${selectedRoom.roomType} 도면`}
+                        width={320}
+                        height={240}
+                        className="w-full h-auto object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="mb-4 flex items-center justify-center rounded-lg border border-dashed border-[#2A2A2A] bg-[#0E0E0E] h-32">
+                      <p className="text-sm text-gray-600">준비 중인 사진입니다</p>
+                    </div>
+                  )}
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">비품</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {typeInfo.amenities.map((item) => (
+                        <span key={item} className="px-2 py-1 rounded-md bg-[#1A1A1A] border border-[#2A2A2A] text-xs text-gray-300">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
 
             {selectedRoom.status === "occupied" ? (
               <div className="space-y-6">
@@ -166,6 +202,16 @@ export default function FloorPlan() {
                 </div>
 
                 <div className="space-y-4">
+                  <div className="flex items-center gap-3 text-sm">
+                    <Building2 className="h-4 w-4 text-gray-500" />
+                    <span className="text-gray-400 w-24">방 유형:</span>
+                    <span className="text-white font-medium">{selectedRoom.roomType}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="h-4 w-4 flex items-center justify-center text-gray-500 text-xs">₩</span>
+                    <span className="text-gray-400 w-24">기준 가격:</span>
+                    <span className="text-white font-medium">{selectedRoom.roomPrice}</span>
+                  </div>
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-gray-500" />
                     <span className="text-gray-400 w-24">입실일:</span>
@@ -198,10 +244,25 @@ export default function FloorPlan() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-48 text-center text-gray-500">
-                <p className="mb-4">{selectedRoom.status === 'vacant' ? '현재 비어 있는 방으로 입실 가능합니다.' : '이 방은 현재 유지보수 중입니다.'}</p>
+              <div className="flex flex-col items-center justify-center h-48 text-center text-gray-500 space-y-3">
+                <div className="w-full rounded-lg bg-[#1A1A1A] border border-[#2A2A2A] px-4 py-3 text-left space-y-2">
+                  <div className="flex items-center gap-3 text-sm">
+                    <Building2 className="h-4 w-4 text-gray-500 shrink-0" />
+                    <span className="text-gray-400 w-24">방 유형:</span>
+                    <span className="text-white font-medium">{selectedRoom.roomType}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="h-4 w-4 flex items-center justify-center text-gray-500 text-xs shrink-0">₩</span>
+                    <span className="text-gray-400 w-24">기준 가격:</span>
+                    <span className="text-white font-medium">{selectedRoom.roomPrice}</span>
+                  </div>
+                </div>
+                <p>{selectedRoom.status === 'vacant' ? '현재 비어 있는 방으로 입실 가능합니다.' : '이 방은 현재 유지보수 중입니다.'}</p>
                 {selectedRoom.status === 'vacant' && (
-                  <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm shadow-lg shadow-emerald-500/20">
+                  <button
+                    onClick={openNewResident}
+                    className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-sm font-medium text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+                  >
                     신규 입실자 등록
                   </button>
                 )}
@@ -218,6 +279,7 @@ export default function FloorPlan() {
             <p className="text-sm mt-1">상세 정보를 보실 수 있습니다</p>
           </div>
         )}
+        </div>
       </div>
 
       {isRealPlanOpen && currentRealPlan && (
