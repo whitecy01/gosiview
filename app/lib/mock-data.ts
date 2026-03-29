@@ -1,6 +1,56 @@
 export type FloorNumber = 1 | 2 | 3 | 4 | 5 | 6;
 export type RoomStatus = "occupied" | "vacant" | "maintenance";
 export type PaymentStatus = "paid" | "upcoming" | "overdue";
+
+export type ScheduledResident = {
+  name: string;
+  phone: string;
+  gender: '남' | '여';
+  age: number;
+  contractMoveInDate: string;   // 계약서상 입실 예정일
+  actualMoveInDate?: string;    // 실제 입실 날짜 (다를 경우)
+  moveOutDate?: string;
+};
+
+export type MaintenanceRecord = {
+  date: string;   // "YYYY-MM-DD"
+  amount: number;
+  details: string[];
+};
+
+export const SCHEDULED_BY_ROOM: Record<string, ScheduledResident[]> = {
+  "101": [{ name: "강민호", phone: "010-6374-8291", gender: '남', age: 25, contractMoveInDate: "2026-07-01", actualMoveInDate: "2026-07-03", moveOutDate: "2027-06-30" }],
+  "104": [
+    { name: "김태양", phone: "010-5823-9104", gender: '남', age: 24, contractMoveInDate: "2026-03-26", actualMoveInDate: "2026-03-27", moveOutDate: "2027-03-25" },
+    { name: "이소현", phone: "010-7291-3847", gender: '여', age: 22, contractMoveInDate: "2026-08-01", moveOutDate: "2027-07-31" },
+  ],
+  "203": [{ name: "박현준", phone: "010-3847-6291", gender: '남', age: 27, contractMoveInDate: "2026-04-01", moveOutDate: "2027-03-31" }],
+  "302": [
+    { name: "최수빈", phone: "010-9182-4756", gender: '여', age: 23, contractMoveInDate: "2026-03-30", moveOutDate: "2027-03-29" },
+    { name: "한도준", phone: "010-2938-5471", gender: '남', age: 25, contractMoveInDate: "2026-03-27", moveOutDate: "2027-03-26" },
+  ],
+  "404": [{ name: "손지원", phone: "010-2847-5931", gender: '여', age: 26, contractMoveInDate: "2026-04-05", moveOutDate: "2027-04-04" }],
+  "506": [{ name: "윤재훈", phone: "010-7382-1947", gender: '남', age: 29, contractMoveInDate: "2026-04-15", moveOutDate: "2027-04-14" }],
+  "606": [{ name: "정하율", phone: "010-8374-2918", gender: '여', age: 21, contractMoveInDate: "2026-04-10", moveOutDate: "2027-04-09" }],
+};
+
+export const MAINTENANCE_BY_ROOM: Record<string, MaintenanceRecord[]> = {
+  "101": [{ date: "2026-03-10", amount: 150000, details: ["에어컨청소", "전구교체"] }],
+  "102": [{ date: "2026-02-15", amount: 350000, details: ["도배", "장판교체"] }],
+  "104": [
+    { date: "2026-03-01", amount: 280000, details: ["도배", "에어컨청소"] },
+    { date: "2026-01-20", amount: 120000, details: ["전구교체"] },
+  ],
+  "203": [{ date: "2026-03-05", amount: 450000, details: ["도배", "매트리스교체", "에어컨청소"] }],
+  "207": [{ date: "2026-02-28", amount: 80000, details: ["전구교체"] }],
+  "302": [{ date: "2026-03-15", amount: 520000, details: ["도배", "매트리스교체", "장판교체"] }],
+  "311": [{ date: "2026-03-20", amount: 680000, details: ["도배", "매트리스교체", "에어컨청소", "전구교체"] }],
+  "404": [{ date: "2026-03-22", amount: 390000, details: ["도배", "매트리스교체"] }],
+  "407": [{ date: "2026-01-15", amount: 200000, details: ["에어컨청소", "전구교체"] }],
+  "506": [{ date: "2026-03-18", amount: 250000, details: ["에어컨청소", "전구교체"] }],
+  "603": [{ date: "2026-03-25", amount: 720000, details: ["도배", "매트리스교체", "에어컨청소", "전구교체"] }],
+  "606": [{ date: "2026-02-10", amount: 310000, details: ["도배", "장판교체"] }],
+};
 export type RoomType = "Cozy" | "Standard A-1" | "Standard A-1 +" | "Standard A-2" | "Standard A-2 +" | "Standard A-2 (넓은 사이즈)" | "Standard A-3" | "Standard B-1" | "Standard B-2" | "Deluxe A" | "Deluxe B";
 
 const ROOM_TYPE_BY_ID: Record<string, RoomType> = {
@@ -101,6 +151,7 @@ export type Room = {
   roomType: RoomType;
   roomPrice: string;
   resident: string | null;
+  phone: string | null;
   gender: '남' | '여' | null;
   age: number | null;
   moveInDate: string | null;
@@ -253,6 +304,7 @@ function buildRoom(id: string, occupiedIndex: number): Room {
       roomType,
       roomPrice,
       resident: null,
+      phone: null,
       gender: null,
       age: null,
       moveInDate: null,
@@ -280,6 +332,7 @@ function buildRoom(id: string, occupiedIndex: number): Room {
     roomType,
     roomPrice,
     resident: getResidentName(occupiedIndex),
+    phone: `010-${String(((roomNumber * 73 + occupiedIndex * 31) % 9000) + 1000)}-${String(((roomNumber * 37 + occupiedIndex * 53) % 9000) + 1000)}`,
     gender: occupiedIndex % 2 === 0 ? '남' : '여',
     age: 20 + ((roomNumber * 3 + occupiedIndex * 7) % 16),
     moveInDate: `2025-${moveInMonth}-${moveInDay}`,
