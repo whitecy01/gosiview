@@ -384,3 +384,136 @@ export function getDashboardStats() {
     occupancyRate: Math.round((occupiedRooms / ALL_ROOMS.length) * 100),
   };
 }
+
+// ────────────────────────────────────────────────────────────
+// 4.2.2 입실자 상세 조회
+// ────────────────────────────────────────────────────────────
+
+export type ResidencePurpose =
+  | "공시생(임용)"
+  | "공시생(일행)"
+  | "공시생(소방)"
+  | "공시생(경찰)"
+  | "세무·회계·계리"
+  | "취준생"
+  | "수능"
+  | "직장";
+
+export type RealEstateAgency = "부동산 A" | "부동산 B" | "부동산 C" | "직거래";
+
+export type DepositDeductionReason =
+  | "차임"
+  | "미납"
+  | "공과금정산"
+  | "도배"
+  | "타일"
+  | "시설손상";
+
+export type RentPaymentMethod = "이체(자진발급)" | "이체" | "현금";
+
+export type DepositDeduction = {
+  date: string;
+  amount: number;
+  reason: DepositDeductionReason;
+};
+
+export type RentPayment = {
+  month: string; // "YYYY-MM"
+  paidAt: string | null;
+  amount: number;
+  paymentMethod: RentPaymentMethod | null;
+  status: "paid" | "overdue" | "upcoming";
+};
+
+export type GasBill = {
+  month: string; // "YYYY-MM"
+  amount: number;
+};
+
+export type ElectricityHandover = {
+  scheduledMoveOutDate: string;
+  actualMoveOutDate: string;
+  usageAmount: number;
+};
+
+export type ResidentDetail = {
+  roomId: string;
+  purpose: ResidencePurpose;
+  utilityIncludedRent: number; // 만원 단위
+  actualMonthlyRent: number;   // 만원 단위
+  paymentDueDay: number;       // 매월 N일
+  contractDeposit: { date: string; amount: number };
+  contractExpiry: string;
+  realEstateAgency: RealEstateAgency;
+  depositTotal: number;
+  depositDeductions: DepositDeduction[];
+  rentPayments: RentPayment[];
+  gasBills: GasBill[];
+  electricityHandover: ElectricityHandover | null;
+};
+
+export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
+  "101": {
+    roomId: "101",
+    purpose: "공시생(일행)",
+    utilityIncludedRent: 70,
+    actualMonthlyRent: 70,
+    paymentDueDay: 10,
+    contractDeposit: { date: "2025-10-14", amount: 200000 },
+    contractExpiry: "2026-10-13",
+    realEstateAgency: "부동산 A",
+    depositTotal: 500000,
+    depositDeductions: [
+      { date: "2026-01-15", amount: 50000, reason: "미납" },
+      { date: "2026-03-05", amount: 30000, reason: "공과금정산" },
+    ],
+    rentPayments: [
+      { month: "2025-10", paidAt: "2025-10-08", amount: 700000, paymentMethod: "이체", status: "paid" },
+      { month: "2025-11", paidAt: "2025-11-10", amount: 700000, paymentMethod: "이체(자진발급)", status: "paid" },
+      { month: "2025-12", paidAt: "2025-12-09", amount: 700000, paymentMethod: "현금", status: "paid" },
+      { month: "2026-01", paidAt: null, amount: 700000, paymentMethod: null, status: "overdue" },
+      { month: "2026-02", paidAt: "2026-02-07", amount: 700000, paymentMethod: "이체", status: "paid" },
+      { month: "2026-03", paidAt: "2026-03-10", amount: 700000, paymentMethod: "이체", status: "paid" },
+    ],
+    gasBills: [
+      { month: "2025-10", amount: 8500 },
+      { month: "2025-11", amount: 12300 },
+      { month: "2025-12", amount: 18900 },
+      { month: "2026-01", amount: 22100 },
+      { month: "2026-02", amount: 19500 },
+      { month: "2026-03", amount: 15200 },
+    ],
+    electricityHandover: null,
+  },
+  "102": {
+    roomId: "102",
+    purpose: "취준생",
+    utilityIncludedRent: 70,
+    actualMonthlyRent: 70,
+    paymentDueDay: 5,
+    contractDeposit: { date: "2025-09-02", amount: 200000 },
+    contractExpiry: "2026-09-01",
+    realEstateAgency: "부동산 B",
+    depositTotal: 500000,
+    depositDeductions: [],
+    rentPayments: [
+      { month: "2025-09", paidAt: "2025-09-04", amount: 700000, paymentMethod: "이체", status: "paid" },
+      { month: "2025-10", paidAt: "2025-10-05", amount: 700000, paymentMethod: "이체", status: "paid" },
+      { month: "2025-11", paidAt: "2025-11-03", amount: 700000, paymentMethod: "현금", status: "paid" },
+      { month: "2025-12", paidAt: "2025-12-05", amount: 700000, paymentMethod: "이체", status: "paid" },
+      { month: "2026-01", paidAt: "2026-01-04", amount: 700000, paymentMethod: "이체(자진발급)", status: "paid" },
+      { month: "2026-02", paidAt: "2026-02-05", amount: 700000, paymentMethod: "이체", status: "paid" },
+      { month: "2026-03", paidAt: null, amount: 700000, paymentMethod: null, status: "overdue" },
+    ],
+    gasBills: [
+      { month: "2025-09", amount: 7200 },
+      { month: "2025-10", amount: 9100 },
+      { month: "2025-11", amount: 14600 },
+      { month: "2025-12", amount: 21300 },
+      { month: "2026-01", amount: 19800 },
+      { month: "2026-02", amount: 16400 },
+      { month: "2026-03", amount: 11200 },
+    ],
+    electricityHandover: null,
+  },
+};
