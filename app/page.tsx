@@ -21,7 +21,7 @@ export default function Home() {
           { title: "총 방 개수", value: `${stats.totalRooms}개`, subtitle: "전체 관리 방" },
           { title: "총 입실자 수", value: `${stats.occupiedRooms}명`, subtitle: `${stats.occupancyRate}% 입실률` },
           { title: "현재 공실", value: `${stats.vacantRooms}개`, subtitle: "즉시 입실 가능" },
-          { title: "유지보수", value: `${stats.maintenanceRooms}개`, subtitle: "점검 필요 방" },
+          { title: "계약", value: `${stats.contractRooms}개`, subtitle: "계약 진행 방" },
         ].map((stat, idx) => (
           <div key={idx} className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400">{stat.title}</h3>

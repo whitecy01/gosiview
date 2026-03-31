@@ -1,4 +1,5 @@
-import { Room, RoomCard } from "./shared";
+import Image from "next/image";
+import { Room } from "./shared";
 
 interface FloorProps {
   rooms: Room[];
@@ -6,101 +7,53 @@ interface FloorProps {
   onSelectRoom: (room: Room) => void;
 }
 
+// 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
+const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
+  // 위 줄: 405, 406, 407, 408
+  { id: "405", top: "55.5%", left: "14%",  width: "14%", height: "17%" },
+  { id: "406", top: "55.5%", left: "28.5%", width: "13.5%", height: "17%" },
+  { id: "407", top: "55.5%", left: "43%", width: "14%", height: "17%" },
+  { id: "408", top: "55%", left: "76.5%", width: "13%", height: "26%" },
+  // 아래 줄: 404, 403, 402, 401
+  { id: "404", top: "81.5%", left: "14%",  width: "10%", height: "17%" },
+  { id: "403", top: "81.5%", left: "24%", width: "15%", height: "17%" },
+  { id: "402", top: "81.5%", left: "40%", width: "16%", height: "17%" },
+  { id: "401", top: "81.5%", left: "56.5%", width: "15%",  height: "17%" },
+];
+
+function statusColor(status: Room["status"], selected: boolean) {
+  if (status === "occupied")    return selected ? "bg-indigo-500/60 border-indigo-300 border-2"   : "bg-indigo-500/20 border-indigo-400/60 hover:bg-indigo-500/35";
+  if (status === "vacant")      return selected ? "bg-emerald-500/60 border-emerald-300 border-2" : "bg-emerald-500/20 border-emerald-400/60 hover:bg-emerald-500/35";
+  if (status === "contract") return selected ? "bg-rose-500/60 border-rose-300 border-2"       : "bg-rose-500/20 border-rose-400/60 hover:bg-rose-500/35";
+  return "";
+}
+
 export default function Floor4({ rooms, selectedRoom, onSelectRoom }: FloorProps) {
   return (
-    <div className="relative w-full aspect-[32/9] bg-[#1A1A1A] rounded-lg p-4 border border-[#2A2A2A] flex justify-between overflow-hidden gap-4">
-      
-      {/* Left Block (Boiler + 401~407) */}
-      <div className="flex-[4] flex flex-col justify-between">
-        
-        {/* Top Row - Boiler & 405~407 */}
-        <div className="flex h-[40%] gap-2 w-full">
-          {/* Rooms 405 to 407 */}
-          <div className="flex-[3] flex gap-2">
-            {[405, 406, 407].map(num => {
-              const room = rooms.find(r => r.id === num.toString());
-              return room ? (
-                <RoomCard 
-                  key={room.id}
-                  room={room} 
-                  isSelected={selectedRoom?.id === room.id}
-                  onClick={() => onSelectRoom(room)} 
-                  className="flex-1"
-                />
-              ) : null;
-            })}
-          </div>
+    <div className="relative w-full rounded-lg overflow-hidden border border-[#2A2A2A]">
+      <Image
+        src="/floor-plans/4f-plan.png"
+        alt="4층 도면"
+        width={1600}
+        height={700}
+        className="w-full h-auto block"
+        priority
+      />
 
-          {/* Boiler Room */}
-          <div className="w-[10%] bg-[#222] border border-[#333] rounded flex items-center justify-center text-[11px] text-gray-500 text-center break-words">
-            보일러실<br/>(4F)
-          </div>
+      {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
+        const room = rooms.find((r) => r.id === id);
+        if (!room) return null;
+        const isSelected = selectedRoom?.id === id;
 
-          {/* Kitchen Area */}
-          <div className="flex-[1.5] bg-[#222] border border-[#333] rounded flex items-center justify-center text-[11px] text-gray-500 text-center break-words relative overflow-hidden">
-            <span className="z-10 bg-[#222] px-1">주방</span>
-            <div className="absolute inset-0 flex flex-col justify-around opacity-10 p-2">
-               <div className="w-full h-2 border-2 border-white rounded"></div>
-               <div className="w-full h-2 border-2 border-white rounded"></div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Corridor */}
-        <div className="flex h-[20%] w-full items-center">
-          <div className="w-full h-1 bg-[#333] rounded-full opacity-30 mt-1"></div>
-        </div>
-
-        {/* Bottom Row - Rooms 404 to 401 */}
-        <div className="flex h-[40%] gap-2 w-full pr-[8%]">
-          {[404, 403, 402, 401].map(num => {
-            const room = rooms.find(r => r.id === num.toString());
-            return room ? (
-              <RoomCard 
-                key={room.id}
-                room={room} 
-                isSelected={selectedRoom?.id === room.id}
-                onClick={() => onSelectRoom(room)} 
-                className={num === 402 ? "flex-[1.3]" : "flex-1"}
-              />
-            ) : null;
-          })}
-        </div>
-      </div>
-
-      {/* Right Block (408, Stairs) */}
-      <div className="flex-1 flex flex-col gap-2">
-        
-        {/* Room 408 (Top) */}
-        <div className="flex-[1.2] flex">
-          {(() => {
-            const room408 = rooms.find(r => r.id === "408");
-            return room408 ? (
-              <RoomCard 
-                room={room408} 
-                isSelected={selectedRoom?.id === room408.id}
-                onClick={() => onSelectRoom(room408)} 
-              />
-            ) : null;
-          })()}
-        </div>
-
-        {/* Stairs/Entrance (Bottom) */}
-        <div className="flex-1 bg-[#222] border border-[#333] rounded flex items-center justify-between text-xs text-gray-500 relative overflow-hidden px-2 mt-auto h-[40%]">
-          <span className="z-10 bg-[#222] px-1 text-[10px] whitespace-nowrap">계단실</span>
-          
-          {/* Vertical Stairs */}
-          <div className="absolute inset-y-0 right-4 left-10 flex justify-between opacity-20">
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-          </div>
-        </div>
-
-      </div>
-
+        return (
+          <button
+            key={id}
+            onClick={() => onSelectRoom(room)}
+            style={{ top, left, width, height }}
+            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}
+          />
+        );
+      })}
     </div>
   );
 }

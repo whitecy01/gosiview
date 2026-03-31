@@ -250,8 +250,8 @@ function CalendarGrid({
                         {room.status === 'vacant' && (
                           <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-[#1A1A1A] text-gray-400 whitespace-nowrap shrink-0">공실</span>
                         )}
-                        {room.status === 'maintenance' && (
-                          <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-[#1A1A1A] text-yellow-600 whitespace-nowrap shrink-0">점검</span>
+                        {room.status === 'contract' && (
+                          <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-[#1A1A1A] text-yellow-600 whitespace-nowrap shrink-0">계약</span>
                         )}
                       </div>
 
@@ -418,7 +418,7 @@ export default function CalendarPage() {
           { title: "총 방 개수", value: `${stats.totalRooms}개`, subtitle: "전체 관리 방" },
           { title: "총 입실자 수", value: `${stats.occupiedRooms}명`, subtitle: `${stats.occupancyRate}% 입실률` },
           { title: "현재 공실", value: `${stats.vacantRooms}개`, subtitle: "즉시 입실 가능" },
-          { title: "유지보수", value: `${stats.maintenanceRooms}개`, subtitle: "점검 필요 방" },
+          { title: "계약", value: `${stats.contractRooms}개`, subtitle: "계약 진행 방" },
         ].map((stat, idx) => (
           <div key={idx} className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400">{stat.title}</h3>

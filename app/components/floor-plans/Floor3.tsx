@@ -1,4 +1,5 @@
-import { Room, RoomCard } from "./shared";
+import Image from "next/image";
+import { Room } from "./shared";
 
 interface FloorProps {
   rooms: Room[];
@@ -6,103 +7,58 @@ interface FloorProps {
   onSelectRoom: (room: Room) => void;
 }
 
+// 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
+const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
+  // 위 줄: 307, 308, 309, 310, 311, 312
+  { id: "307", top: "35%", left: "22.5%", width: "9%",   height: "19%" },
+  { id: "308", top: "35%", left: "32%",   width: "9%",   height: "19%" },
+  { id: "309", top: "35%", left: "41.8%", width: "9%",   height: "19%" },
+  { id: "310", top: "35%", left: "51.5%", width: "9%",   height: "19%" },
+  { id: "311", top: "35%", left: "62%",   width: "10%",  height: "19%" },
+  { id: "312", top: "35%", left: "76%",   width: "14%",  height: "15%" },
+  { id: "313", top: "51%", left: "76%",   width: "14%",  height: "14%" },
+  // 아래 줄: 306, 305, 304, 303, 302, 301
+  { id: "306", top: "61%", left: "15%",   width: "8%",   height: "18.5%" },
+  { id: "305", top: "61%", left: "24%",   width: "8%",   height: "18.5%" },
+  { id: "304", top: "61%", left: "33%",   width: "8%",   height: "18.5%" },
+  { id: "303", top: "61%", left: "42%",   width: "9%",   height: "18.5%" },
+  { id: "302", top: "61%", left: "52%",   width: "8%",   height: "18.5%" },
+  { id: "301", top: "61%", left: "60.5%", width: "11.5%", height: "18.5%" },
+];
+
+function statusColor(status: Room["status"], selected: boolean) {
+  if (status === "occupied")    return selected ? "bg-indigo-500/60 border-indigo-300 border-2"   : "bg-indigo-500/20 border-indigo-400/60 hover:bg-indigo-500/35";
+  if (status === "vacant")      return selected ? "bg-emerald-500/60 border-emerald-300 border-2" : "bg-emerald-500/20 border-emerald-400/60 hover:bg-emerald-500/35";
+  if (status === "contract") return selected ? "bg-rose-500/60 border-rose-300 border-2"       : "bg-rose-500/20 border-rose-400/60 hover:bg-rose-500/35";
+  return "";
+}
+
 export default function Floor3({ rooms, selectedRoom, onSelectRoom }: FloorProps) {
   return (
-    <div className="relative w-full aspect-[25/9] bg-[#1A1A1A] rounded-lg p-4 border border-[#2A2A2A] flex justify-between overflow-hidden gap-4">
-      
-      {/* Left Block (Boiler + 301~311) */}
-      <div className="flex-1 flex flex-col justify-between">
-        
-        {/* Top Row - Boiler & 307~311 */}
-        <div className="flex h-[40%] gap-2 w-full">
-          {/* Boiler Room */}
-          <div className="w-[12%] bg-[#222] border border-[#333] rounded flex items-center justify-center text-[11px] text-gray-500 text-center break-words">
-            보일러실<br/>(3F)
-          </div>
-          
-          {/* Rooms 307 to 311 */}
-          {[307, 308, 309, 310, 311].map(num => {
-            const room = rooms.find(r => r.id === num.toString());
-            return room ? (
-              <RoomCard 
-                key={room.id}
-                room={room} 
-                isSelected={selectedRoom?.id === room.id}
-                onClick={() => onSelectRoom(room)} 
-              />
-            ) : null;
-          })}
-        </div>
-        
-        {/* Corridor */}
-        <div className="flex h-[20%] w-full items-center">
-          <div className="w-full h-1 bg-[#333] rounded-full opacity-30 mt-1"></div>
-        </div>
+    <div className="relative w-full rounded-lg overflow-hidden border border-[#2A2A2A]">
+      <Image
+        src="/floor-plans/3f-plan.png"
+        alt="3층 도면"
+        width={1600}
+        height={914}
+        className="w-full h-auto block"
+        priority
+      />
 
-        {/* Bottom Row - Rooms 306 to 301 */}
-        <div className="flex h-[40%] gap-2 w-full pr-[12%]">
-          {[306, 305, 304, 303, 302, 301].map(num => {
-            const room = rooms.find(r => r.id === num.toString());
-            return room ? (
-              <RoomCard 
-                key={room.id}
-                room={room} 
-                isSelected={selectedRoom?.id === room.id}
-                onClick={() => onSelectRoom(room)} 
-              />
-            ) : null;
-          })}
-        </div>
+      {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
+        const room = rooms.find((r) => r.id === id);
+        if (!room) return null;
+        const isSelected = selectedRoom?.id === id;
 
-      </div>
-
-      {/* Right Block (312, 313, Stairs) */}
-      <div className="w-[18%] flex flex-col gap-2">
-        
-        {/* Room 312 */}
-        <div className="flex-[1.2] flex">
-          {(() => {
-            const room312 = rooms.find(r => r.id === "312");
-            return room312 ? (
-              <RoomCard 
-                room={room312} 
-                isSelected={selectedRoom?.id === room312.id}
-                onClick={() => onSelectRoom(room312)} 
-              />
-            ) : null;
-          })()}
-        </div>
-
-        {/* Room 313 */}
-        <div className="flex-1 flex">
-          {(() => {
-            const room313 = rooms.find(r => r.id === "313");
-            return room313 ? (
-              <RoomCard 
-                room={room313} 
-                isSelected={selectedRoom?.id === room313.id}
-                onClick={() => onSelectRoom(room313)} 
-              />
-            ) : null;
-          })()}
-        </div>
-
-        {/* Stairs/Entrance */}
-        <div className="flex-[1.2] bg-[#222] border border-[#333] rounded flex items-center justify-between text-xs text-gray-500 relative overflow-hidden px-2">
-          <span className="z-10 bg-[#222] px-1 text-[10px] whitespace-nowrap">계단실</span>
-          
-          {/* Vertical Stairs */}
-          <div className="absolute inset-y-0 right-4 left-10 flex justify-between opacity-20">
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-          </div>
-        </div>
-
-      </div>
-
+        return (
+          <button
+            key={id}
+            onClick={() => onSelectRoom(room)}
+            style={{ top, left, width, height }}
+            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}
+          />
+        );
+      })}
     </div>
   );
 }

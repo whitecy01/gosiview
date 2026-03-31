@@ -1,4 +1,5 @@
-import { Room, RoomCard } from "./shared";
+import Image from "next/image";
+import { Room } from "./shared";
 
 interface FloorProps {
   rooms: Room[];
@@ -6,68 +7,50 @@ interface FloorProps {
   onSelectRoom: (room: Room) => void;
 }
 
+// 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
+const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
+  { id: "607", top: "56.5%", left: "12%",   width: "10%", height: "21%" },
+  { id: "606", top: "56.5%", left: "22.5%",  width: "9%", height: "21%" },
+  { id: "605", top: "56.5%", left: "32%",  width: "6%", height: "21%" },
+  { id: "604", top: "56.5%", left: "38.6%",  width: "6%", height: "21%" },
+  { id: "603", top: "56.5%", left: "45.2%",  width: "6%", height: "21%" },
+  { id: "602", top: "56.5%", left: "51.7%",  width: "6%", height: "21%" },
+  { id: "601", top: "56.5%", left: "58.5%",  width: "6%", height: "21%" },
+];
+
+function statusColor(status: Room["status"], selected: boolean) {
+  if (status === "occupied")    return selected ? "bg-indigo-500/60 border-indigo-300 border-2"   : "bg-indigo-500/20 border-indigo-400/60 hover:bg-indigo-500/35";
+  if (status === "vacant")      return selected ? "bg-emerald-500/60 border-emerald-300 border-2" : "bg-emerald-500/20 border-emerald-400/60 hover:bg-emerald-500/35";
+  if (status === "contract") return selected ? "bg-rose-500/60 border-rose-300 border-2"       : "bg-rose-500/20 border-rose-400/60 hover:bg-rose-500/35";
+  return "";
+}
+
 export default function Floor6({ rooms, selectedRoom, onSelectRoom }: FloorProps) {
   return (
-    <div className="relative w-full aspect-[40/9] bg-[#1A1A1A] rounded-lg p-2 border border-[#2A2A2A] flex flex-col justify-end overflow-hidden gap-1">
-      <div className="flex w-full h-[85%] gap-2 relative mt-4">
+    <div className="relative w-full rounded-lg overflow-hidden border border-[#2A2A2A]">
+      <Image
+        src="/floor-plans/6f-plan.png"
+        alt="6층 도면"
+        width={1600}
+        height={500}
+        className="w-full h-auto block"
+        priority
+      />
 
-        {/* Left Block: Rooms 607 to 601 */}
-        <div className="flex-[3] flex gap-1 h-full">
-          {/* Room 607 & 606 (Wider pair on left) */}
-          <div className="flex-[1.5] flex gap-1">
-            {[607, 606].map(num => {
-              const room = rooms.find(r => r.id === num.toString());
-              return room ? (
-                <RoomCard
-                  key={room.id}
-                  room={room}
-                  isSelected={selectedRoom?.id === room.id}
-                  onClick={() => onSelectRoom(room)}
-                  className="flex-1"
-                />
-              ) : null;
-            })}
-          </div>
+      {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
+        const room = rooms.find((r) => r.id === id);
+        if (!room) return null;
+        const isSelected = selectedRoom?.id === id;
 
-          {/* Rooms 605 down to 601 */}
-          <div className="flex-[2] flex gap-1">
-            {[605, 604, 603, 602, 601].map(num => {
-              const room = rooms.find(r => r.id === num.toString());
-              return room ? (
-                <RoomCard
-                  key={room.id}
-                  room={room}
-                  isSelected={selectedRoom?.id === room.id}
-                  onClick={() => onSelectRoom(room)}
-                  className="flex-[1]"
-                />
-              ) : null;
-            })}
-          </div>
-        </div>
-
-        {/* Right Block: Boiler & Stairs */}
-        <div className="flex-1 flex flex-col text-xs text-gray-400 gap-1 h-full pr-2">
-
-          {/* Top Utility (Boiler Room 3 Daes) */}
-          <div className="h-[40%] bg-[#222] border border-[#333] rounded flex items-center justify-center p-2 text-center break-keep w-[83%] ml-auto">
-            <span className="text-[10px]">6F / 5F 보일러 / 3대</span>
-          </div>
-
-          {/* Stairs / Entrance below it */}
-          <div className="h-[60%] bg-[#222] border border-[#333] rounded flex items-center justify-between text-xs text-gray-500 relative overflow-hidden px-2 mt-auto w-full ml-auto">
-            <span className="z-10 bg-[#222] px-1 text-[10px] whitespace-nowrap">계단실</span>
-            {/* Vertical Stairs */}
-            <div className="absolute inset-y-0 right-4 left-10 flex justify-between opacity-20">
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-              <div className="w-px h-full bg-white"></div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
+        return (
+          <button
+            key={id}
+            onClick={() => onSelectRoom(room)}
+            style={{ top, left, width, height }}
+            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}
+          />
+        );
+      })}
     </div>
   );
 }
