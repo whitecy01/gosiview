@@ -1,4 +1,4 @@
-import { Building2, CalendarRange, LayoutDashboard, Settings, Users, LogOut } from 'lucide-react';
+import { Building2, CalendarRange, LayoutDashboard, Settings, Users, LogOut, ListTodo, BarChart2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface SidebarProps {
@@ -6,9 +6,11 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS = [
-  { href: '/', icon: LayoutDashboard, label: '대시보드' },
+  { href: '/', icon: ListTodo, label: 'Todo List' },
+  { href: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
   { href: '/residents', icon: Users, label: '입실자 관리' },
   { href: '/calendar', icon: CalendarRange, label: '연간 캘린더' },
+  { href: '/stats', icon: BarChart2, label: '통계' },
   { href: '/settings', icon: Settings, label: '설정' },
 ];
 

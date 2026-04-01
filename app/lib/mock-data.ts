@@ -51,6 +51,21 @@ export const MAINTENANCE_BY_ROOM: Record<string, MaintenanceRecord[]> = {
   "603": [{ date: "2026-03-25", amount: 720000, details: ["도배", "매트리스교체", "에어컨청소", "전구교체"] }],
   "606": [{ date: "2026-02-10", amount: 310000, details: ["도배", "장판교체"] }],
 };
+export type TenantBar = {
+  name: string;
+  moveInDate: string;
+  moveOutDate: string;
+  gender?: '남' | '여';
+  age?: number;
+  monthlyRent?: string;
+};
+
+export const ROOM_TENANT_HISTORY: Record<string, TenantBar[]> = {
+  "101": [
+    { name: "박지수", moveInDate: "2025-01-05", moveOutDate: "2025-02-28", gender: '여', age: 24, monthlyRent: "₩650,000" },
+  ],
+};
+
 export type RoomType = "Cozy" | "Standard A-1" | "Standard A-1 +" | "Standard A-2" | "Standard A-2 +" | "Standard A-2 (넓은 사이즈)" | "Standard A-3" | "Standard B-1" | "Standard B-2" | "Deluxe A" | "Deluxe B";
 
 const ROOM_TYPE_BY_ID: Record<string, RoomType> = {

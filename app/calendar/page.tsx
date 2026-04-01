@@ -1,141 +1,183 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { ROOMS_BY_FLOOR, FloorNumber, getDashboardStats } from '../lib/mock-data';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { ROOMS_BY_FLOOR, ALL_ROOMS, ROOM_TENANT_HISTORY, FloorNumber, getDashboardStats, type Room, type TenantBar } from '../lib/mock-data';
+import RoomListModal, { type RoomModalType } from '../components/RoomListModal';
+import RoomDetailDrawer from '../components/RoomDetailDrawer';
+
+// ──────────── 상수 ────────────
 
 const FLOORS: FloorNumber[] = [1, 2, 3, 4, 5, 6];
+
+// 실제 데이터 기반으로 연도 범위 자동 계산
+function calcYearRange() {
+  let minYear = 9999;
+  let maxYear = 0;
+  for (const room of ALL_ROOMS) {
+    if (room.moveInDate) {
+      const y = parseInt(room.moveInDate.slice(0, 4), 10);
+      if (y < minYear) minYear = y;
+    }
+    if (room.moveOutDate) {
+      const y = parseInt(room.moveOutDate.slice(0, 4), 10);
+      if (y > maxYear) maxYear = y;
+    }
+  }
+  // 데이터가 없을 경우 fallback
+  if (minYear === 9999) minYear = new Date().getFullYear();
+  if (maxYear === 0) maxYear = minYear;
+  return { startYear: minYear, endYear: maxYear };
+}
+
+const { startYear: TIMELINE_START_YEAR, endYear: TIMELINE_END_YEAR } = calcYearRange();
+
 const ROOM_COL_WIDTH = 100;
 const ROW_HEIGHT = 46;
-const MONTH_H = 38;
-const DAY_H = 30;
+const MONTH_H = 56;
+const DAY_H = 26;
 const FLOOR_ROW_H = 28;
+const DAY_WIDTH = 16;
 
-const FLOOR_COLORS = [
-  { from: '#4f46e5', to: '#3730a3', text: '#ffffff', accent: '#818cf8', dot: '#a5b4fc' },
-  { from: '#9333ea', to: '#7e22ce', text: '#ffffff', accent: '#c084fc', dot: '#d8b4fe' },
-  { from: '#2563eb', to: '#1d4ed8', text: '#ffffff', accent: '#60a5fa', dot: '#93c5fd' },
-  { from: '#0891b2', to: '#0e7490', text: '#ffffff', accent: '#22d3ee', dot: '#67e8f9' },
-  { from: '#0d9488', to: '#0f766e', text: '#ffffff', accent: '#2dd4bf', dot: '#5eead4' },
-  { from: '#16a34a', to: '#15803d', text: '#ffffff', accent: '#4ade80', dot: '#86efac' },
+// 방별 색상 팔레트 (12색 순환)
+const PALETTE = [
+  { from: '#6366f1', to: '#4f46e5', dot: '#a5b4fc' },
+  { from: '#ec4899', to: '#db2777', dot: '#f9a8d4' },
+  { from: '#14b8a6', to: '#0d9488', dot: '#5eead4' },
+  { from: '#f59e0b', to: '#d97706', dot: '#fcd34d' },
+  { from: '#22c55e', to: '#16a34a', dot: '#86efac' },
+  { from: '#3b82f6', to: '#2563eb', dot: '#93c5fd' },
+  { from: '#f43f5e', to: '#e11d48', dot: '#fda4af' },
+  { from: '#8b5cf6', to: '#7c3aed', dot: '#c4b5fd' },
+  { from: '#06b6d4', to: '#0891b2', dot: '#67e8f9' },
+  { from: '#84cc16', to: '#65a30d', dot: '#bef264' },
+  { from: '#fb923c', to: '#ea580c', dot: '#fdba74' },
+  { from: '#a855f7', to: '#9333ea', dot: '#d8b4fe' },
 ];
+
+const ROOM_COLOR_MAP: Record<string, typeof PALETTE[number]> = {};
+ALL_ROOMS.forEach((room, idx) => {
+  ROOM_COLOR_MAP[room.id] = PALETTE[idx % PALETTE.length];
+});
+
+const FLOOR_ACCENTS = ['#818cf8', '#c084fc', '#60a5fa', '#22d3ee', '#2dd4bf', '#4ade80'];
+
+// ──────────── 헬퍼 ────────────
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate();
 }
 
-function isLeapYear(year: number) {
-  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-}
+type MonthInfo = { year: number; month: number; days: number; startDay: number };
 
-type MonthInfo = { month: number; name: string; days: number; startDay: number };
-
-function buildMonths(year: number): MonthInfo[] {
+function buildAllMonths(): MonthInfo[] {
   const months: MonthInfo[] = [];
   let startDay = 0;
-  for (let m = 1; m <= 12; m++) {
-    const days = getDaysInMonth(year, m);
-    months.push({ month: m, name: `${m}월`, days, startDay });
-    startDay += days;
+  for (let y = TIMELINE_START_YEAR; y <= TIMELINE_END_YEAR; y++) {
+    for (let m = 1; m <= 12; m++) {
+      const days = getDaysInMonth(y, m);
+      months.push({ year: y, month: m, days, startDay });
+      startDay += days;
+    }
   }
   return months;
 }
 
-function getBarGeometry(moveInDate: string | null, moveOutDate: string | null, year: number, dayWidth: number) {
+const ALL_MONTHS = buildAllMonths();
+const TIMELINE_START = new Date(TIMELINE_START_YEAR, 0, 1);
+const TOTAL_DAYS = ALL_MONTHS.reduce((s, m) => s + m.days, 0);
+
+// 연도 그룹 (년도 헤더용)
+type YearGroup = { year: number; startDay: number; totalDays: number };
+function buildYearGroups(): YearGroup[] {
+  const groups: YearGroup[] = [];
+  for (let y = TIMELINE_START_YEAR; y <= TIMELINE_END_YEAR; y++) {
+    const months = ALL_MONTHS.filter((m) => m.year === y);
+    groups.push({
+      year: y,
+      startDay: months[0].startDay,
+      totalDays: months.reduce((s, m) => s + m.days, 0),
+    });
+  }
+  return groups;
+}
+const YEAR_GROUPS = buildYearGroups();
+
+function getBarGeometry(moveInDate: string | null, moveOutDate: string | null) {
   if (!moveInDate || !moveOutDate) return null;
 
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year, 11, 31);
+  const timelineEnd = new Date(TIMELINE_END_YEAR, 11, 31);
   const moveIn = new Date(moveInDate);
   const moveOut = new Date(moveOutDate);
 
-  if (moveOut < yearStart || moveIn > yearEnd) return null;
+  if (moveOut < TIMELINE_START || moveIn > timelineEnd) return null;
 
-  const clampedStart = moveIn < yearStart ? yearStart : moveIn;
-  const clampedEnd = moveOut > yearEnd ? yearEnd : moveOut;
+  const clampedStart = moveIn < TIMELINE_START ? TIMELINE_START : moveIn;
+  const clampedEnd = moveOut > timelineEnd ? timelineEnd : moveOut;
 
-  const startIdx = Math.round((clampedStart.getTime() - yearStart.getTime()) / 86400000);
-  const endIdx = Math.round((clampedEnd.getTime() - yearStart.getTime()) / 86400000);
+  const startIdx = Math.round((clampedStart.getTime() - TIMELINE_START.getTime()) / 86400000);
+  const endIdx = Math.round((clampedEnd.getTime() - TIMELINE_START.getTime()) / 86400000);
 
   return {
-    left: startIdx * dayWidth,
-    width: Math.max((endIdx - startIdx + 1) * dayWidth, dayWidth),
+    left: startIdx * DAY_WIDTH,
+    width: Math.max((endIdx - startIdx + 1) * DAY_WIDTH, DAY_WIDTH),
   };
 }
 
-function getTodayOffset(year: number): number | null {
+function getTodayOffset(): number | null {
   const now = new Date();
-  const seoulDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
-  const [y, m, d] = seoulDateStr.split('-').map(Number);
-  if (y !== year) return null;
-  const yearStart = new Date(year, 0, 1);
-  const todayDate = new Date(year, m - 1, d);
-  return Math.round((todayDate.getTime() - yearStart.getTime()) / 86400000);
+  const timelineEnd = new Date(TIMELINE_END_YEAR, 11, 31);
+  if (now < TIMELINE_START || now > timelineEnd) return null;
+  return Math.round((now.getTime() - TIMELINE_START.getTime()) / 86400000);
 }
 
-const MONTH_GRADIENTS = [
-  'linear-gradient(90deg,#6366f1,#818cf8)',
-  'linear-gradient(90deg,#6366f1,#818cf8)',
-  'linear-gradient(90deg,#6366f1,#818cf8)',
-  'linear-gradient(90deg,#22c55e,#4ade80)',
-  'linear-gradient(90deg,#22c55e,#4ade80)',
-  'linear-gradient(90deg,#22c55e,#4ade80)',
-  'linear-gradient(90deg,#f59e0b,#fbbf24)',
-  'linear-gradient(90deg,#f59e0b,#fbbf24)',
-  'linear-gradient(90deg,#f59e0b,#fbbf24)',
-  'linear-gradient(90deg,#3b82f6,#60a5fa)',
-  'linear-gradient(90deg,#3b82f6,#60a5fa)',
-  'linear-gradient(90deg,#3b82f6,#60a5fa)',
-];
+function fmtRent(rent: string | null): string | null {
+  if (!rent) return null;
+  const num = parseInt(rent.replace(/[₩,\s]/g, ''), 10);
+  if (isNaN(num) || num === 0) return null;
+  return `${Math.round(num / 10000)}만`;
+}
 
-function CalendarGrid({
-  year,
-  months,
-  totalDays,
-  visibleFloors,
-  todayOffset,
-  dayWidth,
-}: {
-  year: number;
-  months: MonthInfo[];
-  totalDays: number;
-  visibleFloors: FloorNumber[];
-  todayOffset: number | null;
-  dayWidth: number;
-}) {
-  const totalWidth = totalDays * dayWidth;
+// ──────────── CalendarGrid ────────────
+
+function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNumber[]; onSelectRoom: (room: Room) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const todayOffset = useMemo(() => getTodayOffset(), []);
+  const totalWidth = TOTAL_DAYS * DAY_WIDTH;
+  const HEADER_H = MONTH_H + DAY_H;
+
+  // 오늘 날짜로 초기 스크롤 위치
+  useEffect(() => {
+    if (scrollRef.current && todayOffset !== null) {
+      const el = scrollRef.current;
+      const centerX = todayOffset * DAY_WIDTH - el.clientWidth / 2;
+      el.scrollLeft = Math.max(0, centerX);
+    }
+  }, [todayOffset]);
 
   return (
     <div className="rounded-2xl border border-[#222222] overflow-hidden shadow-2xl">
-      <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 260px)' }}>
+      <div ref={scrollRef} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
         <div style={{ width: ROOM_COL_WIDTH + totalWidth, minWidth: 'max-content' }}>
 
-          {/* ── Month header ── */}
+          {/* ── Month header (연도 + 월 같이 표시) ── */}
           <div
             className="flex sticky top-0 z-20 border-b border-[#222222]"
-            style={{ height: MONTH_H, background: 'linear-gradient(180deg, #161616 0%, #111111 100%)' }}
+            style={{ height: MONTH_H, background: 'linear-gradient(180deg,#161616 0%,#111111 100%)' }}
           >
             <div
               className="sticky left-0 z-30 flex items-center justify-center text-xs font-semibold text-gray-400 tracking-wider uppercase border-r border-[#222222]"
-              style={{
-                width: ROOM_COL_WIDTH,
-                minWidth: ROOM_COL_WIDTH,
-                background: 'linear-gradient(180deg, #161616 0%, #111111 100%)',
-              }}
+              style={{ width: ROOM_COL_WIDTH, minWidth: ROOM_COL_WIDTH, background: 'linear-gradient(180deg,#161616 0%,#111111 100%)' }}
             >
               호수
             </div>
-            {months.map((m) => (
+            {ALL_MONTHS.map((m, i) => (
               <div
-                key={m.month}
-                className="relative flex items-center justify-center border-r border-[#222222]"
-                style={{ width: m.days * dayWidth, minWidth: m.days * dayWidth }}
+                key={i}
+                className="relative flex flex-col items-center justify-center gap-0.5 border-r border-[#222222]"
+                style={{ width: m.days * DAY_WIDTH, minWidth: m.days * DAY_WIDTH, borderRightColor: m.month === 12 ? '#444' : '#222' }}
               >
-                <span className="text-sm font-bold text-white tracking-wide">{m.name}</span>
-                <div
-                  className="absolute bottom-0 left-2 right-2 h-[2px] rounded-t-full opacity-40"
-                  style={{ background: MONTH_GRADIENTS[m.month - 1] }}
-                />
+                <span className="text-sm font-semibold text-indigo-400 leading-none">{m.year}</span>
+                <span className="text-base font-bold text-gray-200 leading-none">{m.month}월</span>
               </div>
             ))}
           </div>
@@ -149,31 +191,25 @@ function CalendarGrid({
               className="sticky left-0 z-30 border-r border-[#222222]"
               style={{ width: ROOM_COL_WIDTH, minWidth: ROOM_COL_WIDTH, backgroundColor: '#0D0D0D' }}
             />
-            {months.map((m) =>
+            {ALL_MONTHS.map((m, mi) =>
               Array.from({ length: m.days }, (_, d) => {
                 const day = d + 1;
                 const isLastOfMonth = day === m.days;
-                const isFirst = day === 1;
                 const dayIdx = m.startDay + d;
                 const isToday = todayOffset === dayIdx;
+                const isFirst = day === 1;
 
                 return (
                   <div
-                    key={`${m.month}-${day}`}
+                    key={`${mi}-${day}`}
                     className="relative flex items-center justify-center shrink-0"
                     style={{
-                      width: dayWidth,
-                      borderRight: `1px solid ${isLastOfMonth ? '#333333' : '#222222'}`,
-                      backgroundColor: isToday ? 'rgba(239,68,68,0.1)' : undefined,
+                      width: DAY_WIDTH,
+                      borderRight: `1px solid ${isLastOfMonth ? (m.month === 12 ? '#444' : '#333') : '#1e1e1e'}`,
+                      backgroundColor: isToday ? 'rgba(239,68,68,0.12)' : undefined,
                     }}
                   >
-                    <span
-                      className="font-medium"
-                      style={{
-                        fontSize: dayWidth < 20 ? 8 : 12,
-                        color: isFirst ? '#e5e7eb' : isToday ? '#fca5a5' : '#9ca3af',
-                      }}
-                    >
+                    <span style={{ fontSize: 8, color: isFirst ? '#e5e7eb' : isToday ? '#fca5a5' : '#555' }}>
                       {day}
                     </span>
                     {isToday && (
@@ -188,36 +224,37 @@ function CalendarGrid({
           {/* ── Rows by floor ── */}
           {visibleFloors.map((floor) => {
             const fi = FLOORS.indexOf(floor);
-            const color = FLOOR_COLORS[fi];
+            const accent = FLOOR_ACCENTS[fi];
 
             return (
               <div key={floor}>
                 {/* Floor separator */}
                 <div
                   className="flex items-center sticky z-10 border-b border-[#222222]"
-                  style={{ height: FLOOR_ROW_H, backgroundColor: '#0F0F0F', top: MONTH_H + DAY_H }}
+                  style={{ height: FLOOR_ROW_H, backgroundColor: '#0F0F0F', top: HEADER_H }}
                 >
                   <div
                     className="sticky left-0 z-20 flex items-center gap-2 px-3 border-r border-[#222222]"
                     style={{ width: ROOM_COL_WIDTH, minWidth: ROOM_COL_WIDTH, backgroundColor: '#0F0F0F' }}
                   >
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color.accent }} />
-                    <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: color.dot }}>
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
+                    <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: accent }}>
                       {floor}F
                     </span>
                   </div>
-                  <div style={{ width: totalWidth, position: 'relative' }}>
-                    {months.slice(0, -1).map((m) => (
+                  <div className="relative" style={{ width: totalWidth }}>
+                    {/* 연도 구분선 */}
+                    {YEAR_GROUPS.slice(0, -1).map((yg) => (
                       <div
-                        key={m.month}
+                        key={yg.year}
                         className="absolute top-0 bottom-0"
-                        style={{ left: (m.startDay + m.days) * dayWidth, width: 1, backgroundColor: '#1A1A1A' }}
+                        style={{ left: (yg.startDay + yg.totalDays) * DAY_WIDTH, width: 1, backgroundColor: '#444' }}
                       />
                     ))}
                     {todayOffset !== null && (
                       <div
                         className="absolute top-0 bottom-0"
-                        style={{ left: todayOffset * dayWidth, width: dayWidth, backgroundColor: 'rgba(239,68,68,0.08)' }}
+                        style={{ left: todayOffset * DAY_WIDTH, width: DAY_WIDTH, backgroundColor: 'rgba(239,68,68,0.08)' }}
                       />
                     )}
                   </div>
@@ -225,8 +262,11 @@ function CalendarGrid({
 
                 {/* Room rows */}
                 {ROOMS_BY_FLOOR[floor].map((room, ri) => {
-                  const bar = getBarGeometry(room.moveInDate, room.moveOutDate, year, dayWidth);
+                  const bar = getBarGeometry(room.moveInDate, room.moveOutDate);
+                  const color = ROOM_COLOR_MAP[room.id] ?? PALETTE[0];
                   const isEven = ri % 2 === 0;
+                  const rentLabel = fmtRent(room.monthlyRent);
+                  const pastTenants: TenantBar[] = ROOM_TENANT_HISTORY[room.id] ?? [];
 
                   return (
                     <div
@@ -238,20 +278,20 @@ function CalendarGrid({
                     >
                       {/* Room label */}
                       <div
-                        className="sticky left-0 z-10 flex items-center gap-1.5 px-3 border-r border-[#222222] transition-colors overflow-hidden"
+                        className="sticky left-0 z-10 flex items-center gap-1.5 px-3 border-r border-[#222222] overflow-hidden"
                         style={{
                           width: ROOM_COL_WIDTH,
                           minWidth: ROOM_COL_WIDTH,
                           backgroundColor: 'inherit',
-                          borderLeft: `2px solid ${color.from}22`,
+                          borderLeft: `2px solid ${color.from}44`,
                         }}
                       >
-                        <span className="text-[15px] font-semibold text-gray-200 whitespace-nowrap">{room.id}호</span>
+                        <span className="text-[14px] font-semibold text-gray-200 whitespace-nowrap">{room.id}호</span>
                         {room.status === 'vacant' && (
-                          <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-[#1A1A1A] text-gray-400 whitespace-nowrap shrink-0">공실</span>
+                          <span className="text-[10px] font-semibold px-1 py-0.5 rounded bg-[#1A1A1A] text-gray-400 whitespace-nowrap shrink-0">공실</span>
                         )}
                         {room.status === 'contract' && (
-                          <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-[#1A1A1A] text-yellow-600 whitespace-nowrap shrink-0">계약</span>
+                          <span className="text-[10px] font-semibold px-1 py-0.5 rounded bg-[#1A1A1A] text-yellow-600 whitespace-nowrap shrink-0">계약</span>
                         )}
                       </div>
 
@@ -260,38 +300,82 @@ function CalendarGrid({
                         className="relative flex-none"
                         style={{
                           width: totalWidth,
-                          backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent ${dayWidth - 1}px, #1e1e1e ${dayWidth - 1}px, #1e1e1e ${dayWidth}px)`,
+                          backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent ${DAY_WIDTH - 1}px, #1a1a1a ${DAY_WIDTH - 1}px, #1a1a1a ${DAY_WIDTH}px)`,
                         }}
                       >
-                        {/* Month dividers */}
-                        {months.slice(0, -1).map((m) => (
+                        {/* 월 구분선 */}
+                        {ALL_MONTHS.slice(0, -1).map((m, i) => (
                           <div
-                            key={m.month}
+                            key={i}
                             className="absolute top-0 bottom-0"
-                            style={{ left: (m.startDay + m.days) * dayWidth, width: 1, backgroundColor: '#333333' }}
+                            style={{
+                              left: (m.startDay + m.days) * DAY_WIDTH,
+                              width: 1,
+                              backgroundColor: m.month === 12 ? '#444' : '#2a2a2a',
+                            }}
                           />
                         ))}
 
-                        {/* Today column highlight */}
+                        {/* 오늘 컬럼 */}
                         {todayOffset !== null && (
                           <div
                             className="absolute top-0 bottom-0 z-[5] pointer-events-none"
-                            style={{ left: todayOffset * dayWidth, width: dayWidth, backgroundColor: 'rgba(239,68,68,0.08)' }}
+                            style={{ left: todayOffset * DAY_WIDTH, width: DAY_WIDTH, backgroundColor: 'rgba(239,68,68,0.08)' }}
                           />
                         )}
 
-                        {/* Occupancy bar */}
+                        {/* 과거 입실자 바 */}
+                        {pastTenants.map((pt, pti) => {
+                          const ptBar = getBarGeometry(pt.moveInDate, pt.moveOutDate);
+                          if (!ptBar) return null;
+                          const ptRent = fmtRent(pt.monthlyRent ?? null);
+                          return (
+                            <div
+                              key={pti}
+                              className="absolute flex items-center overflow-hidden z-10 cursor-default select-none"
+                              style={{
+                                top: 6, bottom: 6,
+                                left: ptBar.left + 2,
+                                width: ptBar.width - 4,
+                                borderRadius: 6,
+                                background: `linear-gradient(90deg, ${color.from}55 0%, ${color.to}55 100%)`,
+                                border: `1px solid ${color.from}66`,
+                              }}
+                              title={`${pt.name}${pt.age ? ` (${pt.age}세)` : ''} · ${pt.moveInDate} ~ ${pt.moveOutDate}`}
+                            >
+                              <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md" style={{ backgroundColor: color.dot, opacity: 0.4 }} />
+                              <div className="flex items-center gap-1.5 pl-3 pr-2 overflow-hidden">
+                                <div
+                                  className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
+                                  style={{ backgroundColor: `${color.dot}30`, color: color.dot, border: `1px solid ${color.dot}60` }}
+                                >
+                                  {pt.name[0]}
+                                </div>
+                                <span className="whitespace-nowrap text-[12px] font-semibold text-white opacity-70">{pt.name}</span>
+                                {ptRent && ptBar.width > 80 && (
+                                  <span className="whitespace-nowrap text-[11px] text-white opacity-50">{ptRent}</span>
+                                )}
+                                {ptBar.width > 220 && (
+                                  <span className="whitespace-nowrap text-[11px] text-white opacity-40">· {pt.moveInDate} ~ {pt.moveOutDate}</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* 현재 입실 바 */}
                         {bar && (
                           <div
-                            className="absolute flex items-center overflow-hidden z-10 cursor-default select-none"
+                            onClick={() => onSelectRoom(room)}
+                            className="absolute flex items-center overflow-hidden z-10 cursor-pointer select-none"
                             style={{
                               top: 6,
                               bottom: 6,
                               left: bar.left + 2,
                               width: bar.width - 4,
                               borderRadius: 6,
-                              background: `linear-gradient(90deg, ${color.from} 0%, ${color.to} 100%)`,
-                              boxShadow: `0 1px 8px ${color.from}55`,
+                              background: `linear-gradient(90deg, ${color.from}99 0%, ${color.to}99 100%)`,
+                              boxShadow: `0 1px 8px ${color.from}33`,
                             }}
                             title={`${room.resident} (${room.age}세) · ${room.monthlyRent} · ${room.moveInDate} ~ ${room.moveOutDate}`}
                           >
@@ -306,32 +390,23 @@ function CalendarGrid({
                               >
                                 {room.resident?.[0]}
                               </div>
-                              <span className="whitespace-nowrap text-[14px] font-bold tracking-tight" style={{ color: '#ffffff' }}>
+                              <span className="whitespace-nowrap text-[13px] font-bold tracking-tight text-white">
                                 {room.resident}
                               </span>
-                              {room.gender && (
+                              {rentLabel && bar.width > 80 && (
                                 <span
-                                  className="whitespace-nowrap text-[11px] font-bold px-1.5 py-0.5 rounded"
+                                  className="whitespace-nowrap text-[12px] font-bold px-1.5 py-0.5 rounded"
                                   style={{
-                                    backgroundColor: room.gender === '남' ? 'rgba(96,165,250,0.3)' : 'rgba(244,114,182,0.3)',
-                                    color: room.gender === '남' ? '#93c5fd' : '#f9a8d4',
+                                    backgroundColor: `${color.dot}30`,
+                                    color: color.dot,
+                                    border: `1px solid ${color.dot}50`,
                                   }}
                                 >
-                                  {room.gender}
+                                  {rentLabel}
                                 </span>
                               )}
-                              {room.age && bar.width > 100 && (
-                                <span className="whitespace-nowrap text-[14px] font-semibold" style={{ color: '#ffffff' }}>
-                                  · {room.age}세
-                                </span>
-                              )}
-                              {room.monthlyRent && bar.width > 180 && (
-                                <span className="whitespace-nowrap text-[14px] font-semibold" style={{ color: '#ffffff' }}>
-                                  · {room.monthlyRent}
-                                </span>
-                              )}
-                              {room.moveInDate && room.moveOutDate && bar.width > 320 && (
-                                <span className="whitespace-nowrap text-[14px] font-bold opacity-80" style={{ color: '#ffffff' }}>
+                              {room.moveInDate && room.moveOutDate && bar.width > 220 && (
+                                <span className="whitespace-nowrap text-[12px] font-bold text-white opacity-90">
                                   · {room.moveInDate} ~ {room.moveOutDate}
                                 </span>
                               )}
@@ -351,18 +426,16 @@ function CalendarGrid({
   );
 }
 
+// ──────────── Page ────────────
+
 export default function CalendarPage() {
   const stats = getDashboardStats();
-  const [year, setYear] = useState(2026);
   const [selectedFloors, setSelectedFloors] = useState<Set<FloorNumber>>(new Set(FLOORS));
+  const [activeModal, setActiveModal] = useState<RoomModalType>(null);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
-  const months = useMemo(() => buildMonths(year), [year]);
-  const totalDays = useMemo(() => (isLeapYear(year) ? 366 : 365), [year]);
-  const todayOffset = useMemo(() => getTodayOffset(year), [year]);
-  const visibleFloors = useMemo(
-    () => FLOORS.filter((f) => selectedFloors.has(f)),
-    [selectedFloors]
-  );
+  const modalRooms = activeModal ? ALL_ROOMS.filter((r) => r.status === activeModal) : [];
+  const visibleFloors = FLOORS.filter((f) => selectedFloors.has(f));
 
   function toggleFloor(floor: FloorNumber) {
     setSelectedFloors((prev) => {
@@ -386,41 +459,28 @@ export default function CalendarPage() {
   return (
     <main className="w-full space-y-5">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">연간 캘린더</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            연도별 입실 현황을 한눈에 확인할 수 있습니다.
-          </p>
-        </div>
-
-        {/* Year selector */}
-        <div className="flex items-center gap-1 rounded-xl border border-[#2A2A2A] bg-[#111111] p-1">
-          <button
-            onClick={() => setYear((y) => y - 1)}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-white hover:bg-[#222222] transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="w-20 text-center text-sm font-semibold text-white tabular-nums">{year}년</span>
-          <button
-            onClick={() => setYear((y) => y + 1)}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-white hover:bg-[#222222] transition-colors"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-white">연간 캘린더</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          {TIMELINE_START_YEAR}~{TIMELINE_END_YEAR}년 입실 현황 · 오늘 날짜 기준으로 자동 스크롤됩니다.
+        </p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { title: "총 방 개수", value: `${stats.totalRooms}개`, subtitle: "전체 관리 방" },
-          { title: "총 입실자 수", value: `${stats.occupiedRooms}명`, subtitle: `${stats.occupancyRate}% 입실률` },
-          { title: "현재 공실", value: `${stats.vacantRooms}개`, subtitle: "즉시 입실 가능" },
-          { title: "계약", value: `${stats.contractRooms}개`, subtitle: "계약 진행 방" },
+          { key: null,                        title: "총 방 개수",   value: `${stats.totalRooms}개`,    subtitle: "전체 관리 방" },
+          { key: "occupied" as RoomModalType, title: "총 입실자 수", value: `${stats.occupiedRooms}명`, subtitle: `${stats.occupancyRate}% 입실률` },
+          { key: "vacant"   as RoomModalType, title: "현재 공실",   value: `${stats.vacantRooms}개`,   subtitle: "즉시 입실 가능" },
+          { key: "contract" as RoomModalType, title: "계약",        value: `${stats.contractRooms}개`, subtitle: "계약 진행 방" },
         ].map((stat, idx) => (
-          <div key={idx} className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
+          <div
+            key={idx}
+            onClick={() => stat.key && setActiveModal(stat.key)}
+            className={`rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm transition-colors ${
+              stat.key ? "cursor-pointer hover:border-[#3A3A3A] hover:bg-[#161616]" : ""
+            }`}
+          >
             <h3 className="text-sm font-medium text-gray-400">{stat.title}</h3>
             <p className="mt-2 text-3xl font-bold text-white">{stat.value}</p>
             <p className="mt-1 text-sm text-gray-500">{stat.subtitle}</p>
@@ -428,7 +488,7 @@ export default function CalendarPage() {
         ))}
       </div>
 
-      {/* Filter bar */}
+      {/* Floor filter */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={toggleAll}
@@ -444,7 +504,7 @@ export default function CalendarPage() {
         <div className="w-px h-5 bg-[#2A2A2A]" />
 
         {FLOORS.map((floor, fi) => {
-          const color = FLOOR_COLORS[fi];
+          const accent = FLOOR_ACCENTS[fi];
           const active = selectedFloors.has(floor);
           return (
             <button
@@ -452,57 +512,37 @@ export default function CalendarPage() {
               onClick={() => toggleFloor(floor)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all"
               style={{
-                backgroundColor: active ? `${color.from}22` : 'transparent',
-                borderColor: active ? color.from : '#2A2A2A',
-                color: '#000000',
+                backgroundColor: active ? `${accent}22` : 'transparent',
+                borderColor: active ? accent : '#2A2A2A',
+                color: active ? accent : '#9ca3af',
               }}
             >
-              <span
-                className="inline-block w-2.5 h-2.5 rounded-sm"
-                style={{
-                  background: active
-                    ? `linear-gradient(135deg, ${color.from}, ${color.to})`
-                    : '#2A2A2A',
-                }}
-              />
+              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: active ? accent : '#2A2A2A' }} />
               {floor}층
             </button>
           );
         })}
 
-        {todayOffset !== null && (
-          <>
-            <div className="w-px h-5 bg-[#2A2A2A]" />
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block w-0.5 h-4 rounded-full bg-rose-500" />
-              <span className="text-sm text-gray-400 font-medium">오늘</span>
-            </div>
-          </>
-        )}
+        <div className="w-px h-5 bg-[#2A2A2A]" />
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-0.5 h-4 rounded-full bg-rose-500" />
+          <span className="text-sm text-gray-400 font-medium">오늘</span>
+        </div>
       </div>
 
-      {/* 기본 캘린더 (DAY_WIDTH=28) */}
-      <CalendarGrid
-        year={year}
-        months={months}
-        totalDays={totalDays}
-        visibleFloors={visibleFloors}
-        todayOffset={todayOffset}
-        dayWidth={28}
+      {/* 타임라인 */}
+      <CalendarGrid visibleFloors={visibleFloors} onSelectRoom={setSelectedRoom} />
+
+      <RoomListModal
+        type={activeModal}
+        rooms={modalRooms}
+        onClose={() => setActiveModal(null)}
       />
 
-      {/* 축소 캘린더 (DAY_WIDTH=10) */}
-      <div>
-        <p className="mb-3 text-sm font-semibold text-gray-400">전체 보기 (축소)</p>
-        <CalendarGrid
-          year={year}
-          months={months}
-          totalDays={totalDays}
-          visibleFloors={visibleFloors}
-          todayOffset={todayOffset}
-          dayWidth={16}
-        />
-      </div>
+      <RoomDetailDrawer
+        room={selectedRoom}
+        onClose={() => setSelectedRoom(null)}
+      />
     </main>
   );
 }
