@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   Pencil,
-  Flame,
   Zap,
   Home,
   Calendar,
@@ -98,12 +97,6 @@ export default function ResidentDetailPage() {
   const [depAmount, setDepAmount] = useState("");
   const [depReason, setDepReason] = useState<DepositDeductionReason>("차임");
 
-  // 도시가스 폼
-  const [showGasForm, setShowGasForm] = useState(false);
-  const [gasMonth, setGasMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [gasAmount, setGasAmount] = useState("");
-  const [editGasIdx, setEditGasIdx] = useState<number | null>(null);
-
   // 한전
   const [editElec, setEditElec] = useState(false);
   const [elecScheduled, setElecScheduled] = useState("");
@@ -161,40 +154,6 @@ export default function ResidentDetailPage() {
     setDetail((prev) =>
       prev ? { ...prev, depositDeductions: prev.depositDeductions.filter((_, idx) => idx !== i) } : prev
     );
-  }
-
-  // ── 도시가스 ──
-
-  function addGasBill() {
-    if (!detail || !gasMonth || !gasAmount) return;
-    if (editGasIdx !== null) {
-      setDetail((prev) =>
-        prev
-          ? {
-              ...prev,
-              gasBills: prev.gasBills.map((b, i) =>
-                i === editGasIdx ? { month: gasMonth, amount: Number(gasAmount) } : b
-              ),
-            }
-          : prev
-      );
-      setEditGasIdx(null);
-    } else {
-      setDetail((prev) =>
-        prev ? { ...prev, gasBills: [...prev.gasBills, { month: gasMonth, amount: Number(gasAmount) }] } : prev
-      );
-    }
-    setGasAmount("");
-    setShowGasForm(false);
-  }
-
-  function startEditGas(i: number) {
-    if (!detail) return;
-    const bill = detail.gasBills[i];
-    setGasMonth(bill.month);
-    setGasAmount(String(bill.amount));
-    setEditGasIdx(i);
-    setShowGasForm(true);
   }
 
   // ── 한전 ──
@@ -604,73 +563,7 @@ export default function ResidentDetailPage() {
           </div>
 
           {/* ── 공과금 처리 ── */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-
-            {/* 도시가스 */}
-            <div className={CARD}>
-              <div className={SECTION_HEADER}>
-                <div className="flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-orange-400" />
-                  <div>
-                    <h2 className="text-base font-semibold text-white">도시가스</h2>
-                    <p className="mt-0.5 text-xs text-gray-500">월별 가스 납부 내역</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setEditGasIdx(null);
-                    setGasAmount("");
-                    setGasMonth(new Date().toISOString().slice(0, 7));
-                    setShowGasForm((v) => !v);
-                  }}
-                  className="flex items-center gap-1.5 rounded-lg border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-400 transition-colors hover:bg-orange-500/20"
-                >
-                  <Plus className="h-3.5 w-3.5" />추가
-                </button>
-              </div>
-
-              {showGasForm && (
-                <div className="border-b border-[#2A2A2A] bg-[#0E0E0E] px-5 py-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1.5 block text-xs text-gray-400">월</label>
-                      <input type="month" value={gasMonth} onChange={(e) => setGasMonth(e.target.value)} className={INPUT} />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs text-gray-400">금액 (원)</label>
-                      <input type="number" value={gasAmount} onChange={(e) => setGasAmount(e.target.value)} placeholder="15000" className={INPUT} />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => { setShowGasForm(false); setEditGasIdx(null); }} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
-                    <button onClick={addGasBill} disabled={!gasMonth || !gasAmount} className="rounded-lg bg-orange-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40">저장</button>
-                  </div>
-                </div>
-              )}
-
-              <div className="divide-y divide-[#1E1E1E]">
-                {detail.gasBills.length === 0 ? (
-                  <div className="px-5 py-8 text-center text-sm text-gray-500">등록된 가스 납부 내역이 없습니다.</div>
-                ) : (
-                  [...detail.gasBills]
-                    .sort((a, b) => b.month.localeCompare(a.month))
-                    .map((b, i) => {
-                      const origIdx = detail.gasBills.findIndex((g) => g.month === b.month);
-                      return (
-                        <div key={i} className="flex items-center justify-between px-5 py-3">
-                          <span className="text-sm font-medium text-gray-300">{fmtMonthKo(b.month)}</span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold text-orange-400">₩{b.amount.toLocaleString("ko-KR")}</span>
-                            <button onClick={() => startEditGas(origIdx)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-orange-500/10 hover:text-orange-400">
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </div>
+          <div className="grid grid-cols-1 gap-6">
 
             {/* 한전 */}
             <div className={CARD}>

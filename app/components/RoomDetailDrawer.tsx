@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   X, ExternalLink, Home, Banknote, Calendar, MapPin, Target,
-  Flame, Zap, Plus, Trash2, Pencil,
+  Zap, Plus, Trash2, Pencil,
 } from "lucide-react";
 import {
   RESIDENT_DETAIL_BY_ROOM,
@@ -87,9 +87,6 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
     setActiveTab("기본 정보");
     setShowDepForm(false);
     setDepAmount("");
-    setShowGasForm(false);
-    setGasAmount("");
-    setEditGasIdx(null);
     setEditElec(false);
     setElecScheduled("");
     setElecActual("");
@@ -104,12 +101,6 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
   const [depDate, setDepDate] = useState(new Date().toISOString().slice(0, 10));
   const [depAmount, setDepAmount] = useState("");
   const [depReason, setDepReason] = useState<DepositDeductionReason>("차임");
-
-  // 도시가스
-  const [showGasForm, setShowGasForm] = useState(false);
-  const [gasMonth, setGasMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [gasAmount, setGasAmount] = useState("");
-  const [editGasIdx, setEditGasIdx] = useState<number | null>(null);
 
   // 한전
   const [editElec, setEditElec] = useState(false);
@@ -132,21 +123,6 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
   }
   function deleteDeduction(i: number) {
     setDetail((p) => p ? { ...p, depositDeductions: p.depositDeductions.filter((_, idx) => idx !== i) } : p);
-  }
-  function addGasBill() {
-    if (!detail || !gasMonth || !gasAmount) return;
-    if (editGasIdx !== null) {
-      setDetail((p) => p ? { ...p, gasBills: p.gasBills.map((b, i) => i === editGasIdx ? { month: gasMonth, amount: Number(gasAmount) } : b) } : p);
-      setEditGasIdx(null);
-    } else {
-      setDetail((p) => p ? { ...p, gasBills: [...p.gasBills, { month: gasMonth, amount: Number(gasAmount) }] } : p);
-    }
-    setGasAmount(""); setShowGasForm(false);
-  }
-  function startEditGas(i: number) {
-    if (!detail) return;
-    const b = detail.gasBills[i];
-    setGasMonth(b.month); setGasAmount(String(b.amount)); setEditGasIdx(i); setShowGasForm(true);
   }
   function saveElec() {
     if (!detail || !elecScheduled || !elecActual || !elecUsage) return;
@@ -449,60 +425,6 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
               {/* 공과금 탭 */}
               {room.status === "occupied" && activeTab === "공과금" && detail && (
                 <div className="p-5 space-y-4">
-                  {/* 도시가스 */}
-                  <div className="rounded-xl border border-[#2A2A2A] bg-[#111] overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-[#2A2A2A]">
-                      <div className="flex items-center gap-2">
-                        <Flame className="h-4 w-4 text-orange-400" />
-                        <span className="text-sm font-semibold text-white">도시가스</span>
-                      </div>
-                      <button
-                        onClick={() => { setEditGasIdx(null); setGasAmount(""); setGasMonth(new Date().toISOString().slice(0, 7)); setShowGasForm((v) => !v); }}
-                        className="flex items-center gap-1.5 rounded-lg border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-400 hover:bg-orange-500/20"
-                      >
-                        <Plus className="h-3.5 w-3.5" />추가
-                      </button>
-                    </div>
-                    {showGasForm && (
-                      <div className="border-b border-[#2A2A2A] bg-[#0E0E0E] px-4 py-3 space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="mb-1.5 block text-xs text-gray-400">월</label>
-                            <input type="month" value={gasMonth} onChange={(e) => setGasMonth(e.target.value)} className={INPUT} />
-                          </div>
-                          <div>
-                            <label className="mb-1.5 block text-xs text-gray-400">금액 (원)</label>
-                            <input type="number" value={gasAmount} onChange={(e) => setGasAmount(e.target.value)} placeholder="15000" className={INPUT} />
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <button onClick={() => { setShowGasForm(false); setEditGasIdx(null); }} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 hover:text-white">취소</button>
-                          <button onClick={addGasBill} disabled={!gasMonth || !gasAmount} className="rounded-lg bg-orange-500 px-4 py-2 text-xs font-semibold text-white hover:bg-orange-400 disabled:opacity-40">저장</button>
-                        </div>
-                      </div>
-                    )}
-                    <div className="divide-y divide-[#1E1E1E]">
-                      {detail.gasBills.length === 0 ? (
-                        <p className="py-6 text-center text-sm text-gray-500">등록된 가스 납부 내역이 없습니다.</p>
-                      ) : (
-                        [...detail.gasBills].sort((a, b) => b.month.localeCompare(a.month)).map((b, i) => {
-                          const origIdx = detail.gasBills.findIndex((g) => g.month === b.month);
-                          return (
-                            <div key={i} className="flex items-center justify-between px-4 py-3">
-                              <span className="text-sm text-gray-300">{fmtMonthKo(b.month)}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold text-orange-400">₩{b.amount.toLocaleString("ko-KR")}</span>
-                                <button onClick={() => startEditGas(origIdx)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 hover:bg-orange-500/10 hover:text-orange-400">
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-
                   {/* 한전 */}
                   <div className="rounded-xl border border-[#2A2A2A] bg-[#111] overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-[#2A2A2A]">

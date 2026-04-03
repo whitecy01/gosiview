@@ -32,32 +32,14 @@ function calcYearRange() {
 const { startYear: TIMELINE_START_YEAR, endYear: TIMELINE_END_YEAR } = calcYearRange();
 
 const ROOM_COL_WIDTH = 100;
-const ROW_HEIGHT = 46;
+const ROW_HEIGHT = 34;
 const MONTH_H = 56;
 const DAY_H = 26;
 const FLOOR_ROW_H = 28;
 const DAY_WIDTH = 16;
 
-// 방별 색상 팔레트 (12색 순환)
-const PALETTE = [
-  { from: '#6366f1', to: '#4f46e5', dot: '#a5b4fc' },
-  { from: '#ec4899', to: '#db2777', dot: '#f9a8d4' },
-  { from: '#14b8a6', to: '#0d9488', dot: '#5eead4' },
-  { from: '#f59e0b', to: '#d97706', dot: '#fcd34d' },
-  { from: '#22c55e', to: '#16a34a', dot: '#86efac' },
-  { from: '#3b82f6', to: '#2563eb', dot: '#93c5fd' },
-  { from: '#f43f5e', to: '#e11d48', dot: '#fda4af' },
-  { from: '#8b5cf6', to: '#7c3aed', dot: '#c4b5fd' },
-  { from: '#06b6d4', to: '#0891b2', dot: '#67e8f9' },
-  { from: '#84cc16', to: '#65a30d', dot: '#bef264' },
-  { from: '#fb923c', to: '#ea580c', dot: '#fdba74' },
-  { from: '#a855f7', to: '#9333ea', dot: '#d8b4fe' },
-];
-
-const ROOM_COLOR_MAP: Record<string, typeof PALETTE[number]> = {};
-ALL_ROOMS.forEach((room, idx) => {
-  ROOM_COLOR_MAP[room.id] = PALETTE[idx % PALETTE.length];
-});
+// 모든 바에 동일한 색상 사용
+const BAR_COLOR = { from: '#6366f1', to: '#4f46e5', dot: '#a5b4fc' };
 
 const FLOOR_ACCENTS = ['#818cf8', '#c084fc', '#60a5fa', '#22d3ee', '#2dd4bf', '#4ade80'];
 
@@ -156,7 +138,7 @@ function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNum
 
   return (
     <div className="rounded-2xl border border-[#222222] overflow-hidden shadow-2xl">
-      <div ref={scrollRef} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+      <div ref={scrollRef} className="overflow-x-auto overflow-y-visible">
         <div style={{ width: ROOM_COL_WIDTH + totalWidth, minWidth: 'max-content' }}>
 
           {/* ── Month header (연도 + 월 같이 표시) ── */}
@@ -263,7 +245,7 @@ function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNum
                 {/* Room rows */}
                 {ROOMS_BY_FLOOR[floor].map((room, ri) => {
                   const bar = getBarGeometry(room.moveInDate, room.moveOutDate);
-                  const color = ROOM_COLOR_MAP[room.id] ?? PALETTE[0];
+                  const color = BAR_COLOR;
                   const isEven = ri % 2 === 0;
                   const rentLabel = fmtRent(room.monthlyRent);
                   const pastTenants: TenantBar[] = ROOM_TENANT_HISTORY[room.id] ?? [];

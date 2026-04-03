@@ -1,26 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { X } from 'lucide-react';
-import { ALL_ROOMS, ROOMS_BY_FLOOR, getDashboardStats, type FloorNumber } from '../lib/mock-data';
-
-// ──────────── 상수 ────────────
-
-const FLOORS: FloorNumber[] = [1, 2, 3, 4, 5, 6];
-const FLOOR_COLORS = ['#6366f1', '#a855f7', '#3b82f6', '#06b6d4', '#14b8a6', '#22c55e'];
-const ROOM_TYPE_COLORS: Record<string, string> = {
-  'Cozy':                        '#6366f1',
-  'Standard A-1':                '#3b82f6',
-  'Standard A-1 +':              '#06b6d4',
-  'Standard A-2':                '#14b8a6',
-  'Standard A-2 +':              '#22c55e',
-  'Standard A-2 (넓은 사이즈)':  '#f59e0b',
-  'Standard A-3':                '#fb923c',
-  'Standard B-1':                '#f43f5e',
-  'Standard B-2':                '#ec4899',
-  'Deluxe A':                    '#8b5cf6',
-  'Deluxe B':                    '#a855f7',
-};
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ALL_ROOMS, MAINTENANCE_BY_ROOM, getDashboardStats } from '../lib/mock-data';
 
 // ──────────── 헬퍼 ────────────
 
@@ -52,19 +34,31 @@ type MonthData = {
 
 // ──────────── 컴포넌트: MonthDetailModal ────────────
 
+const STATUS_STYLE: Record<string, { badge: string; dot: string }> = {
+  '납부 완료': { badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', dot: '#22c55e' },
+  '납부 예정': { badge: 'bg-amber-500/20 text-amber-400 border-amber-500/30',       dot: '#f59e0b' },
+  '미납':      { badge: 'bg-rose-500/20 text-rose-400 border-rose-500/30',           dot: '#f43f5e' },
+};
+
+type StatusFilter = '전체' | '납부 완료' | '납부 예정' | '미납';
+
 function MonthDetailModal({ months, initialIdx, onClose }: { months: MonthData[]; initialIdx: number; onClose: () => void }) {
   const [idx, setIdx] = useState(initialIdx);
+  const [filter, setFilter] = useState<StatusFilter>('전체');
   const m = months[idx];
 
-  const paid    = m.rows.filter(r => r.status === '납부 완료').reduce((s, r) => s + r.rent, 0);
-  const pending = m.rows.filter(r => r.status === '납부 예정').reduce((s, r) => s + r.rent, 0);
-  const overdue = m.rows.filter(r => r.status === '미납').reduce((s, r) => s + r.rent, 0);
+  const paidCount    = m.rows.filter(r => r.status === '납부 완료').length;
+  const upcomingCount = m.rows.filter(r => r.status === '납부 예정').length;
+  const overdueCount  = m.rows.filter(r => r.status === '미납').length;
 
-  const STATUS_STYLE: Record<string, string> = {
-    '납부 완료': 'bg-emerald-500/20 text-emerald-400',
-    '납부 예정': 'bg-amber-500/20 text-amber-400',
-    '미납':      'bg-rose-500/20 text-rose-400',
-  };
+  const filtered = filter === '전체' ? m.rows : m.rows.filter(r => r.status === filter);
+
+  const FILTERS: { label: StatusFilter; count: number; style: string; activeStyle: string }[] = [
+    { label: '전체',    count: m.rows.length, style: 'border-[#2A2A2A] text-gray-500', activeStyle: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
+    { label: '납부 완료', count: paidCount,    style: 'border-[#2A2A2A] text-gray-500', activeStyle: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    { label: '납부 예정', count: upcomingCount, style: 'border-[#2A2A2A] text-gray-500', activeStyle: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    { label: '미납',    count: overdueCount,  style: 'border-[#2A2A2A] text-gray-500', activeStyle: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -73,19 +67,16 @@ function MonthDetailModal({ months, initialIdx, onClose }: { months: MonthData[]
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4 shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-base font-semibold text-white">월별 수입 상세</h2>
-            {/* Month tabs */}
+            <h2 className="text-base font-semibold text-white">월별 납부 상세</h2>
             <div className="flex gap-1">
               {months.map((mo, i) => (
                 <button
                   key={i}
-                  onClick={() => setIdx(i)}
+                  onClick={() => { setIdx(i); setFilter('전체'); }}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    i === idx
-                      ? 'bg-indigo-500 text-white'
-                      : 'text-gray-400 hover:bg-[#1A1A1A] hover:text-white'
+                    i === idx ? 'bg-indigo-500 text-white' : 'text-gray-400 hover:bg-[#1A1A1A] hover:text-white'
                   }`}
                 >
                   {mo.label}
@@ -99,19 +90,32 @@ function MonthDetailModal({ months, initialIdx, onClose }: { months: MonthData[]
         </div>
 
         {/* 요약 */}
-        <div className="grid grid-cols-3 gap-4 border-b border-[#2A2A2A] px-6 py-4">
-          <div>
-            <p className="text-xs text-gray-500">납부 완료</p>
-            <p className="mt-1 text-lg font-bold text-emerald-400">{fmtWon(paid)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">납부 예정</p>
-            <p className="mt-1 text-lg font-bold text-amber-400">{fmtWon(pending)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">미납</p>
-            <p className="mt-1 text-lg font-bold text-rose-400">{fmtWon(overdue)}</p>
-          </div>
+        <div className="grid grid-cols-3 border-b border-[#2A2A2A] shrink-0">
+          {[
+            { label: '납부 완료', count: paidCount,     color: '#22c55e' },
+            { label: '납부 예정', count: upcomingCount, color: '#f59e0b' },
+            { label: '미납',     count: overdueCount,  color: '#f43f5e' },
+          ].map(({ label, count, color }) => (
+            <div key={label} className="flex flex-col items-center py-4 gap-0.5">
+              <span className="text-2xl font-bold" style={{ color }}>{count}</span>
+              <span className="text-xs text-gray-500">{label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 필터 탭 */}
+        <div className="flex gap-1.5 px-6 py-3 border-b border-[#2A2A2A] shrink-0">
+          {FILTERS.map((f) => (
+            <button
+              key={f.label}
+              onClick={() => setFilter(f.label)}
+              className={`rounded-lg border px-3 py-1 text-xs font-semibold transition-colors ${
+                filter === f.label ? f.activeStyle : `${f.style} hover:text-gray-300`
+              }`}
+            >
+              {f.label} {f.count}
+            </button>
+          ))}
         </div>
 
         {/* 테이블 */}
@@ -127,29 +131,36 @@ function MonthDetailModal({ months, initialIdx, onClose }: { months: MonthData[]
               </tr>
             </thead>
             <tbody>
-              {m.rows.map((row, i) => (
-                <tr key={row.id} className={`border-b border-[#1A1A1A] ${i % 2 === 0 ? 'bg-[#0C0C0C]' : 'bg-[#0A0A0A]'}`}>
-                  <td className="px-6 py-3 font-semibold text-white">{row.id}호</td>
-                  <td className="px-4 py-3 text-gray-300">{row.resident}</td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">{row.roomType}</td>
-                  <td className="px-4 py-3 text-right font-medium text-white">{fmtWonFull(row.rent)}</td>
-                  <td className="px-6 py-3 text-right">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLE[row.status]}`}>
-                      {row.status}
-                    </span>
-                  </td>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-10 text-center text-sm text-gray-500">해당 상태의 호실이 없습니다.</td>
                 </tr>
-              ))}
+              ) : (
+                filtered.map((row, i) => (
+                  <tr key={row.id} className={`border-b border-[#1A1A1A] ${i % 2 === 0 ? 'bg-[#0C0C0C]' : 'bg-[#0A0A0A]'}`}>
+                    <td className="px-6 py-3 font-semibold text-white">{row.id}호</td>
+                    <td className="px-4 py-3 text-gray-300">{row.resident}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400">{row.roomType}</td>
+                    <td className="px-4 py-3 text-right font-medium text-white">{fmtWonFull(row.rent)}</td>
+                    <td className="px-6 py-3 text-right">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLE[row.status].badge}`}>
+                        <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: STATUS_STYLE[row.status].dot }} />
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Footer 합계 */}
-        <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-4">
-          <span className="text-sm text-gray-400">총 {m.rows.length}개 호실</span>
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-4 shrink-0">
+          <span className="text-sm text-gray-400">총 {filtered.length}개 호실</span>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400">합계</span>
-            <span className="text-xl font-bold text-white">{fmtWonFull(m.rows.reduce((s, r) => s + r.rent, 0))}</span>
+            <span className="text-xl font-bold text-white">{fmtWonFull(filtered.reduce((s, r) => s + r.rent, 0))}</span>
           </div>
         </div>
       </div>
@@ -227,20 +238,113 @@ function BarChart({ data, height = 140, onBarClick }: {
   );
 }
 
-// ──────────── 컴포넌트: HBarChart (가로) ────────────
+// ──────────── 컴포넌트: MaintenanceGrid ────────────
 
-function HBarChart({ data }: { data: { label: string; value: number; total: number; color: string }[] }) {
+const DETAIL_COLOR: Record<string, string> = {
+  '도배':       'bg-violet-500/20 text-violet-300 border-violet-500/30',
+  '매트리스교체': 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  '에어컨청소':  'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  '전구교체':   'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  '장판교체':   'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  '화장실청소':  'bg-rose-500/20 text-rose-300 border-rose-500/30',
+};
+const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+function MaintenanceGrid() {
+  const [year, setYear] = useState(new Date().getFullYear());
+
+  // 해당 연도에 기록이 하나라도 있는 방만
+  const roomsWithData = ALL_ROOMS.filter(room => {
+    const records = MAINTENANCE_BY_ROOM[room.id] ?? [];
+    return records.some(r => r.date.startsWith(String(year)));
+  });
+
+  // 해당 연도에 기록이 아예 없으면 전체 표시
+  const rows = roomsWithData.length > 0 ? roomsWithData : [];
+
+  function recordsFor(roomId: string, month: number) {
+    return (MAINTENANCE_BY_ROOM[roomId] ?? []).filter(r => {
+      const [y, m] = r.date.split('-').map(Number);
+      return y === year && m === month;
+    });
+  }
+
   return (
-    <div className="flex flex-col gap-2.5">
-      {data.map((d, i) => (
-        <div key={i} className="flex items-center gap-3">
-          <span className="w-28 shrink-0 text-sm text-gray-300 truncate">{d.label}</span>
-          <div className="flex-1 h-5 rounded-full bg-[#1A1A1A] overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${(d.value / d.total) * 100}%`, backgroundColor: d.color }} />
-          </div>
-          <span className="w-8 shrink-0 text-right text-sm font-bold text-white">{d.value}</span>
+    <div className="rounded-xl border border-[#2A2A2A] bg-[#111] shadow-sm overflow-hidden">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+        <div>
+          <h2 className="text-base font-semibold text-white">연간 유지보수 현황</h2>
+          <p className="mt-0.5 text-xs text-gray-500">방별 유지보수 및 비품 교체 이력</p>
         </div>
-      ))}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setYear(y => y - 1)}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors"
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <span className="w-16 text-center text-sm font-semibold text-white">{year}년</span>
+          <button
+            onClick={() => setYear(y => y + 1)}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <p className="text-sm text-gray-500">{year}년 유지보수 기록이 없습니다.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" style={{ minWidth: 900 }}>
+            <thead>
+              <tr className="border-b border-[#2A2A2A] bg-[#0E0E0E]">
+                <th className="sticky left-0 z-10 bg-[#0E0E0E] w-16 px-4 py-3 text-left text-xs font-semibold text-gray-500">호실</th>
+                {MONTHS.map(m => (
+                  <th key={m} className="px-2 py-3 text-center text-xs font-semibold text-gray-500 min-w-[80px]">{m}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((room, ri) => (
+                <tr key={room.id} className={`border-b border-[#1A1A1A] ${ri % 2 === 0 ? 'bg-[#0C0C0C]' : 'bg-[#0A0A0A]'}`}>
+                  <td className="sticky left-0 z-10 px-4 py-2 font-semibold text-gray-200 text-sm whitespace-nowrap"
+                    style={{ backgroundColor: ri % 2 === 0 ? '#0C0C0C' : '#0A0A0A' }}>
+                    {room.id}호
+                  </td>
+                  {MONTHS.map((_, mi) => {
+                    const recs = recordsFor(room.id, mi + 1);
+                    return (
+                      <td key={mi} className="px-1.5 py-2 align-top">
+                        {recs.length > 0 && (
+                          <div className="flex flex-col gap-1">
+                            {recs.map((rec, i) => (
+                              <div key={i} className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-2 py-1.5">
+                                <div className="mb-1 text-[10px] text-gray-500">{rec.date.slice(8)}일 · ₩{(rec.amount / 10000).toFixed(0)}만</div>
+                                <div className="flex flex-wrap gap-0.5">
+                                  {rec.details.map(d => (
+                                    <span key={d} className={`rounded border px-1 py-0.5 text-[9px] font-medium ${DETAIL_COLOR[d] ?? 'bg-gray-500/20 text-gray-400 border-gray-500/30'}`}>
+                                      {d}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -262,41 +366,9 @@ function StatCard({ title, value, subtitle, color }: { title: string; value: str
 export default function StatsPage() {
   const stats = getDashboardStats();
   const [detailIdx, setDetailIdx] = useState<number | null>(null);
+  const [paymentMonthIdx, setPaymentMonthIdx] = useState(5); // 마지막 달 (현재)
 
   const occupiedRooms = useMemo(() => ALL_ROOMS.filter(r => r.status === 'occupied'), []);
-
-  // 층별 현황
-  const floorStats = useMemo(() =>
-    FLOORS.map((floor, fi) => {
-      const rooms = ROOMS_BY_FLOOR[floor];
-      return {
-        floor, color: FLOOR_COLORS[fi], total: rooms.length,
-        occupied: rooms.filter(r => r.status === 'occupied').length,
-        vacant:   rooms.filter(r => r.status === 'vacant').length,
-        contract: rooms.filter(r => r.status === 'contract').length,
-      };
-    }), []);
-
-  // 방 유형별 분포
-  const typeStats = useMemo(() => {
-    const map: Record<string, number> = {};
-    ALL_ROOMS.forEach(r => { map[r.roomType] = (map[r.roomType] ?? 0) + 1; });
-    return Object.entries(map)
-      .sort((a, b) => b[1] - a[1])
-      .map(([type, count]) => ({ label: type, value: count, total: ALL_ROOMS.length, color: ROOM_TYPE_COLORS[type] ?? '#6366f1' }));
-  }, []);
-
-  // 납부 상태
-  const paymentStats = useMemo(() => {
-    const paid    = ALL_ROOMS.filter(r => r.paymentStatus === 'paid').length;
-    const overdue = ALL_ROOMS.filter(r => r.paymentStatus === 'overdue').length;
-    const upcoming = ALL_ROOMS.filter(r => r.paymentStatus === 'upcoming').length;
-    return [
-      { label: '납부 완료', value: paid,     color: '#22c55e' },
-      { label: '납부 예정', value: upcoming,  color: '#f59e0b' },
-      { label: '미납',     value: overdue,   color: '#f43f5e' },
-    ];
-  }, []);
 
   // 월별 수입 (최근 6개월) - 방별 납부 내역 포함
   const monthlyRevenue: MonthData[] = useMemo(() => {
@@ -358,67 +430,64 @@ export default function StatsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* 층별 입실 현황 */}
-        <div className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
-          <h2 className="mb-5 text-base font-semibold text-white">층별 입실 현황</h2>
-          <div className="flex flex-col gap-3">
-            {floorStats.map((f) => (
-              <div key={f.floor} className="flex items-center gap-3">
-                <span className="w-6 shrink-0 text-sm font-bold" style={{ color: f.color }}>{f.floor}F</span>
-                <div className="flex-1 flex h-6 rounded-lg overflow-hidden bg-[#1A1A1A]">
-                  {f.occupied > 0 && (
-                    <div className="flex items-center justify-center text-[10px] font-bold text-white"
-                      style={{ width: `${(f.occupied / f.total) * 100}%`, backgroundColor: f.color }}>{f.occupied}</div>
-                  )}
-                  {f.contract > 0 && (
-                    <div className="flex items-center justify-center text-[10px] font-bold text-white"
-                      style={{ width: `${(f.contract / f.total) * 100}%`, backgroundColor: '#eab308' }}>{f.contract}</div>
-                  )}
-                  {f.vacant > 0 && (
-                    <div className="flex items-center justify-center text-[10px] font-semibold text-gray-500"
-                      style={{ width: `${(f.vacant / f.total) * 100}%`, backgroundColor: '#1E1E1E' }}>{f.vacant}</div>
-                  )}
-                </div>
-                <span className="w-12 shrink-0 text-right text-xs text-gray-500">{f.total}개</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
-            <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-indigo-500" />입실 중</div>
-            <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-yellow-500" />계약</div>
-            <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-[#1E1E1E] border border-[#333]" />공실</div>
-          </div>
-        </div>
-
         {/* 납부 상태 */}
         <div className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
-          <h2 className="mb-5 text-base font-semibold text-white">납부 상태 현황</h2>
-          <DonutChart segments={paymentStats} />
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-white">납부 상태 현황</h2>
+            <div className="flex items-center gap-2">
+              {/* 월 네비게이션 */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => setPaymentMonthIdx(i => Math.max(0, i - 1))}
+                  disabled={paymentMonthIdx === 0}
+                  className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="min-w-[60px] text-center text-xs font-semibold text-gray-300">
+                  {monthlyRevenue[paymentMonthIdx]?.year}년 {monthlyRevenue[paymentMonthIdx]?.month}월
+                </span>
+                <button
+                  onClick={() => setPaymentMonthIdx(i => Math.min(monthlyRevenue.length - 1, i + 1))}
+                  disabled={paymentMonthIdx === monthlyRevenue.length - 1}
+                  className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+              <button
+                onClick={() => setDetailIdx(paymentMonthIdx)}
+                className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-indigo-500/50 hover:text-white transition-colors"
+              >
+                자세히 보기
+              </button>
+            </div>
+          </div>
+          <DonutChart segments={[
+            { label: '납부 완료', value: monthlyRevenue[paymentMonthIdx]?.rows.filter(r => r.status === '납부 완료').length ?? 0, color: '#22c55e' },
+            { label: '납부 예정', value: monthlyRevenue[paymentMonthIdx]?.rows.filter(r => r.status === '납부 예정').length ?? 0, color: '#f59e0b' },
+            { label: '미납',     value: monthlyRevenue[paymentMonthIdx]?.rows.filter(r => r.status === '미납').length ?? 0,     color: '#f43f5e' },
+          ]} />
         </div>
 
         {/* 월별 수입 추이 */}
         <div className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-white">월별 예상 수입 추이</h2>
-            <button
-              onClick={() => setDetailIdx(monthlyRevenue.length - 1)}
-              className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-indigo-500/50 hover:text-white transition-colors"
-            >
-              자세히 보기
-            </button>
-          </div>
-          <BarChart data={monthlyRevenue} height={160} onBarClick={(i) => setDetailIdx(i)} />
-          <p className="mt-2 text-center text-[11px] text-gray-600">막대를 클릭하면 해당 월 상세를 볼 수 있습니다.</p>
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-white">월별 예상 수입 추이</h2>
+          <button
+            onClick={() => setDetailIdx(monthlyRevenue.length - 1)}
+            className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-indigo-500/50 hover:text-white transition-colors"
+          >
+            자세히 보기
+          </button>
         </div>
-
-        {/* 방 유형 분포 */}
-        <div className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
-          <h2 className="mb-5 text-base font-semibold text-white">방 유형별 분포</h2>
-          <HBarChart data={typeStats} />
+        <BarChart data={monthlyRevenue} height={160} onBarClick={(i) => setDetailIdx(i)} />
+        <p className="mt-2 text-center text-[11px] text-gray-600">막대를 클릭하면 해당 월 상세를 볼 수 있습니다.</p>
         </div>
-
       </div>
+
+      {/* 연간 유지보수 현황 */}
+      <MaintenanceGrid />
 
       {/* 월별 상세 모달 */}
       {detailIdx !== null && (

@@ -235,7 +235,7 @@ function ScheduledInfoModal({
                     </div>
                     <div className="mt-3 space-y-1.5">
                       <div className="flex items-center gap-2 rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
-                        <span className="text-gray-500 shrink-0 font-medium">계약</span>
+                        <span className="text-gray-500 shrink-0 font-medium">계약일</span>
                         <span className="text-indigo-400 font-semibold">{s.contractMoveInDate}</span>
                         <span className="text-gray-600 shrink-0">→</span>
                         {s.moveOutDate
@@ -244,7 +244,7 @@ function ScheduledInfoModal({
                       </div>
                       {s.actualMoveInDate && (
                         <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs border ${s.actualMoveInDate !== s.contractMoveInDate ? 'bg-amber-500/8 border-amber-500/20' : 'bg-[#1A1A1A] border-transparent'}`}>
-                          <span className="text-gray-500 shrink-0 font-medium">실제 입실일</span>
+                          <span className="text-gray-500 shrink-0 font-medium">입실일</span>
                           <span className={`font-semibold ${s.actualMoveInDate !== s.contractMoveInDate ? 'text-amber-400' : 'text-gray-300'}`}>{s.actualMoveInDate}</span>
                           {s.actualMoveInDate !== s.contractMoveInDate && (
                             <span className="text-amber-500/70 text-[10px]">계약일과 다름</span>
@@ -276,42 +276,67 @@ function RoomManagementModal({
   onDelete: (index: number) => void;
   onClose: () => void;
 }) {
+  const now = new Date();
+  const [viewYear, setViewYear] = useState(now.getFullYear());
   const [showForm, setShowForm] = useState(false);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => now.toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
   const [selectedDetails, setSelectedDetails] = useState<string[]>([]);
 
+  const MONTH_NAMES = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+
+  // 연도별로 해당 월에 속한 records 인덱스 모아두기
+  function recordsForMonth(month: number): { record: MaintenanceRecord; index: number }[] {
+    return records
+      .map((r, i) => ({ record: r, index: i }))
+      .filter(({ record }) => {
+        const [y, m] = record.date.split("-").map(Number);
+        return y === viewYear && m === month;
+      })
+      .sort((a, b) => b.record.date.localeCompare(a.record.date));
+  }
+
   function toggleDetail(d: string) {
-    setSelectedDetails((prev) =>
-      prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]
-    );
+    setSelectedDetails((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
   }
 
   function handleAdd() {
     if (!date || !amount || selectedDetails.length === 0) return;
     onAdd({ date, amount: Number(amount), details: selectedDetails });
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(now.toISOString().slice(0, 10));
     setAmount("");
     setSelectedDetails([]);
     setShowForm(false);
   }
 
+  // 해당 연도에 기록이 있는지
+  const hasRecordsInYear = records.some(r => r.date.startsWith(String(viewYear)));
+
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#2A2A2A] bg-[#0E0E0E] shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#2A2A2A] bg-[#0E0E0E] shadow-2xl max-h-[88vh] flex flex-col">
+
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-5 shrink-0">
-          <div>
-            <h3 className="text-base font-semibold text-white">방 관리</h3>
-            <p className="mt-0.5 text-sm text-gray-400">{room.id}호 · 관리 이력</p>
+          <div className="flex items-center gap-4">
+            <div>
+              <h3 className="text-base font-semibold text-white">방 관리</h3>
+              <p className="mt-0.5 text-sm text-gray-400">{room.id}호 · 관리 이력</p>
+            </div>
+            {/* 연도 선택 */}
+            <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-1 py-1">
+              <button onClick={() => setViewYear(y => y - 1)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:text-white transition-colors">‹</button>
+              <span className="w-14 text-center text-sm font-semibold text-white">{viewYear}년</span>
+              <button onClick={() => setViewYear(y => y + 1)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:text-white transition-colors">›</button>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowForm((v) => !v)}
+              onClick={() => setShowForm(v => !v)}
               className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
             >
-              <Plus className="h-3.5 w-3.5" />
-              추가
+              <Plus className="h-3.5 w-3.5" />추가
             </button>
             <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-[#1A1A1A] hover:text-white">
               <X className="h-4 w-4" />
@@ -319,6 +344,7 @@ function RoomManagementModal({
           </div>
         </div>
 
+        {/* 추가 폼 */}
         {showForm && (
           <div className="border-b border-[#2A2A2A] px-6 py-4 shrink-0 space-y-4 bg-[#111]">
             <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide">새 관리 이력 추가</p>
@@ -352,59 +378,69 @@ function RoomManagementModal({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-          {records.length === 0 ? (
+        {/* 월별 달력 뷰 */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {!hasRecordsInYear ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <Wrench className="h-8 w-8 text-gray-600 mb-3" />
-              <p className="text-sm text-gray-500">관리 이력이 없습니다.</p>
+              <p className="text-sm text-gray-500">{viewYear}년 관리 이력이 없습니다.</p>
             </div>
-          ) : (() => {
-            // 카테고리별로 그룹핑: { category: { date, amount, recordIndex }[] }
-            const grouped: Record<string, { date: string; amount: number; recordIndex: number }[]> = {};
-            records.forEach((r, i) => {
-              r.details.forEach((d) => {
-                if (!grouped[d]) grouped[d] = [];
-                grouped[d].push({ date: r.date, amount: r.amount, recordIndex: i });
-              });
-            });
-            const categories = DETAIL_OPTIONS.filter((d) => grouped[d]);
+          ) : (
+            <div className="grid grid-cols-4 gap-3">
+              {MONTH_NAMES.map((name, mi) => {
+                const month = mi + 1;
+                const monthRecords = recordsForMonth(month);
+                const isEmpty = monthRecords.length === 0;
 
-            return categories.map((category) => {
-              const entries = [...grouped[category]].sort((a, b) => b.date.localeCompare(a.date));
-              const colorCls = DETAIL_COLOR[category] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20";
-              return (
-                <div key={category} className="rounded-xl border border-[#2A2A2A] bg-[#161616] overflow-hidden">
-                  <div className={`flex items-center gap-2 px-4 py-2.5 border-b border-[#2A2A2A] ${colorCls.split(' ').filter(c => c.startsWith('bg-')).join(' ')}`}>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-md border ${colorCls}`}>{category}</span>
-                    <span className="text-xs text-gray-600">{entries.length}건</span>
+                return (
+                  <div
+                    key={month}
+                    className={`rounded-xl border p-3 flex flex-col gap-2 min-h-[100px] ${isEmpty ? "border-[#1A1A1A] bg-[#0C0C0C]" : "border-[#2A2A2A] bg-[#161616]"}`}
+                  >
+                    {/* 월 헤더 */}
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-bold ${isEmpty ? "text-gray-700" : "text-amber-400"}`}>{name}</span>
+                      {!isEmpty && (
+                        <span className="text-[10px] text-gray-500">{monthRecords.length}건</span>
+                      )}
+                    </div>
+
+                    {/* 이벤트 */}
+                    {!isEmpty && (
+                      <div className="flex flex-col gap-1.5">
+                        {monthRecords.map(({ record, index }) => {
+                          const day = record.date.split("-")[2];
+                          return (
+                            <div key={index} className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1.5">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] text-gray-500">{parseInt(day)}일</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] font-semibold text-emerald-400">₩{record.amount.toLocaleString("ko-KR")}</span>
+                                  <button
+                                    onClick={() => onDelete(index)}
+                                    className="flex h-4 w-4 items-center justify-center rounded text-gray-700 hover:text-rose-400 transition-colors"
+                                  >
+                                    <Trash2 className="h-2.5 w-2.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {record.details.map((d) => (
+                                  <span key={d} className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${DETAIL_COLOR[d] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
+                                    {d}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <div className="divide-y divide-[#222]">
-                    {entries.map((entry, ei) => {
-                      const [y, m, d] = entry.date.split("-");
-                      return (
-                        <div key={ei} className="flex items-center justify-between px-4 py-2.5">
-                          <span className="text-xs text-gray-300 font-mono">
-                            {y}년 {m}월 {d}일
-                          </span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-semibold text-emerald-400">₩{entry.amount.toLocaleString("ko-KR")}</span>
-                            {ei === 0 && entries.length === 1 && (
-                              <button
-                                onClick={() => onDelete(entry.recordIndex)}
-                                className="flex h-6 w-6 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            });
-          })()}
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </>
