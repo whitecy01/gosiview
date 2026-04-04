@@ -112,9 +112,9 @@ function getTodayOffset(): number | null {
   return Math.round((now.getTime() - TIMELINE_START.getTime()) / 86400000);
 }
 
-function fmtRent(rent: string | null): string | null {
-  if (!rent) return null;
-  const num = parseInt(rent.replace(/[₩,\s]/g, ''), 10);
+function fmtRent(rent: string | number | null | undefined): string | null {
+  if (rent == null) return null;
+  const num = typeof rent === 'number' ? rent : parseInt(rent.replace(/[₩,\s]/g, ''), 10);
   if (isNaN(num) || num === 0) return null;
   return `${Math.round(num / 10000)}만`;
 }

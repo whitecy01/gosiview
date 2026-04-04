@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil } from "lucide-react";
+import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History } from "lucide-react";
 import {
   ALL_ROOMS,
   SCHEDULED_BY_ROOM,
@@ -545,6 +545,7 @@ export default function TenantListTable() {
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">예정 입실</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">방 관리</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">상세</th>
+                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">이력</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1E1E1E]">
@@ -614,12 +615,21 @@ export default function TenantListTable() {
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>
                     </td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => router.push(`/rooms/${room.id}/history`)}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs text-gray-400 transition-colors hover:border-indigo-500/50 hover:text-indigo-400"
+                      >
+                        <History className="h-3.5 w-3.5" />
+                        이력
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-500">
                     검색 결과가 없습니다.
                   </td>
                 </tr>

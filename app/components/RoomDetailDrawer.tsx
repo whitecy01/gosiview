@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   X, ExternalLink, Home, Banknote, Calendar, MapPin, Target,
-  Zap, Plus, Trash2, Pencil,
+  Zap, Plus, Trash2, Pencil, History,
 } from "lucide-react";
 import {
   RESIDENT_DETAIL_BY_ROOM,
@@ -188,6 +188,12 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                 {room.resident && <span className="text-sm text-gray-400">· {room.resident}</span>}
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => router.push(`/rooms/${room.id}/history`)}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs text-gray-400 transition-colors hover:text-white"
+                >
+                  <History className="h-3.5 w-3.5" />이력
+                </button>
                 {room.status === "occupied" && (
                   <button
                     onClick={() => router.push(`/residents/${room.id}`)}

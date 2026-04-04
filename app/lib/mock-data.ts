@@ -51,12 +51,135 @@ export type TenantBar = {
   moveOutDate: string;
   gender?: '남' | '여';
   age?: number;
-  monthlyRent?: string;
+  monthlyRent?: number;
+  phone?: string;
+  purpose?: string;
+  realEstateAgency?: string;
+  depositTotal?: number;
+  depositDeducted?: number;
+  depositReturned?: boolean;
+  depositReturnedAt?: string | null;
+  electricityHandover?: { moveOutMeter: number; vacancyMeter: number; vacancyCost: number | null; giroCost: number | null } | null;
 };
 
 export const ROOM_TENANT_HISTORY: Record<string, TenantBar[]> = {
   "101": [
-    { name: "박지수", moveInDate: "2025-01-05", moveOutDate: "2025-02-28", gender: '여', age: 24, monthlyRent: "₩650,000" },
+    {
+      name: "이수현", moveInDate: "2023-09-01", moveOutDate: "2024-02-29",
+      gender: '남', age: 26, monthlyRent: 700000, phone: "010-4821-3947",
+      purpose: "공시생(일행)", realEstateAgency: "부동산 A",
+      depositTotal: 500000, depositDeducted: 20000,
+      depositReturned: true, depositReturnedAt: "2024-03-05",
+      electricityHandover: null,
+    },
+    {
+      name: "박지수", moveInDate: "2024-03-05", moveOutDate: "2025-02-28",
+      gender: '여', age: 24, monthlyRent: 700000, phone: "010-3928-5174",
+      purpose: "취준생", realEstateAgency: "부동산 B",
+      depositTotal: 500000, depositDeducted: 50000,
+      depositReturned: true, depositReturnedAt: "2025-03-03",
+      electricityHandover: { moveOutMeter: 930, vacancyMeter: 931, vacancyCost: 660, giroCost: 38000 },
+    },
+  ],
+  "102": [
+    {
+      name: "최준혁", moveInDate: "2023-06-10", moveOutDate: "2024-06-09",
+      gender: '남', age: 29, monthlyRent: 700000, phone: "010-7291-4836",
+      purpose: "직장", realEstateAgency: "직거래",
+      depositTotal: 500000, depositDeducted: 0,
+      depositReturned: true, depositReturnedAt: "2024-06-12",
+      electricityHandover: null,
+    },
+    {
+      name: "송민아", moveInDate: "2024-07-01", moveOutDate: "2025-08-31",
+      gender: '여', age: 22, monthlyRent: 700000, phone: "010-5847-2913",
+      purpose: "수능", realEstateAgency: "부동산 C",
+      depositTotal: 500000, depositDeducted: 30000,
+      depositReturned: true, depositReturnedAt: "2025-09-04",
+      electricityHandover: { moveOutMeter: 1150, vacancyMeter: 1152, vacancyCost: 1320, giroCost: 40500 },
+    },
+  ],
+  "103": [
+    {
+      name: "김동현", moveInDate: "2024-01-15", moveOutDate: "2024-07-14",
+      gender: '남', age: 27, monthlyRent: 650000, phone: "010-9283-6174",
+      purpose: "공시생(임용)", realEstateAgency: "부동산 A",
+      depositTotal: 300000, depositDeducted: 15000,
+      depositReturned: true, depositReturnedAt: "2024-07-18",
+      electricityHandover: null,
+    },
+    {
+      name: "윤서연", moveInDate: "2024-08-01", moveOutDate: "2025-07-31",
+      gender: '여', age: 23, monthlyRent: 650000, phone: "010-4736-8192",
+      purpose: "세무·회계·계리", realEstateAgency: "부동산 B",
+      depositTotal: 300000, depositDeducted: 0,
+      depositReturned: true, depositReturnedAt: "2025-08-05",
+      electricityHandover: null,
+    },
+  ],
+  "206": [
+    {
+      name: "정태민", moveInDate: "2023-03-10", moveOutDate: "2024-03-09",
+      gender: '남', age: 30, monthlyRent: 750000, phone: "010-2847-5931",
+      purpose: "직장", realEstateAgency: "직거래",
+      depositTotal: 700000, depositDeducted: 40000,
+      depositReturned: true, depositReturnedAt: "2024-03-12",
+      electricityHandover: null,
+    },
+    {
+      name: "한지원", moveInDate: "2024-03-15", moveOutDate: "2025-03-04",
+      gender: '여', age: 25, monthlyRent: 750000, phone: "010-6382-1947",
+      purpose: "공시생(소방)", realEstateAgency: "부동산 A",
+      depositTotal: 700000, depositDeducted: 60000,
+      depositReturned: false, depositReturnedAt: null,
+      electricityHandover: { moveOutMeter: 1060, vacancyMeter: 1062, vacancyCost: 1330, giroCost: 42000 },
+    },
+  ],
+  "302": [
+    {
+      name: "오민준", moveInDate: "2023-05-01", moveOutDate: "2024-04-30",
+      gender: '남', age: 24, monthlyRent: 700000, phone: "010-8473-2918",
+      purpose: "공시생(경찰)", realEstateAgency: "부동산 C",
+      depositTotal: 500000, depositDeducted: 20000,
+      depositReturned: true, depositReturnedAt: "2024-05-03",
+      electricityHandover: null,
+    },
+    {
+      name: "강예은", moveInDate: "2024-05-10", moveOutDate: "2025-02-14",
+      gender: '여', age: 21, monthlyRent: 700000, phone: "010-3948-7261",
+      purpose: "수능", realEstateAgency: "부동산 B",
+      depositTotal: 500000, depositDeducted: 0,
+      depositReturned: true, depositReturnedAt: "2025-02-17",
+      electricityHandover: { moveOutMeter: 980, vacancyMeter: 981, vacancyCost: 660, giroCost: 38500 },
+    },
+  ],
+  "407": [
+    {
+      name: "임성호", moveInDate: "2023-11-01", moveOutDate: "2024-10-31",
+      gender: '남', age: 33, monthlyRent: 850000, phone: "010-7382-4918",
+      purpose: "직장", realEstateAgency: "직거래",
+      depositTotal: 700000, depositDeducted: 35000,
+      depositReturned: true, depositReturnedAt: "2024-11-04",
+      electricityHandover: null,
+    },
+    {
+      name: "조하나", moveInDate: "2024-11-15", moveOutDate: "2025-03-14",
+      gender: '여', age: 28, monthlyRent: 850000, phone: "010-5928-3174",
+      purpose: "취준생", realEstateAgency: "부동산 A",
+      depositTotal: 700000, depositDeducted: 0,
+      depositReturned: true, depositReturnedAt: "2025-03-17",
+      electricityHandover: { moveOutMeter: 1120, vacancyMeter: 1123, vacancyCost: 1980, giroCost: 41000 },
+    },
+  ],
+  "506": [
+    {
+      name: "박성준", moveInDate: "2023-07-01", moveOutDate: "2024-06-30",
+      gender: '남', age: 31, monthlyRent: 850000, phone: "010-4827-6391",
+      purpose: "직장", realEstateAgency: "부동산 B",
+      depositTotal: 700000, depositDeducted: 50000,
+      depositReturned: true, depositReturnedAt: "2024-07-05",
+      electricityHandover: null,
+    },
   ],
 };
 
