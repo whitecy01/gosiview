@@ -97,11 +97,18 @@ export default function ResidentDetailPage() {
   const [depAmount, setDepAmount] = useState("");
   const [depReason, setDepReason] = useState<DepositDeductionReason>("차임");
 
+  // 보증금 반환
+  const [showReturnForm, setShowReturnForm] = useState(false);
+  const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
+
   // 한전
   const [editElec, setEditElec] = useState(false);
-  const [elecScheduled, setElecScheduled] = useState("");
-  const [elecActual, setElecActual] = useState("");
-  const [elecUsage, setElecUsage] = useState("");
+  const [elecMoveOutDate, setElecMoveOutDate] = useState("");
+  const [elecMoveOutMeter, setElecMoveOutMeter] = useState("");
+  const [elecVacancyDate, setElecVacancyDate] = useState("");
+  const [elecVacancyMeter, setElecVacancyMeter] = useState("");
+  const [elecVacancyCost, setElecVacancyCost] = useState("");
+  const [elecGiroCost, setElecGiroCost] = useState("");
 
   // 월세 납부
   const [payingMonthIdx, setPayingMonthIdx] = useState<number | null>(null);
@@ -159,15 +166,18 @@ export default function ResidentDetailPage() {
   // ── 한전 ──
 
   function saveElec() {
-    if (!detail || !elecScheduled || !elecActual || !elecUsage) return;
+    if (!detail || !elecMoveOutDate || !elecMoveOutMeter || !elecVacancyDate || !elecVacancyMeter) return;
     setDetail((prev) =>
       prev
         ? {
             ...prev,
             electricityHandover: {
-              scheduledMoveOutDate: elecScheduled,
-              actualMoveOutDate: elecActual,
-              usageAmount: Number(elecUsage),
+              moveOutDate: elecMoveOutDate,
+              moveOutMeter: Number(elecMoveOutMeter),
+              vacancyDate: elecVacancyDate,
+              vacancyMeter: Number(elecVacancyMeter),
+              vacancyCost: elecVacancyCost ? Number(elecVacancyCost) : null,
+              giroCost: elecGiroCost ? Number(elecGiroCost) : null,
             },
           }
         : prev
@@ -481,6 +491,64 @@ export default function ResidentDetailPage() {
                 ))
               )}
             </div>
+
+            {/* 보증금 반환 */}
+            <div className="border-t border-[#2A2A2A]">
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center gap-2.5">
+                  <div className={`h-2 w-2 rounded-full ${detail.depositReturn.returned ? "bg-emerald-400" : "bg-gray-600"}`} />
+                  <span className="text-sm font-semibold text-white">보증금 반환</span>
+                  {detail.depositReturn.returned && (
+                    <span className="text-xs text-emerald-400 font-medium">{fmtDate(detail.depositReturn.returnedAt!)}</span>
+                  )}
+                </div>
+                {detail.depositReturn.returned ? (
+                  <button
+                    onClick={() => setDetail((p) => p ? { ...p, depositReturn: { returned: false, returnedAt: null } } : p)}
+                    className="text-xs text-gray-500 hover:text-rose-400 transition-colors"
+                  >
+                    취소
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setShowReturnForm((v) => !v); setReturnDate(new Date().toISOString().slice(0, 10)); }}
+                    className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                  >
+                    반환 완료 처리
+                  </button>
+                )}
+              </div>
+
+              {!detail.depositReturn.returned && showReturnForm && (
+                <div className="px-6 pb-4 space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-400">반환 날짜</label>
+                    <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className={INPUT} />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setShowReturnForm(false)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 hover:text-white">취소</button>
+                    <button
+                      onClick={() => {
+                        setDetail((p) => p ? { ...p, depositReturn: { returned: true, returnedAt: returnDate } } : p);
+                        setShowReturnForm(false);
+                      }}
+                      disabled={!returnDate}
+                      className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400 disabled:opacity-40"
+                    >
+                      저장
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {detail.depositReturn.returned && (
+                <div className="px-6 pb-4 flex items-center gap-2">
+                  <span className="text-xs text-gray-500">잔여 보증금</span>
+                  <span className="text-sm font-bold text-emerald-400">₩{depositRemaining.toLocaleString("ko-KR")}</span>
+                  <span className="text-xs text-gray-600">반환 완료</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── 월세 납부 관리 ── */}
@@ -572,19 +640,25 @@ export default function ResidentDetailPage() {
                   <Zap className="h-4 w-4 text-yellow-400" />
                   <div>
                     <h2 className="text-base font-semibold text-white">한전 현금 승계</h2>
-                    <p className="mt-0.5 text-xs text-gray-500">퇴실일 기준 한전 처리</p>
+                    <p className="mt-0.5 text-xs text-gray-500">퇴실 계량기 기준 한전 처리</p>
                   </div>
                 </div>
                 <button
                   onClick={() => {
                     if (detail.electricityHandover) {
-                      setElecScheduled(detail.electricityHandover.scheduledMoveOutDate);
-                      setElecActual(detail.electricityHandover.actualMoveOutDate);
-                      setElecUsage(String(detail.electricityHandover.usageAmount));
+                      setElecMoveOutDate(detail.electricityHandover.moveOutDate);
+                      setElecMoveOutMeter(String(detail.electricityHandover.moveOutMeter));
+                      setElecVacancyDate(detail.electricityHandover.vacancyDate);
+                      setElecVacancyMeter(String(detail.electricityHandover.vacancyMeter));
+                      setElecVacancyCost(detail.electricityHandover.vacancyCost != null ? String(detail.electricityHandover.vacancyCost) : "");
+                      setElecGiroCost(detail.electricityHandover.giroCost != null ? String(detail.electricityHandover.giroCost) : "");
                     } else {
-                      setElecScheduled(room.moveOutDate ?? "");
-                      setElecActual("");
-                      setElecUsage("");
+                      setElecMoveOutDate(room.moveOutDate ?? "");
+                      setElecMoveOutMeter("");
+                      setElecVacancyDate("");
+                      setElecVacancyMeter("");
+                      setElecVacancyCost("");
+                      setElecGiroCost("");
                     }
                     setEditElec((v) => !v);
                   }}
@@ -596,49 +670,122 @@ export default function ResidentDetailPage() {
               </div>
 
               {editElec ? (
-                <div className="px-5 py-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1.5 block text-xs text-gray-400">계약 퇴실일</label>
-                      <input type="date" value={elecScheduled} onChange={(e) => setElecScheduled(e.target.value)} className={INPUT} />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs text-gray-400">실제 퇴실일</label>
-                      <input type="date" value={elecActual} onChange={(e) => setElecActual(e.target.value)} className={INPUT} />
+                <div className="px-5 py-4 space-y-4">
+                  {/* Step 1: 퇴실 계량기 */}
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">① 퇴실 계량기</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1.5 block text-xs text-gray-500">퇴실일</label>
+                        <input type="date" value={elecMoveOutDate} onChange={(e) => setElecMoveOutDate(e.target.value)} className={INPUT} />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs text-gray-500">계량기 값 (kWh)</label>
+                        <input type="number" value={elecMoveOutMeter} onChange={(e) => setElecMoveOutMeter(e.target.value)} placeholder="1060" className={INPUT} />
+                      </div>
                     </div>
                   </div>
+                  {/* Step 2: 공백기간 계량기 */}
                   <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">한전 금액 (원)</label>
-                    <input type="number" value={elecUsage} onChange={(e) => setElecUsage(e.target.value)} placeholder="35000" className={INPUT} />
+                    <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">② 공백기간 계량기</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1.5 block text-xs text-gray-500">측정일</label>
+                        <input type="date" value={elecVacancyDate} onChange={(e) => setElecVacancyDate(e.target.value)} className={INPUT} />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs text-gray-500">계량기 값 (kWh)</label>
+                        <input type="number" value={elecVacancyMeter} onChange={(e) => setElecVacancyMeter(e.target.value)} placeholder="1062" className={INPUT} />
+                      </div>
+                    </div>
+                    {elecMoveOutMeter && elecVacancyMeter && (
+                      <p className="mt-2 text-xs text-indigo-400">
+                        사용량: {Number(elecVacancyMeter) - Number(elecMoveOutMeter)} kWh
+                      </p>
+                    )}
+                  </div>
+                  {/* Step 3: 네이버 계산기 → 공백기간 요금 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">③ 공백기간 요금</p>
+                      <a
+                        href="https://search.naver.com/search.naver?query=전기요금+계산기"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 rounded-md border border-green-500/30 bg-green-500/10 px-2 py-1 text-xs text-green-400 hover:bg-green-500/20 transition-colors"
+                      >
+                        <Zap className="h-3 w-3" />
+                        네이버 계산기
+                      </a>
+                    </div>
+                    <input type="number" value={elecVacancyCost} onChange={(e) => setElecVacancyCost(e.target.value)} placeholder="공백기간 전기요금 (원)" className={INPUT} />
+                  </div>
+                  {/* Step 4: 지로 금액 */}
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">④ 지로 금액</p>
+                    <input type="number" value={elecGiroCost} onChange={(e) => setElecGiroCost(e.target.value)} placeholder="청구된 지로 금액 (원)" className={INPUT} />
+                    {elecVacancyCost && elecGiroCost && (
+                      <p className="mt-2 text-xs text-yellow-400">
+                        입주자 부담액: ₩{(Number(elecGiroCost) - Number(elecVacancyCost)).toLocaleString("ko-KR")}
+                      </p>
+                    )}
                   </div>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setEditElec(false)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
-                    <button onClick={saveElec} disabled={!elecScheduled || !elecActual || !elecUsage} className="rounded-lg bg-yellow-500 px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-40">저장</button>
+                    <button
+                      onClick={saveElec}
+                      disabled={!elecMoveOutDate || !elecMoveOutMeter || !elecVacancyDate || !elecVacancyMeter}
+                      className="rounded-lg bg-yellow-500 px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    >저장</button>
                   </div>
                 </div>
               ) : detail.electricityHandover ? (
                 <div className="p-5 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg bg-[#1A1A1A] px-4 py-3">
-                      <p className="mb-1 text-xs text-gray-500">계약 퇴실일</p>
-                      <p className="text-sm font-semibold text-white">{fmtDate(detail.electricityHandover.scheduledMoveOutDate)}</p>
+                      <p className="mb-1 text-xs text-gray-500">퇴실 계량기</p>
+                      <p className="text-sm font-semibold text-white">{detail.electricityHandover.moveOutMeter} kWh</p>
+                      <p className="mt-0.5 text-xs text-gray-600">{fmtDate(detail.electricityHandover.moveOutDate)}</p>
                     </div>
                     <div className="rounded-lg bg-[#1A1A1A] px-4 py-3">
-                      <p className="mb-1 text-xs text-gray-500">실제 퇴실일</p>
-                      <p className="text-sm font-semibold text-white">{fmtDate(detail.electricityHandover.actualMoveOutDate)}</p>
+                      <p className="mb-1 text-xs text-gray-500">공백기간 계량기</p>
+                      <p className="text-sm font-semibold text-white">{detail.electricityHandover.vacancyMeter} kWh</p>
+                      <p className="mt-0.5 text-xs text-gray-600">{fmtDate(detail.electricityHandover.vacancyDate)}</p>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-4 py-3">
-                    <p className="mb-1 text-xs text-gray-500">승계 한전 금액</p>
-                    <p className="text-lg font-bold text-yellow-400">₩{detail.electricityHandover.usageAmount.toLocaleString("ko-KR")}</p>
-                    <p className="mt-1 text-xs text-gray-600">다음 입실자 월세에서 차감됩니다.</p>
+                  <div className="rounded-lg bg-[#1A1A1A] px-4 py-3">
+                    <p className="mb-1 text-xs text-gray-500">공백기간 사용량</p>
+                    <p className="text-sm font-semibold text-indigo-400">{detail.electricityHandover.vacancyMeter - detail.electricityHandover.moveOutMeter} kWh</p>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {detail.electricityHandover.vacancyCost != null && (
+                      <div className="rounded-lg bg-[#1A1A1A] px-4 py-3">
+                        <p className="mb-1 text-xs text-gray-500">공백기간 요금</p>
+                        <p className="text-sm font-semibold text-white">₩{detail.electricityHandover.vacancyCost.toLocaleString("ko-KR")}</p>
+                      </div>
+                    )}
+                    {detail.electricityHandover.giroCost != null && (
+                      <div className="rounded-lg bg-[#1A1A1A] px-4 py-3">
+                        <p className="mb-1 text-xs text-gray-500">지로 금액</p>
+                        <p className="text-sm font-semibold text-white">₩{detail.electricityHandover.giroCost.toLocaleString("ko-KR")}</p>
+                      </div>
+                    )}
+                  </div>
+                  {detail.electricityHandover.vacancyCost != null && detail.electricityHandover.giroCost != null && (
+                    <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-4 py-3">
+                      <p className="mb-1 text-xs text-gray-500">입주자 부담액</p>
+                      <p className="text-lg font-bold text-yellow-400">
+                        ₩{(detail.electricityHandover.giroCost - detail.electricityHandover.vacancyCost).toLocaleString("ko-KR")}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-600">다음 입실자 월세에서 차감됩니다.</p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="px-5 py-10 text-center">
                   <Zap className="mx-auto mb-3 h-8 w-8 text-gray-600" />
                   <p className="text-sm text-gray-500">한전 승계 정보가 없습니다.</p>
-                  <p className="mt-1 text-xs text-gray-600">퇴실 시 한전 금액을 등록해주세요.</p>
+                  <p className="mt-1 text-xs text-gray-600">퇴실 시 한전 계량기를 등록해주세요.</p>
                 </div>
               )}
             </div>

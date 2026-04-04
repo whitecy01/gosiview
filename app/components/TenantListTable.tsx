@@ -127,9 +127,7 @@ function ScheduledInfoModal({
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
 
-  const sorted = [...records]
-    .map((r, i) => ({ r, i }))
-    .sort((a, b) => a.r.contractMoveInDate.localeCompare(b.r.contractMoveInDate));
+  const hasRecord = records.length > 0;
 
   return (
     <>
@@ -143,12 +141,14 @@ function ScheduledInfoModal({
             <p className="mt-0.5 text-sm text-gray-400">{room.id}호 · 앞으로 예정된 입실 일정</p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setShowAddForm((v) => !v); setEditingIdx(null); }}
-              className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-400 transition-colors hover:bg-indigo-500/20"
-            >
-              <Plus className="h-3.5 w-3.5" />추가
-            </button>
+            {!hasRecord && (
+              <button
+                onClick={() => { setShowAddForm((v) => !v); setEditingIdx(null); }}
+                className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-400 transition-colors hover:bg-indigo-500/20"
+              >
+                <Plus className="h-3.5 w-3.5" />추가
+              </button>
+            )}
             <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-[#1A1A1A] hover:text-white">
               <X className="h-4 w-4" />
             </button>
@@ -181,81 +181,77 @@ function ScheduledInfoModal({
           </div>
         )}
 
-        {/* 예정 목록 */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
-          {sorted.length === 0 ? (
+        {/* 예정 입실자 */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {!hasRecord ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <CalendarDays className="h-8 w-8 text-gray-600 mb-3" />
               <p className="text-sm text-gray-500">예정된 입실 일정이 없습니다.</p>
             </div>
           ) : (
-            sorted.map(({ r: s, i: origIdx }) => (
-              <div key={origIdx} className={`rounded-xl border bg-[#161616] p-4 transition-colors ${editingIdx === origIdx ? 'border-indigo-500/40' : 'border-[#2A2A2A]'}`}>
-                {editingIdx === origIdx ? (
-                  /* 인라인 수정 폼 */
-                  <>
-                    <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-3">정보 수정</p>
-                    <ResidentForm
-                      initial={s}
-                      onSave={(updated) => { onUpdate(origIdx, updated); setEditingIdx(null); }}
-                      onCancel={() => setEditingIdx(null)}
-                    />
-                  </>
-                ) : (
-                  /* 조회 뷰 */
-                  <>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-500/10 border border-indigo-500/20 text-sm font-bold text-indigo-400">
-                          {s.name[0]}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-white">{s.name}</span>
-                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${s.gender === '남' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-pink-500/10 text-pink-400 border-pink-500/20'}`}>{s.gender}</span>
-                            <span className="text-xs text-gray-500">{s.age}세</span>
-                          </div>
-                          <p className="mt-0.5 text-xs text-teal-400">{s.phone}</p>
-                        </div>
+            <div className={`rounded-xl border bg-[#161616] p-4 transition-colors ${editingIdx === 0 ? 'border-indigo-500/40' : 'border-[#2A2A2A]'}`}>
+              {editingIdx === 0 ? (
+                <>
+                  <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-3">정보 수정</p>
+                  <ResidentForm
+                    initial={records[0]}
+                    onSave={(updated) => { onUpdate(0, updated); setEditingIdx(null); }}
+                    onCancel={() => setEditingIdx(null)}
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-500/10 border border-indigo-500/20 text-sm font-bold text-indigo-400">
+                        {records[0].name[0]}
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => { setEditingIdx(origIdx); setShowAddForm(false); }}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-indigo-500/10 hover:text-indigo-400"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => onDelete(origIdx)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-white">{records[0].name}</span>
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${records[0].gender === '남' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-pink-500/10 text-pink-400 border-pink-500/20'}`}>{records[0].gender}</span>
+                          <span className="text-xs text-gray-500">{records[0].age}세</span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-teal-400">{records[0].phone}</p>
                       </div>
                     </div>
-                    <div className="mt-3 space-y-1.5">
-                      <div className="flex items-center gap-2 rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
-                        <span className="text-gray-500 shrink-0 font-medium">계약일</span>
-                        <span className="text-indigo-400 font-semibold">{s.contractMoveInDate}</span>
-                        <span className="text-gray-600 shrink-0">→</span>
-                        {s.moveOutDate
-                          ? <span className="text-gray-300 font-semibold">{s.moveOutDate}</span>
-                          : <span className="text-gray-600 italic">퇴실일 미정</span>}
-                      </div>
-                      {s.actualMoveInDate && (
-                        <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs border ${s.actualMoveInDate !== s.contractMoveInDate ? 'bg-amber-500/8 border-amber-500/20' : 'bg-[#1A1A1A] border-transparent'}`}>
-                          <span className="text-gray-500 shrink-0 font-medium">입실일</span>
-                          <span className={`font-semibold ${s.actualMoveInDate !== s.contractMoveInDate ? 'text-amber-400' : 'text-gray-300'}`}>{s.actualMoveInDate}</span>
-                          {s.actualMoveInDate !== s.contractMoveInDate && (
-                            <span className="text-amber-500/70 text-[10px]">계약일과 다름</span>
-                          )}
-                        </div>
-                      )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => { setEditingIdx(0); setShowAddForm(false); }}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-indigo-500/10 hover:text-indigo-400"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDelete(0)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                  </>
-                )}
-              </div>
-            ))
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex items-center gap-2 rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                      <span className="text-gray-500 shrink-0 font-medium">계약일</span>
+                      <span className="text-indigo-400 font-semibold">{records[0].contractMoveInDate}</span>
+                      <span className="text-gray-600 shrink-0">→</span>
+                      {records[0].moveOutDate
+                        ? <span className="text-gray-300 font-semibold">{records[0].moveOutDate}</span>
+                        : <span className="text-gray-600 italic">퇴실일 미정</span>}
+                    </div>
+                    {records[0].actualMoveInDate && (
+                      <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs border ${records[0].actualMoveInDate !== records[0].contractMoveInDate ? 'bg-amber-500/8 border-amber-500/20' : 'bg-[#1A1A1A] border-transparent'}`}>
+                        <span className="text-gray-500 shrink-0 font-medium">입실일</span>
+                        <span className={`font-semibold ${records[0].actualMoveInDate !== records[0].contractMoveInDate ? 'text-amber-400' : 'text-gray-300'}`}>{records[0].actualMoveInDate}</span>
+                        {records[0].actualMoveInDate !== records[0].contractMoveInDate && (
+                          <span className="text-amber-500/70 text-[10px]">계약일과 다름</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -459,6 +455,7 @@ export default function TenantListTable() {
     () => ({ ...MAINTENANCE_BY_ROOM })
   );
 
+
   function handleAddScheduled(roomId: string, record: ScheduledResident) {
     setScheduledData((prev) => ({
       ...prev,
@@ -592,7 +589,7 @@ export default function TenantListTable() {
                         }`}
                       >
                         <CalendarDays className="h-3.5 w-3.5" />
-                        {hasScheduled ? `${roomScheduled.length}건` : "없음"}
+                        {hasScheduled ? "있음" : "없음"}
                       </button>
                     </td>
                     <td className="px-6 py-4">

@@ -20,15 +20,9 @@ export type MaintenanceRecord = {
 
 export const SCHEDULED_BY_ROOM: Record<string, ScheduledResident[]> = {
   "101": [{ name: "강민호", phone: "010-6374-8291", gender: '남', age: 25, contractMoveInDate: "2026-07-01", actualMoveInDate: "2026-07-03", moveOutDate: "2027-06-30" }],
-  "104": [
-    { name: "김태양", phone: "010-5823-9104", gender: '남', age: 24, contractMoveInDate: "2026-03-26", actualMoveInDate: "2026-03-27", moveOutDate: "2027-03-25" },
-    { name: "이소현", phone: "010-7291-3847", gender: '여', age: 22, contractMoveInDate: "2026-08-01", moveOutDate: "2027-07-31" },
-  ],
+  "104": [{ name: "김태양", phone: "010-5823-9104", gender: '남', age: 24, contractMoveInDate: "2026-03-26", actualMoveInDate: "2026-03-27", moveOutDate: "2027-03-25" }],
   "203": [{ name: "박현준", phone: "010-3847-6291", gender: '남', age: 27, contractMoveInDate: "2026-04-01", moveOutDate: "2027-03-31" }],
-  "302": [
-    { name: "최수빈", phone: "010-9182-4756", gender: '여', age: 23, contractMoveInDate: "2026-03-30", moveOutDate: "2027-03-29" },
-    { name: "한도준", phone: "010-2938-5471", gender: '남', age: 25, contractMoveInDate: "2026-03-27", moveOutDate: "2027-03-26" },
-  ],
+  "302": [{ name: "최수빈", phone: "010-9182-4756", gender: '여', age: 23, contractMoveInDate: "2026-03-30", moveOutDate: "2027-03-29" }],
   "404": [{ name: "손지원", phone: "010-2847-5931", gender: '여', age: 26, contractMoveInDate: "2026-04-05", moveOutDate: "2027-04-04" }],
   "506": [{ name: "윤재훈", phone: "010-7382-1947", gender: '남', age: 29, contractMoveInDate: "2026-04-15", moveOutDate: "2027-04-14" }],
   "606": [{ name: "정하율", phone: "010-8374-2918", gender: '여', age: 21, contractMoveInDate: "2026-04-10", moveOutDate: "2027-04-09" }],
@@ -446,9 +440,12 @@ export type GasBill = {
 };
 
 export type ElectricityHandover = {
-  scheduledMoveOutDate: string;
-  actualMoveOutDate: string;
-  usageAmount: number;
+  moveOutDate: string;         // 퇴실일
+  moveOutMeter: number;        // 퇴실 시 계량기 (kWh)
+  vacancyDate: string;         // 공백기간 계량기 기록일
+  vacancyMeter: number;        // 공백기간 계량기 (kWh)
+  vacancyCost: number | null;  // 공백기간 전기요금 (원) - 네이버 계산기로 입력
+  giroCost: number | null;     // 지로 금액 (원)
 };
 
 export type ResidentDetail = {
@@ -462,6 +459,7 @@ export type ResidentDetail = {
   realEstateAgency: RealEstateAgency;
   depositTotal: number;
   depositDeductions: DepositDeduction[];
+  depositReturn: { returned: boolean; returnedAt: string | null };
   rentPayments: RentPayment[];
   gasBills: GasBill[];
   electricityHandover: ElectricityHandover | null;
@@ -499,6 +497,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-03", amount: 15200 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "102": {
     roomId: "102",
@@ -530,6 +529,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-03", amount: 11200 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
 
   // ─── 1층 ───
@@ -564,6 +564,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 17800 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "105": {
     roomId: "105",
@@ -590,6 +591,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 21300 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
 
   // ─── 2층 ───
@@ -629,6 +631,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 18100 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "202": {
     roomId: "202",
@@ -666,6 +669,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-03", amount: 13400 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "204": {
     roomId: "204",
@@ -694,6 +698,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 17300 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "205": {
     roomId: "205",
@@ -735,6 +740,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 21100 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "206": {
     roomId: "206",
@@ -777,7 +783,8 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 22300 },
       { month: "2026-03", amount: 16100 },
     ],
-    electricityHandover: { scheduledMoveOutDate: "2026-03-04", actualMoveOutDate: "2026-03-06", usageAmount: 42000 },
+    electricityHandover: { moveOutDate: "2026-03-04", moveOutMeter: 1060, vacancyDate: "2026-03-05", vacancyMeter: 1062, vacancyCost: 1330, giroCost: 42000 },
+    depositReturn: { returned: false, returnedAt: null },
   },
   "207": {
     roomId: "207",
@@ -806,6 +813,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 18600 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "208": {
     roomId: "208",
@@ -838,6 +846,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 19000 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "209": {
     roomId: "209",
@@ -862,6 +871,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 18300 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "211": {
     roomId: "211",
@@ -892,6 +902,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 17200 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "212": {
     roomId: "212",
@@ -935,6 +946,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 22600 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "213": {
     roomId: "213",
@@ -958,6 +970,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-03", amount: 12400 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
 
   // ─── 3층 ───
@@ -994,6 +1007,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 19800 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "303": {
     roomId: "303",
@@ -1020,6 +1034,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 18700 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "304": {
     roomId: "304",
@@ -1056,6 +1071,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 21500 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "305": {
     roomId: "305",
@@ -1084,6 +1100,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 19200 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "306": {
     roomId: "306",
@@ -1113,6 +1130,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-03", amount: 12900 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "307": {
     roomId: "307",
@@ -1157,7 +1175,8 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2025-12", amount: 26300 },
       { month: "2026-01", amount: 29100 },
     ],
-    electricityHandover: { scheduledMoveOutDate: "2026-02-14", actualMoveOutDate: "2026-02-16", usageAmount: 38500 },
+    electricityHandover: { moveOutDate: "2026-02-14", moveOutMeter: 980, vacancyDate: "2026-02-15", vacancyMeter: 981, vacancyCost: 660, giroCost: 38500 },
+    depositReturn: { returned: false, returnedAt: null },
   },
   "308": {
     roomId: "308",
@@ -1190,6 +1209,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 20300 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "309": {
     roomId: "309",
@@ -1228,6 +1248,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 20800 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "310": {
     roomId: "310",
@@ -1256,6 +1277,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 17600 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "312": {
     roomId: "312",
@@ -1300,6 +1322,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-03", amount: 17600 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "313": {
     roomId: "313",
@@ -1324,6 +1347,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 17000 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
 
   // ─── 4층 ───
@@ -1356,6 +1380,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 19400 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "402": {
     roomId: "402",
@@ -1390,6 +1415,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 21900 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "403": {
     roomId: "403",
@@ -1416,6 +1442,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 17800 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "405": {
     roomId: "405",
@@ -1448,6 +1475,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 21200 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "406": {
     roomId: "406",
@@ -1484,6 +1512,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 22900 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "407": {
     roomId: "407",
@@ -1512,6 +1541,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 18900 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "408": {
     roomId: "408",
@@ -1555,6 +1585,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 25100 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
 
   // ─── 5층 ───
@@ -1589,6 +1620,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 20700 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "502": {
     roomId: "502",
@@ -1617,6 +1649,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 17900 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "503": {
     roomId: "503",
@@ -1651,6 +1684,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 22000 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "504": {
     roomId: "504",
@@ -1677,6 +1711,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 18200 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "505": {
     roomId: "505",
@@ -1706,6 +1741,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-03", amount: 13100 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "507": {
     roomId: "507",
@@ -1747,6 +1783,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 23800 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
 
   // ─── 6층 ───
@@ -1779,6 +1816,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 20100 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "602": {
     roomId: "602",
@@ -1805,6 +1843,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 18400 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "604": {
     roomId: "604",
@@ -1833,6 +1872,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 17300 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "605": {
     roomId: "605",
@@ -1867,6 +1907,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 23000 },
     ],
     electricityHandover: null,
+    depositReturn: { returned: false, returnedAt: null },
   },
   "607": {
     roomId: "607",
@@ -1911,6 +1952,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 30600 },
       { month: "2026-02", amount: 24700 },
     ],
-    electricityHandover: { scheduledMoveOutDate: "2026-03-14", actualMoveOutDate: "2026-03-15", usageAmount: 41000 },
+    electricityHandover: { moveOutDate: "2026-03-14", moveOutMeter: 1120, vacancyDate: "2026-03-15", vacancyMeter: 1123, vacancyCost: 1980, giroCost: 41000 },
+    depositReturn: { returned: false, returnedAt: null },
   },
 };
