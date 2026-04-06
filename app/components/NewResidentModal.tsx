@@ -6,17 +6,18 @@ import { ALL_ROOMS, ROOM_TYPE_INFO } from '@/app/lib/mock-data';
 
 interface NewResidentModalProps {
   onClose: () => void;
+  initialRoomId?: string;
 }
 
 const FLOOR_LABELS: Record<number, string> = {
   1: '1층', 2: '2층', 3: '3층', 4: '4층', 5: '5층', 6: '6층',
 };
 
-export default function NewResidentModal({ onClose }: NewResidentModalProps) {
+export default function NewResidentModal({ onClose, initialRoomId = '' }: NewResidentModalProps) {
   const vacantRooms = ALL_ROOMS.filter((r) => r.status === 'vacant');
 
   const [form, setForm] = useState({
-    roomId: '',
+    roomId: initialRoomId,
     name: '',
     gender: '' as '남' | '여' | '',
     age: '',

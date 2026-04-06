@@ -261,17 +261,14 @@ export default function TodoListPage() {
                   style={{ color: isToday ? '#818cf8' : isSun ? '#f87171' : isSat ? '#60a5fa' : '#d1d5db' }}>
                   {day}
                 </span>
-                <div className="flex flex-col gap-1 overflow-hidden">
-                  {dayTodos.slice(0, 3).map((todo) => (
+                <div className="flex flex-col gap-1">
+                  {dayTodos.map((todo) => (
                     <div key={todo.id} className={`truncate rounded px-1.5 py-1 text-xs leading-tight ${
                       todo.done ? 'bg-gray-700/50 text-gray-500 line-through' : 'bg-indigo-500/20 text-indigo-300'
                     }`}>
                       {todo.text}
                     </div>
                   ))}
-                  {dayTodos.length > 3 && (
-                    <span className="text-[10px] text-gray-500 pl-1">+{dayTodos.length - 3}개 더</span>
-                  )}
                 </div>
               </button>
             );

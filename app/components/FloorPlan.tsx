@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { getRoomsByFloor, type FloorNumber, type Room } from "../lib/mock-data";
 import RoomDetailDrawer from "./RoomDetailDrawer";
+import { useNewResident } from "./NewResidentContext";
 import Floor1 from "./floor-plans/Floor1";
 import Floor2 from "./floor-plans/Floor2";
 import Floor3 from "./floor-plans/Floor3";
@@ -27,15 +28,24 @@ export default function FloorPlan() {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [isRealPlanOpen, setIsRealPlanOpen] = useState(false);
   const currentRealPlan = REAL_FLOOR_PLANS[currentFloor];
+  const openNewResident = useNewResident();
+
+  function handleSelectRoom(room: Room) {
+    if (room.status === 'vacant') {
+      openNewResident(room.id);
+    } else {
+      setSelectedRoom(room);
+    }
+  }
 
   const renderFloor = () => {
     switch (currentFloor) {
-      case 1: return <Floor1 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={setSelectedRoom} />;
-      case 2: return <Floor2 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={setSelectedRoom} />;
-      case 3: return <Floor3 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={setSelectedRoom} />;
-      case 4: return <Floor4 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={setSelectedRoom} />;
-      case 5: return <Floor5 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={setSelectedRoom} />;
-      case 6: return <Floor6 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={setSelectedRoom} />;
+      case 1: return <Floor1 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={handleSelectRoom} />;
+      case 2: return <Floor2 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={handleSelectRoom} />;
+      case 3: return <Floor3 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={handleSelectRoom} />;
+      case 4: return <Floor4 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={handleSelectRoom} />;
+      case 5: return <Floor5 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={handleSelectRoom} />;
+      case 6: return <Floor6 rooms={rooms} selectedRoom={selectedRoom} onSelectRoom={handleSelectRoom} />;
       default: return null;
     }
   };

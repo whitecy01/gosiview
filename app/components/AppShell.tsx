@@ -8,21 +8,28 @@ import { NewResidentContext } from './NewResidentContext';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [isNewResidentOpen, setIsNewResidentOpen] = useState(false);
+  const [newResidentRoomId, setNewResidentRoomId] = useState<string | undefined>(undefined);
+
+  function openNewResident(roomId?: string) {
+    setNewResidentRoomId(roomId);
+  }
 
   return (
-    <NewResidentContext.Provider value={() => setIsNewResidentOpen(true)}>
+    <NewResidentContext.Provider value={openNewResident}>
       <Sidebar collapsed={collapsed} />
       <Header
         collapsed={collapsed}
         onToggle={() => setCollapsed((c) => !c)}
-        onNewResident={() => setIsNewResidentOpen(true)}
+        onNewResident={() => openNewResident()}
       />
       <div className={`p-4 pt-20 transition-all duration-300 ${collapsed ? 'ml-16' : 'ml-64'}`}>
         {children}
       </div>
-      {isNewResidentOpen && (
-        <NewResidentModal onClose={() => setIsNewResidentOpen(false)} />
+      {newResidentRoomId !== undefined && (
+        <NewResidentModal
+          initialRoomId={newResidentRoomId}
+          onClose={() => setNewResidentRoomId(undefined)}
+        />
       )}
     </NewResidentContext.Provider>
   );

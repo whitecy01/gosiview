@@ -208,7 +208,7 @@ export default function RoomHistoryPage() {
         </button>
         <div className="flex items-center gap-2.5">
           <Home className="h-4 w-4 text-indigo-400" />
-          <h1 className="text-xl font-bold text-white">{room.name} 입실 이력</h1>
+          <h1 className="text-xl font-bold text-gray-900">{room.name} 입실 이력</h1>
           <span className="rounded-full border border-[#2A2A2A] px-2.5 py-0.5 text-xs text-gray-500">{room.roomType}</span>
         </div>
       </div>
