@@ -185,7 +185,7 @@ function DonutChart({ segments }: { segments: { label: string; value: number; co
     return { ...seg, angle, x1, y1, x2, y2, largeArc: angle > Math.PI ? 1 : 0 };
   });
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex items-center justify-center gap-6">
       <svg width={160} height={160}>
         {arcs.map((arc, i) => (
           <path key={i} d={`M ${arc.x1} ${arc.y1} A ${R} ${R} 0 ${arc.largeArc} 1 ${arc.x2} ${arc.y2}`}
