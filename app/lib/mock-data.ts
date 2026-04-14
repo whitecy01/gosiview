@@ -571,6 +571,26 @@ export type ElectricityHandover = {
   giroCost: number | null;     // 지로 금액 (원)
 };
 
+export type CashSuccessionRecord = {
+  billingStart?: string;      // 청구기간 시작
+  billingEnd?: string;        // 청구기간 종료
+  landlordStart?: string;     // 임대인 현금승계 기간 시작
+  landlordEnd?: string;       // 임대인 현금승계 기간 종료
+  tenantStart?: string;       // 임차인 실 사용 기간 시작
+  tenantEnd?: string;         // 임차인 실 사용 기간 종료
+  totalAmount?: number;       // 총 금액 (원)
+  totalKwh?: number;          // 총 사용량 (kWh)
+  landlordAmount?: number;    // 임대인 금액 (원)
+  landlordKwh?: number;       // 임대인 사용량 (kWh)
+  tenantAmount?: number;      // 임차인 금액 (원)
+  tenantKwh?: number;         // 임차인 사용량 (kWh)
+  bankName?: string;          // 은행명
+  accountHolder?: string;     // 예금주
+  accountNumber?: string;     // 계좌번호
+  paymentDate?: string;       // 납부 일자
+  notes?: string;             // 비고
+};
+
 export type ResidentDetail = {
   roomId: string;
   purpose: ResidencePurpose;
@@ -585,7 +605,7 @@ export type ResidentDetail = {
   depositReturn: { returned: boolean; returnedAt: string | null };
   rentPayments: RentPayment[];
   gasBills: GasBill[];
-  electricityHandover: ElectricityHandover | null;
+  cashSuccessions: CashSuccessionRecord[];
 };
 
 export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
@@ -619,7 +639,18 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 19500 },
       { month: "2026-03", amount: 15200 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [
+      {
+        billingStart: "2026-01-30", billingEnd: "2026-03-02",
+        landlordStart: "2026-01-30", landlordEnd: "2026-02-01",
+        tenantStart: "2026-02-02", tenantEnd: "2026-03-02",
+        totalAmount: 7180, totalKwh: 34,
+        landlordAmount: 1170, landlordKwh: 1,
+        tenantAmount: 6010, tenantKwh: 33,
+        bankName: "신한", accountHolder: "고민선", accountNumber: "110-561-650745",
+        notes: "반환완료",
+      },
+    ],
     depositReturn: { returned: false, returnedAt: null },
   },
   "102": {
@@ -651,7 +682,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 16400 },
       { month: "2026-03", amount: 11200 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
 
@@ -686,7 +717,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 23400 },
       { month: "2026-02", amount: 17800 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "105": {
@@ -713,7 +744,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 25600 },
       { month: "2026-02", amount: 21300 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
 
@@ -753,7 +784,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 22700 },
       { month: "2026-02", amount: 18100 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "202": {
@@ -791,7 +822,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 19600 },
       { month: "2026-03", amount: 13400 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "204": {
@@ -820,7 +851,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 21800 },
       { month: "2026-02", amount: 17300 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "205": {
@@ -862,7 +893,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 26800 },
       { month: "2026-02", amount: 21100 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "206": {
@@ -906,7 +937,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 22300 },
       { month: "2026-03", amount: 16100 },
     ],
-    electricityHandover: { moveOutDate: "2026-03-04", moveOutMeter: 1060, vacancyDate: "2026-03-05", vacancyMeter: 1062, vacancyCost: 1330, giroCost: 42000 },
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "207": {
@@ -935,7 +966,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 23100 },
       { month: "2026-02", amount: 18600 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "208": {
@@ -968,7 +999,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 24300 },
       { month: "2026-02", amount: 19000 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "209": {
@@ -993,7 +1024,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 22900 },
       { month: "2026-02", amount: 18300 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "211": {
@@ -1024,7 +1055,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 23600 },
       { month: "2026-02", amount: 17200 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "212": {
@@ -1068,7 +1099,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 28400 },
       { month: "2026-02", amount: 22600 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "213": {
@@ -1092,7 +1123,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 16800 },
       { month: "2026-03", amount: 12400 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
 
@@ -1129,7 +1160,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 26100 },
       { month: "2026-02", amount: 19800 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "303": {
@@ -1156,7 +1187,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 24500 },
       { month: "2026-02", amount: 18700 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "304": {
@@ -1193,7 +1224,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 27300 },
       { month: "2026-02", amount: 21500 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "305": {
@@ -1222,7 +1253,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 25000 },
       { month: "2026-02", amount: 19200 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "306": {
@@ -1252,7 +1283,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 18500 },
       { month: "2026-03", amount: 12900 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "307": {
@@ -1298,7 +1329,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2025-12", amount: 26300 },
       { month: "2026-01", amount: 29100 },
     ],
-    electricityHandover: { moveOutDate: "2026-02-14", moveOutMeter: 980, vacancyDate: "2026-02-15", vacancyMeter: 981, vacancyCost: 660, giroCost: 38500 },
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "308": {
@@ -1331,7 +1362,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 25700 },
       { month: "2026-02", amount: 20300 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "309": {
@@ -1370,7 +1401,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 27000 },
       { month: "2026-02", amount: 20800 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "310": {
@@ -1399,7 +1430,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 22800 },
       { month: "2026-02", amount: 17600 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "312": {
@@ -1444,7 +1475,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 24400 },
       { month: "2026-03", amount: 17600 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "313": {
@@ -1469,7 +1500,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 22100 },
       { month: "2026-02", amount: 17000 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
 
@@ -1502,7 +1533,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 24800 },
       { month: "2026-02", amount: 19400 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "402": {
@@ -1537,7 +1568,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 27600 },
       { month: "2026-02", amount: 21900 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "403": {
@@ -1564,7 +1595,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 23100 },
       { month: "2026-02", amount: 17800 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "405": {
@@ -1597,7 +1628,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 26900 },
       { month: "2026-02", amount: 21200 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "406": {
@@ -1634,7 +1665,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 28700 },
       { month: "2026-02", amount: 22900 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "407": {
@@ -1663,7 +1694,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 24600 },
       { month: "2026-02", amount: 18900 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "408": {
@@ -1707,7 +1738,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 30900 },
       { month: "2026-02", amount: 25100 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
 
@@ -1742,7 +1773,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 26500 },
       { month: "2026-02", amount: 20700 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "502": {
@@ -1771,7 +1802,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 23400 },
       { month: "2026-02", amount: 17900 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "503": {
@@ -1806,7 +1837,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 27800 },
       { month: "2026-02", amount: 22000 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "504": {
@@ -1833,7 +1864,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 23800 },
       { month: "2026-02", amount: 18200 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "505": {
@@ -1863,7 +1894,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-02", amount: 18600 },
       { month: "2026-03", amount: 13100 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "507": {
@@ -1905,7 +1936,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 29700 },
       { month: "2026-02", amount: 23800 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
 
@@ -1938,7 +1969,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 25900 },
       { month: "2026-02", amount: 20100 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "602": {
@@ -1965,7 +1996,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 24100 },
       { month: "2026-02", amount: 18400 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "604": {
@@ -1994,7 +2025,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 22600 },
       { month: "2026-02", amount: 17300 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "605": {
@@ -2029,7 +2060,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 28800 },
       { month: "2026-02", amount: 23000 },
     ],
-    electricityHandover: null,
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "607": {
@@ -2075,7 +2106,7 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
       { month: "2026-01", amount: 30600 },
       { month: "2026-02", amount: 24700 },
     ],
-    electricityHandover: { moveOutDate: "2026-03-14", moveOutMeter: 1120, vacancyDate: "2026-03-15", vacancyMeter: 1123, vacancyCost: 1980, giroCost: 41000 },
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
 };

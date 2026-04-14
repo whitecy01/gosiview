@@ -126,133 +126,271 @@ function ScheduledInfoModal({
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  const hasRecord = records.length > 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const sortedReservations = [...records]
+    .map((r, i) => ({ ...r, originalIdx: i }))
+    .sort((a, b) => a.contractMoveInDate.localeCompare(b.contractMoveInDate));
+
+  // 타임라인 범위 계산
+  const allDates: Date[] = [today];
+  if (room.moveInDate) allDates.push(new Date(room.moveInDate));
+  if (room.moveOutDate) allDates.push(new Date(room.moveOutDate));
+  sortedReservations.forEach((r) => {
+    allDates.push(new Date(r.contractMoveInDate));
+    if (r.moveOutDate) allDates.push(new Date(r.moveOutDate));
+  });
+
+  const earliest = new Date(Math.min(...allDates.map((d) => d.getTime())));
+  const latest = new Date(Math.max(...allDates.map((d) => d.getTime())));
+
+  const timelineStart = new Date(earliest.getFullYear(), earliest.getMonth(), 1);
+  const minEnd = new Date(timelineStart.getFullYear(), timelineStart.getMonth() + 14, 0);
+  const naturalEnd = new Date(latest.getFullYear(), latest.getMonth() + 2, 0);
+  const timelineEnd = naturalEnd > minEnd ? naturalEnd : minEnd;
+  const totalMs = timelineEnd.getTime() - timelineStart.getTime();
+
+  function toPercent(dateStr: string): number {
+    const d = new Date(dateStr);
+    return Math.max(0, Math.min(100, ((d.getTime() - timelineStart.getTime()) / totalMs) * 100));
+  }
+
+  function barWidth(startStr: string, endStr?: string): number {
+    const s = new Date(startStr);
+    const e = endStr ? new Date(endStr) : timelineEnd;
+    return Math.max(1, ((e.getTime() - s.getTime()) / totalMs) * 100);
+  }
+
+  const months: Date[] = [];
+  let cur = new Date(timelineStart);
+  while (cur <= timelineEnd) {
+    months.push(new Date(cur));
+    cur.setMonth(cur.getMonth() + 1);
+  }
+
+  const todayPercent = toPercent(today.toISOString().slice(0, 10));
 
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#2A2A2A] bg-[#0E0E0E] shadow-2xl max-h-[88vh] flex flex-col">
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-4xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#2A2A2A] bg-[#0E0E0E] shadow-2xl max-h-[88vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-5 shrink-0">
           <div>
-            <h3 className="text-base font-semibold text-white">예정 입실 정보</h3>
-            <p className="mt-0.5 text-sm text-gray-400">{room.id}호 · 앞으로 예정된 입실 일정</p>
+            <h3 className="text-base font-semibold text-white">입실 예약 현황</h3>
+            <p className="mt-0.5 text-sm text-gray-400">{room.id}호 · 예약 {records.length}건</p>
           </div>
           <div className="flex items-center gap-2">
-            {!hasRecord && (
-              <button
-                onClick={() => { setShowAddForm((v) => !v); setEditingIdx(null); }}
-                className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-400 transition-colors hover:bg-indigo-500/20"
-              >
-                <Plus className="h-3.5 w-3.5" />추가
-              </button>
-            )}
+            <button
+              onClick={() => { setShowAddForm((v) => !v); setEditingIdx(null); setSelectedIdx(null); }}
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                showAddForm
+                  ? "border-indigo-500/60 bg-indigo-500/20 text-indigo-300"
+                  : "border-indigo-500/40 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"
+              }`}
+            >
+              <Plus className="h-3.5 w-3.5" />예약 추가
+            </button>
             <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-[#1A1A1A] hover:text-white">
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        {/* 현재 입실자 퇴실일 */}
-        {room.status === 'occupied' && room.moveOutDate && (
-          <div className="px-6 py-3 bg-emerald-500/5 border-b border-emerald-500/15 shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-              <span className="text-xs text-gray-400">현재 입실자</span>
-              <span className="text-xs font-semibold text-white">{room.resident}</span>
-              <span className="text-xs text-gray-600">·</span>
-              <span className="text-xs text-gray-400">퇴실 예정</span>
-              <span className="text-xs font-semibold text-emerald-400">{room.moveOutDate}</span>
+        <div className="flex-1 overflow-y-auto">
+
+          {/* 타임라인 */}
+          <div className="px-6 pt-5 pb-4">
+            <div className="overflow-x-auto">
+              <div style={{ minWidth: `${Math.max(600, months.length * 72)}px` }}>
+
+                {/* 월 헤더 */}
+                <div className="flex mb-1 ml-28">
+                  {months.map((m, i) => (
+                    <div key={i} className="flex-1 text-center border-l border-[#222] first:border-l-0 pb-1.5">
+                      {m.getMonth() === 0
+                        ? <span className="text-[10px] font-bold text-gray-300">{m.getFullYear()}년</span>
+                        : <span className="text-[10px] text-gray-600">{m.getMonth() + 1}월</span>
+                      }
+                    </div>
+                  ))}
+                </div>
+
+                {/* 현재 입실자 */}
+                {room.moveInDate && (
+                  <div className="flex items-center mb-2">
+                    <div className="w-28 shrink-0 pr-3 text-right">
+                      <span className="text-[10px] font-semibold text-emerald-400 block">현재 입실자</span>
+                      <span className="text-xs font-medium text-white truncate block">{room.resident ?? '-'}</span>
+                    </div>
+                    <div className="flex-1 relative h-10 bg-[#111] rounded border border-[#1E1E1E]">
+                      {months.map((_, i) => (
+                        <div key={i} className="absolute top-0 bottom-0 border-l border-[#1A1A1A]" style={{ left: `${(i / months.length) * 100}%` }} />
+                      ))}
+                      <div
+                        className="absolute top-1.5 bottom-1.5 rounded bg-emerald-500/20 border border-emerald-500/40 flex items-center gap-2 px-2.5 overflow-hidden"
+                        style={{ left: `${toPercent(room.moveInDate)}%`, width: `${barWidth(room.moveInDate, room.moveOutDate ?? undefined)}%` }}
+                      >
+                        <span className="text-[10px] font-bold text-emerald-300 shrink-0">{room.resident}</span>
+                        <span className="text-[10px] text-emerald-500/70 shrink-0">입실 {room.moveInDate}</span>
+                        {room.moveOutDate && <span className="text-[10px] text-emerald-500/50 shrink-0">~ {room.moveOutDate}</span>}
+                      </div>
+                      <div className="absolute top-0 bottom-0 w-px bg-rose-500/70 z-10" style={{ left: `${todayPercent}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* 빈 상태 */}
+                {sortedReservations.length === 0 && !room.moveInDate && (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <CalendarDays className="h-7 w-7 text-gray-600 mb-2" />
+                    <p className="text-sm text-gray-500">예약된 입실 일정이 없습니다.</p>
+                  </div>
+                )}
+
+                {/* 예약 행 */}
+                {sortedReservations.map((res, order) => (
+                  <div
+                    key={res.originalIdx}
+                    className="flex items-center mb-2 cursor-pointer group"
+                    onClick={() => {
+                      setSelectedIdx(selectedIdx === res.originalIdx ? null : res.originalIdx);
+                      setShowAddForm(false);
+                      setEditingIdx(null);
+                    }}
+                  >
+                    <div className="w-28 shrink-0 pr-3 text-right">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/20">
+                        예약 {order + 1}
+                      </span>
+                      <span className="text-xs font-medium text-white mt-0.5 block truncate">{res.name}</span>
+                    </div>
+                    <div
+                      className={`flex-1 relative h-10 rounded border transition-colors ${
+                        selectedIdx === res.originalIdx
+                          ? 'bg-indigo-500/5 border-indigo-500/30'
+                          : 'bg-[#111] border-[#1E1E1E] group-hover:border-indigo-500/20'
+                      }`}
+                    >
+                      {months.map((_, i) => (
+                        <div key={i} className="absolute top-0 bottom-0 border-l border-[#1A1A1A]" style={{ left: `${(i / months.length) * 100}%` }} />
+                      ))}
+                      <div
+                        className={`absolute top-1.5 bottom-1.5 rounded flex items-center gap-2 px-2.5 overflow-hidden transition-colors ${
+                          selectedIdx === res.originalIdx
+                            ? 'bg-indigo-500/30 border border-indigo-400/60'
+                            : 'bg-indigo-500/15 border border-indigo-500/30 group-hover:bg-indigo-500/25'
+                        }`}
+                        style={{ left: `${toPercent(res.contractMoveInDate)}%`, width: `${barWidth(res.contractMoveInDate, res.moveOutDate)}%` }}
+                      >
+                        <span className="text-[10px] font-bold text-indigo-200 shrink-0">{res.name}</span>
+                        <span className="text-[10px] text-indigo-400/70 shrink-0">계약일 {res.contractMoveInDate}</span>
+                        {res.actualMoveInDate
+                          ? <span className={`text-[10px] shrink-0 ${res.actualMoveInDate !== res.contractMoveInDate ? 'text-amber-400/80' : 'text-indigo-400/50'}`}>
+                              입실일 {res.actualMoveInDate}
+                            </span>
+                          : <span className="text-[10px] text-indigo-500/40 shrink-0 italic">입실일 미정</span>
+                        }
+                      </div>
+                      <div className="absolute top-0 bottom-0 w-px bg-rose-500/70 z-10" style={{ left: `${todayPercent}%` }} />
+                    </div>
+                  </div>
+                ))}
+
+                {/* 오늘 범례 */}
+                <div className="flex justify-end mt-1 ml-28">
+                  <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
+                    <div className="w-3 h-px bg-rose-500/70" />오늘
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* 추가 폼 */}
-        {showAddForm && (
-          <div className="border-b border-[#2A2A2A] px-6 py-4 shrink-0 bg-[#111]">
-            <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-3">새 예정 입실자 추가</p>
-            <ResidentForm
-              initial={{}}
-              onSave={(r) => { onAdd(r); setShowAddForm(false); }}
-              onCancel={() => setShowAddForm(false)}
-            />
-          </div>
-        )}
-
-        {/* 예정 입실자 */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          {!hasRecord ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <CalendarDays className="h-8 w-8 text-gray-600 mb-3" />
-              <p className="text-sm text-gray-500">예정된 입실 일정이 없습니다.</p>
-            </div>
-          ) : (
-            <div className={`rounded-xl border bg-[#161616] p-4 transition-colors ${editingIdx === 0 ? 'border-indigo-500/40' : 'border-[#2A2A2A]'}`}>
-              {editingIdx === 0 ? (
+          {/* 선택된 예약 상세 */}
+          {selectedIdx !== null && records[selectedIdx] && (
+            <div className="border-t border-[#222] px-6 py-4 bg-[#0A0A0A]">
+              {editingIdx === selectedIdx ? (
                 <>
                   <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-3">정보 수정</p>
                   <ResidentForm
-                    initial={records[0]}
-                    onSave={(updated) => { onUpdate(0, updated); setEditingIdx(null); }}
+                    initial={records[selectedIdx]}
+                    onSave={(updated) => { onUpdate(selectedIdx, updated); setEditingIdx(null); }}
                     onCancel={() => setEditingIdx(null)}
                   />
                 </>
               ) : (
-                <>
-                  <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-500/10 border border-indigo-500/20 text-sm font-bold text-indigo-400">
-                        {records[0].name[0]}
+                        {records[selectedIdx].name[0]}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-white">{records[0].name}</span>
-                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${records[0].gender === '남' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-pink-500/10 text-pink-400 border-pink-500/20'}`}>{records[0].gender}</span>
-                          <span className="text-xs text-gray-500">{records[0].age}세</span>
+                          <span className="text-sm font-semibold text-white">{records[selectedIdx].name}</span>
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${records[selectedIdx].gender === '남' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-pink-500/10 text-pink-400 border-pink-500/20'}`}>{records[selectedIdx].gender}</span>
+                          <span className="text-xs text-gray-500">{records[selectedIdx].age}세</span>
                         </div>
-                        <p className="mt-0.5 text-xs text-teal-400">{records[0].phone}</p>
+                        <p className="mt-0.5 text-xs text-teal-400">{records[selectedIdx].phone}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={() => { setEditingIdx(0); setShowAddForm(false); }}
+                        onClick={() => { setEditingIdx(selectedIdx); setShowAddForm(false); }}
                         className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-indigo-500/10 hover:text-indigo-400"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={() => onDelete(0)}
+                        onClick={() => { onDelete(selectedIdx); setSelectedIdx(null); }}
                         className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex items-center gap-2 rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
-                      <span className="text-gray-500 shrink-0 font-medium">계약일</span>
-                      <span className="text-indigo-400 font-semibold">{records[0].contractMoveInDate}</span>
-                      <span className="text-gray-600 shrink-0">→</span>
-                      {records[0].moveOutDate
-                        ? <span className="text-gray-300 font-semibold">{records[0].moveOutDate}</span>
-                        : <span className="text-gray-600 italic">퇴실일 미정</span>}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                      <span className="text-gray-500 block mb-0.5">계약일</span>
+                      <span className="text-indigo-400 font-semibold">{records[selectedIdx].contractMoveInDate}</span>
                     </div>
-                    {records[0].actualMoveInDate && (
-                      <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs border ${records[0].actualMoveInDate !== records[0].contractMoveInDate ? 'bg-amber-500/8 border-amber-500/20' : 'bg-[#1A1A1A] border-transparent'}`}>
-                        <span className="text-gray-500 shrink-0 font-medium">입실일</span>
-                        <span className={`font-semibold ${records[0].actualMoveInDate !== records[0].contractMoveInDate ? 'text-amber-400' : 'text-gray-300'}`}>{records[0].actualMoveInDate}</span>
-                        {records[0].actualMoveInDate !== records[0].contractMoveInDate && (
-                          <span className="text-amber-500/70 text-[10px]">계약일과 다름</span>
-                        )}
-                      </div>
-                    )}
+                    <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                      <span className="text-gray-500 block mb-0.5">입실일</span>
+                      {records[selectedIdx].actualMoveInDate
+                        ? <span className={`font-semibold ${records[selectedIdx].actualMoveInDate !== records[selectedIdx].contractMoveInDate ? 'text-amber-400' : 'text-gray-300'}`}>{records[selectedIdx].actualMoveInDate}</span>
+                        : <span className="text-gray-600 italic text-[10px]">미입력</span>
+                      }
+                    </div>
+                    <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                      <span className="text-gray-500 block mb-0.5">계약일(퇴실)</span>
+                      {records[selectedIdx].moveOutDate
+                        ? <span className="text-gray-300 font-semibold">{records[selectedIdx].moveOutDate}</span>
+                        : <span className="text-gray-600 italic text-[10px]">미정</span>
+                      }
+                    </div>
                   </div>
-                </>
+                </div>
               )}
             </div>
           )}
+
+          {/* 예약 추가 폼 */}
+          {showAddForm && (
+            <div className="border-t border-[#222] px-6 py-4 bg-[#0A0A0A]">
+              <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-3">새 예약 추가</p>
+              <ResidentForm
+                initial={{}}
+                onSave={(r) => { onAdd(r); setShowAddForm(false); }}
+                onCancel={() => setShowAddForm(false)}
+              />
+            </div>
+          )}
+
         </div>
       </div>
     </>
@@ -542,7 +680,7 @@ export default function TenantListTable() {
                 <th className="px-6 py-4 font-medium bg-violet-500/10 text-violet-400">이름</th>
                 <th className="px-6 py-4 font-medium bg-teal-500/10 text-teal-400">연락처</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">상태</th>
-                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">예정 입실</th>
+                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">예약(예정 입실)</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">방 관리</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">상세</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">이력</th>
@@ -590,7 +728,7 @@ export default function TenantListTable() {
                         }`}
                       >
                         <CalendarDays className="h-3.5 w-3.5" />
-                        {hasScheduled ? "있음" : "없음"}
+                        {hasScheduled ? `${roomScheduled.length}건` : "없음"}
                       </button>
                     </td>
                     <td className="px-6 py-4">
