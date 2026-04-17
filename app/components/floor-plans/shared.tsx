@@ -1,3 +1,4 @@
+import type { Room } from "../../lib/mock-data";
 export type { Room } from "../../lib/mock-data";
 
 export function RoomCard({ room, isSelected, onClick, className = "flex-1" }: { room: Room, isSelected: boolean, onClick: () => void, className?: string }) {
