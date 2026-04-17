@@ -1,6 +1,8 @@
 'use client';
 
-import { Bell, PanelLeftClose, PanelLeftOpen, Search, UserPlus } from 'lucide-react';
+import { useState } from 'react';
+import { Bell, PanelLeftClose, PanelLeftOpen, Search, UserPlus, CalendarClock, X } from 'lucide-react';
+import { useToday } from '../context/MockDateContext';
 
 interface HeaderProps {
   collapsed: boolean;
@@ -9,6 +11,21 @@ interface HeaderProps {
 }
 
 export default function Header({ collapsed, onToggle, onNewResident }: HeaderProps) {
+  const { todayStr, mockDate, setMockDate } = useToday();
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [inputDate, setInputDate] = useState(todayStr);
+  const isMock = !!mockDate;
+
+  function applyDate() {
+    setMockDate(inputDate || null);
+    setShowDatePicker(false);
+  }
+  function resetDate() {
+    setMockDate(null);
+    setInputDate(new Date().toISOString().slice(0, 10));
+    setShowDatePicker(false);
+  }
+
   return (
     <header className={`fixed top-0 z-30 border-b border-[#2A2A2A] bg-[#0A0A0A]/80 backdrop-blur-md transition-all duration-300 ${collapsed ? 'left-16' : 'left-64'} right-0`}>
       <div className="flex h-16 items-center justify-between px-4 lg:px-6">
@@ -44,6 +61,54 @@ export default function Header({ collapsed, onToggle, onNewResident }: HeaderPro
 
         {/* Right actions */}
         <div className="flex items-center gap-4">
+
+          {/* 날짜 테스트 */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => { setInputDate(todayStr); setShowDatePicker((v) => !v); }}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                isMock
+                  ? 'border-amber-500/50 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25'
+                  : 'border-[#2A2A2A] bg-[#1A1A1A] text-gray-400 hover:text-white'
+              }`}
+              title="테스트 날짜 변경"
+            >
+              <CalendarClock className="h-3.5 w-3.5" />
+              <span>{isMock ? `테스트: ${todayStr}` : todayStr}</span>
+              {isMock && (
+                <span
+                  role="button"
+                  onClick={(e) => { e.stopPropagation(); resetDate(); }}
+                  className="ml-0.5 rounded-full hover:text-rose-400 transition-colors cursor-pointer"
+                >
+                  <X className="h-3 w-3" />
+                </span>
+              )}
+            </button>
+
+            {showDatePicker && (
+              <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-xl border border-[#2A2A2A] bg-[#111] shadow-2xl p-4 space-y-3">
+                <p className="text-xs font-semibold text-amber-400">테스트 날짜 설정</p>
+                <p className="text-[10px] text-gray-500">오늘 날짜를 임시로 변경해 날짜 기반 로직을 테스트합니다.</p>
+                <input
+                  type="date"
+                  value={inputDate}
+                  onChange={(e) => setInputDate(e.target.value)}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none focus:border-amber-500 transition-colors"
+                />
+                <div className="flex gap-2">
+                  <button onClick={resetDate} className="flex-1 rounded-lg border border-[#2A2A2A] py-1.5 text-xs text-gray-400 hover:text-white transition-colors">
+                    실제 오늘로 리셋
+                  </button>
+                  <button onClick={applyDate} className="flex-1 rounded-lg bg-amber-500 py-1.5 text-xs font-semibold text-black hover:bg-amber-400 transition-colors">
+                    적용
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={onNewResident}

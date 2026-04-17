@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import NewResidentModal from './NewResidentModal';
 import { NewResidentContext } from './NewResidentContext';
+import { MockDateProvider } from '../context/MockDateContext';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -15,6 +16,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <MockDateProvider>
     <NewResidentContext.Provider value={openNewResident}>
       <Sidebar collapsed={collapsed} />
       <Header
@@ -32,5 +34,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
     </NewResidentContext.Provider>
+    </MockDateProvider>
   );
 }

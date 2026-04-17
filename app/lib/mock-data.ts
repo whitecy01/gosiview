@@ -7,9 +7,16 @@ export type ScheduledResident = {
   phone: string;
   gender: '남' | '여';
   age: number;
-  contractMoveInDate: string;   // 계약서상 입실 예정일
-  actualMoveInDate?: string;    // 실제 입실 날짜 (다를 경우)
-  moveOutDate?: string;
+  contractMoveInDate: string;   // 계약일(시작) — 계약서상 입실 예정일
+  contractEndDate?: string;     // 계약일(끝) — contractMoveInDate + contractMonths - 1일
+  contractMonths?: number;      // 계약 개월 수
+  actualMoveInDate?: string;    // 실제 입실일 (계약일과 다를 경우)
+  moveOutDate?: string;         // 실제 퇴실일 (actualMoveInDate + contractMonths - 1일)
+  // 추가 계약 정보
+  purpose?: ResidencePurpose;       // 거주 목적
+  monthlyRent?: number;             // 실제 납부 월세 (만원 단위)
+  contractDeposit?: number;         // 계약금 (원 단위)
+  realEstateAgency?: RealEstateAgency; // 부동산
 };
 
 export type MaintenanceRecord = {
@@ -19,7 +26,7 @@ export type MaintenanceRecord = {
 };
 
 export const SCHEDULED_BY_ROOM: Record<string, ScheduledResident[]> = {
-  "101": [{ name: "강민호", phone: "010-6374-8291", gender: '남', age: 25, contractMoveInDate: "2026-07-01", actualMoveInDate: "2026-07-03", moveOutDate: "2027-06-30" }],
+  "101": [{ name: "강민호", phone: "010-6374-8291", gender: '남', age: 25, contractMoveInDate: "2026-07-01", contractEndDate: "2026-09-30", contractMonths: 3, actualMoveInDate: "2026-07-03", moveOutDate: "2027-10-02" }],
   "104": [{ name: "김태양", phone: "010-5823-9104", gender: '남', age: 24, contractMoveInDate: "2026-03-26", actualMoveInDate: "2026-03-27", moveOutDate: "2027-03-25" }],
   "203": [{ name: "박현준", phone: "010-3847-6291", gender: '남', age: 27, contractMoveInDate: "2026-04-01", moveOutDate: "2027-03-31" }],
   "302": [{ name: "최수빈", phone: "010-9182-4756", gender: '여', age: 23, contractMoveInDate: "2026-03-30", moveOutDate: "2027-03-29" }],
@@ -478,6 +485,19 @@ function buildRoom(id: string, occupiedIndex: number): Room {
   };
 }
 
+const ROOM_DATA_OVERRIDE: Partial<Record<string, Partial<Room>>> = {
+  "101": {
+    resident: "김민준",
+    phone: "010-3821-5947",
+    gender: '남',
+    age: 25,
+    moveInDate: "2026-04-07",
+    moveOutDate: "2026-06-06",
+    paymentStatus: "upcoming",
+    rentStatus: "paid",
+  },
+};
+
 function buildRoomsByFloor(): Record<FloorNumber, Room[]> {
   let occupiedIndex = 0;
 
@@ -486,7 +506,8 @@ function buildRoomsByFloor(): Record<FloorNumber, Room[]> {
     acc[floor] = ids.map((id) => {
       const room = buildRoom(id, occupiedIndex);
       if (room.status === "occupied") occupiedIndex += 1;
-      return room;
+      const override = ROOM_DATA_OVERRIDE[id];
+      return override ? { ...room, ...override } : room;
     });
     return acc;
   }, {} as Record<FloorNumber, Room[]>);
@@ -597,8 +618,11 @@ export type ResidentDetail = {
   utilityIncludedRent: number; // 만원 단위
   actualMonthlyRent: number;   // 만원 단위
   paymentDueDay: number;       // 매월 N일
+  contractMoveInDate?: string;  // 계약서상 입실일(시작) — 계약일(시작)
+  contractExpiry: string;        // 계약서상 종료일 — 계약일(끝)
+  actualMoveInDate?: string;     // 실제 입실일
+  actualMoveOutDate?: string;    // 실제 퇴실일 (입실일 + N개월 - 1일)
   contractDeposit: { date: string; amount: number };
-  contractExpiry: string;
   realEstateAgency: RealEstateAgency;
   depositTotal: number;
   depositDeductions: DepositDeduction[];
@@ -614,43 +638,24 @@ export const RESIDENT_DETAIL_BY_ROOM: Record<string, ResidentDetail> = {
     purpose: "공시생(일행)",
     utilityIncludedRent: 70,
     actualMonthlyRent: 70,
-    paymentDueDay: 10,
-    contractDeposit: { date: "2025-10-14", amount: 200000 },
-    contractExpiry: "2026-10-13",
+    paymentDueDay: 7,
+    contractMoveInDate: "2026-04-05",
+    contractExpiry: "2026-06-04",
+    actualMoveInDate: "2026-04-07",
+    actualMoveOutDate: "2026-06-06",
+    contractDeposit: { date: "2026-04-05", amount: 200000 },
     realEstateAgency: "부동산 A",
     depositTotal: 500000,
-    depositDeductions: [
-      { date: "2026-01-15", amount: 50000, reason: "미납" },
-      { date: "2026-03-05", amount: 30000, reason: "공과금정산" },
-    ],
+    depositDeductions: [],
     rentPayments: [
-      { month: "2025-10", paidAt: "2025-10-08", amount: 700000, paymentMethod: "이체", status: "paid" },
-      { month: "2025-11", paidAt: "2025-11-10", amount: 700000, paymentMethod: "이체(자진발급)", status: "paid" },
-      { month: "2025-12", paidAt: "2025-12-09", amount: 700000, paymentMethod: "현금", status: "paid" },
-      { month: "2026-01", paidAt: null, amount: 700000, paymentMethod: null, status: "overdue" },
-      { month: "2026-02", paidAt: "2026-02-07", amount: 700000, paymentMethod: "이체", status: "paid" },
-      { month: "2026-03", paidAt: "2026-03-10", amount: 700000, paymentMethod: "이체", status: "paid" },
+      { month: "2026-04", paidAt: "2026-04-07", amount: 700000, paymentMethod: "현금", status: "paid" },
+      { month: "2026-05", paidAt: null, amount: 700000, paymentMethod: null, status: "upcoming" },
     ],
     gasBills: [
-      { month: "2025-10", amount: 8500 },
-      { month: "2025-11", amount: 12300 },
-      { month: "2025-12", amount: 18900 },
-      { month: "2026-01", amount: 22100 },
-      { month: "2026-02", amount: 19500 },
-      { month: "2026-03", amount: 15200 },
+      { month: "2026-04", amount: 9800 },
+      { month: "2026-05", amount: 7200 },
     ],
-    cashSuccessions: [
-      {
-        billingStart: "2026-01-30", billingEnd: "2026-03-02",
-        landlordStart: "2026-01-30", landlordEnd: "2026-02-01",
-        tenantStart: "2026-02-02", tenantEnd: "2026-03-02",
-        totalAmount: 7180, totalKwh: 34,
-        landlordAmount: 1170, landlordKwh: 1,
-        tenantAmount: 6010, tenantKwh: 33,
-        bankName: "신한", accountHolder: "고민선", accountNumber: "110-561-650745",
-        notes: "반환완료",
-      },
-    ],
+    cashSuccessions: [],
     depositReturn: { returned: false, returnedAt: null },
   },
   "102": {

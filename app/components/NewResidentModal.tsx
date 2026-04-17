@@ -2,7 +2,13 @@
 
 import { useState } from 'react';
 import { X, UserPlus, CheckCircle2, ChevronDown } from 'lucide-react';
-import { ALL_ROOMS, ROOM_TYPE_INFO } from '@/app/lib/mock-data';
+import { ALL_ROOMS, ROOM_TYPE_INFO, type ResidencePurpose, type RealEstateAgency } from '@/app/lib/mock-data';
+
+const RESIDENCE_PURPOSES: ResidencePurpose[] = [
+  "공시생(임용)", "공시생(일행)", "공시생(소방)", "공시생(경찰)",
+  "세무·회계·계리", "취준생", "수능", "직장",
+];
+const REAL_ESTATE_AGENCIES: RealEstateAgency[] = ["부동산 A", "부동산 B", "부동산 C", "직거래"];
 
 interface NewResidentModalProps {
   onClose: () => void;
@@ -13,35 +19,80 @@ const FLOOR_LABELS: Record<number, string> = {
   1: '1층', 2: '2층', 3: '3층', 4: '4층', 5: '5층', 6: '6층',
 };
 
+/** 입실일 + N개월 - 1일 */
+function calcEndDate(startDate: string, months: number): string {
+  const d = new Date(startDate);
+  d.setMonth(d.getMonth() + months);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function NewResidentModal({ onClose, initialRoomId = '' }: NewResidentModalProps) {
   const vacantRooms = ALL_ROOMS.filter((r) => r.status === 'vacant');
+  const isRoomFixed = !!initialRoomId;
 
-  const [form, setForm] = useState({
-    roomId: initialRoomId,
-    name: '',
-    gender: '' as '남' | '여' | '',
-    age: '',
-    moveInDate: '',
-    moveOutDate: '',
-    paymentDay: '5',
-  });
+  // 기본 정보
+  const [roomId, setRoomId] = useState(initialRoomId);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState<'남' | '여' | ''>('');
+  const [age, setAge] = useState('');
+
+  // 계약 정보
+  const [contractMoveInDate, setContractMoveInDate] = useState('');
+  const [contractMonths, setContractMonths] = useState('');
+  const [contractEndDate, setContractEndDate] = useState('');
+
+  // 입실 정보
+  const [actualMoveInDate, setActualMoveInDate] = useState('');
+  const [moveOutDate, setMoveOutDate] = useState('');
+
+  // 추가 계약 정보
+  const [purpose, setPurpose] = useState<ResidencePurpose | ''>('');
+  const [rentAmount, setRentAmount] = useState('');
+  const [contractDeposit, setContractDeposit] = useState('');
+  const [realEstateAgency, setRealEstateAgency] = useState<RealEstateAgency | ''>('');
+
   const [submitted, setSubmitted] = useState(false);
 
-  const selectedRoom = ALL_ROOMS.find((r) => r.id === form.roomId);
+  const selectedRoom = ALL_ROOMS.find((r) => r.id === roomId);
   const typeInfo = selectedRoom ? ROOM_TYPE_INFO[selectedRoom.roomType] : null;
-  const monthlyRent = typeInfo
-    ? `₩${typeInfo.price.toLocaleString()}`
-    : null;
+  const monthlyRent = typeInfo ? `₩${typeInfo.price.toLocaleString()}` : null;
 
-  const set = (field: string, value: string) =>
-    setForm((prev) => ({ ...prev, [field]: value }));
+  const inputCls = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-indigo-500 [color-scheme:dark]";
 
-  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
+  function handleContractStartChange(val: string) {
+    setContractMoveInDate(val);
+    const months = Number(contractMonths);
+    if (val && months > 0) setContractEndDate(calcEndDate(val, months));
+  }
+
+  function handleContractMonthsChange(val: string) {
+    setContractMonths(val);
+    const months = Number(val);
+    if (contractMoveInDate && months > 0) setContractEndDate(calcEndDate(contractMoveInDate, months));
+    const base = actualMoveInDate || contractMoveInDate;
+    if (base && months > 0) setMoveOutDate(calcEndDate(base, months));
+  }
+
+  function handleActualMoveInChange(val: string) {
+    setActualMoveInDate(val);
+    const months = Number(contractMonths);
+    if (val && months > 0) setMoveOutDate(calcEndDate(val, months));
+  }
+
+  const effectiveMoveIn = actualMoveInDate || contractMoveInDate;
+  const effectiveMoveOut = moveOutDate || contractEndDate;
+
+  const canSubmit = !!(roomId && name && phone && gender && age && contractMoveInDate && contractMonths);
+
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!canSubmit) return;
     setSubmitted(true);
-  };
+  }
 
-  // Success screen
+  // 성공 화면
   if (submitted) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -51,13 +102,10 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
           </div>
           <h3 className="text-xl font-bold text-white mb-2">등록 완료</h3>
           <p className="text-gray-400 mb-1">
-            <span className="text-white font-semibold">{form.name}</span>님이
+            <span className="text-white font-semibold">{name}</span>님이
           </p>
           <p className="text-gray-400 mb-6">
-            <span className="text-white font-semibold">
-              {selectedRoom?.name}
-            </span>
-            에 입실 등록되었습니다.
+            <span className="text-white font-semibold">{selectedRoom?.name}</span>에 입실 등록되었습니다.
           </p>
           <button
             onClick={onClose}
@@ -73,7 +121,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg rounded-2xl border border-[#2A2A2A] bg-[#111] shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
+        {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2A2A2A]">
           <div className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-indigo-400" />
@@ -87,37 +135,44 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
           </button>
         </div>
 
-        {/* Form */}
+        {/* 폼 */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
           <div className="px-6 py-5 space-y-5">
 
             {/* 호실 선택 */}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">호실 선택 <span className="text-rose-400">*</span></label>
-              <div className="relative">
-                <select
-                  required
-                  value={form.roomId}
-                  onChange={(e) => set('roomId', e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none transition-colors pr-8"
-                >
-                  <option value="">공실 호실을 선택하세요</option>
-                  {[1, 2, 3, 4, 5, 6].map((floor) => {
-                    const floorRooms = vacantRooms.filter((r) => r.floor === floor);
-                    if (floorRooms.length === 0) return null;
-                    return (
-                      <optgroup key={floor} label={FLOOR_LABELS[floor]}>
-                        {floorRooms.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} ({r.roomType})
-                          </option>
-                        ))}
-                      </optgroup>
-                    );
-                  })}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
+              {isRoomFixed ? (
+                <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/5 px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-indigo-300">{selectedRoom?.name}</span>
+                  <span className="text-xs text-gray-500">{selectedRoom?.roomType}</span>
+                </div>
+              ) : (
+                <div className="relative">
+                  <select
+                    required
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value)}
+                    className="w-full appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none transition-colors pr-8"
+                  >
+                    <option value="">공실 호실을 선택하세요</option>
+                    {[1, 2, 3, 4, 5, 6].map((floor) => {
+                      const floorRooms = vacantRooms.filter((r) => r.floor === floor);
+                      if (floorRooms.length === 0) return null;
+                      return (
+                        <optgroup key={floor} label={FLOOR_LABELS[floor]}>
+                          {floorRooms.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name} ({r.roomType})
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                </div>
+              )}
               {selectedRoom && (
                 <div className="mt-2 rounded-lg bg-[#1A1A1A] border border-[#2A2A2A] px-3 py-2 flex items-center justify-between">
                   <span className="text-xs text-gray-400">{selectedRoom.roomType}</span>
@@ -126,100 +181,212 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
               )}
             </div>
 
-            {/* 이름 */}
+            {/* 기본 정보 */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">이름 <span className="text-rose-400">*</span></label>
-              <input
-                required
-                type="text"
-                placeholder="홍길동"
-                value={form.name}
-                onChange={(e) => set('name', e.target.value)}
-                className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-indigo-500 focus:outline-none transition-colors"
-              />
-            </div>
-
-            {/* 성별 + 나이 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5">성별 <span className="text-rose-400">*</span></label>
-                <div className="flex gap-2">
-                  {(['남', '여'] as const).map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => set('gender', g)}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
-                        form.gender === g
-                          ? g === '남'
-                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                            : 'bg-pink-500/20 border-pink-500/50 text-pink-300'
-                          : 'bg-[#1A1A1A] border-[#2A2A2A] text-gray-400 hover:border-[#3A3A3A]'
-                      }`}
-                    >
-                      {g}
-                    </button>
-                  ))}
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-600">기본 정보</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">이름 <span className="text-rose-400">*</span></label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="홍길동"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">연락처 <span className="text-rose-400">*</span></label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="010-0000-0000"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className={inputCls}
+                  />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5">나이 <span className="text-rose-400">*</span></label>
-                <input
-                  required
-                  type="number"
-                  min={10}
-                  max={99}
-                  placeholder="25"
-                  value={form.age}
-                  onChange={(e) => set('age', e.target.value)}
-                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-indigo-500 focus:outline-none transition-colors"
-                />
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">성별 <span className="text-rose-400">*</span></label>
+                  <div className="flex rounded-lg border border-[#2A2A2A] overflow-hidden">
+                    {(['남', '여'] as const).map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setGender(g)}
+                        className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                          gender === g
+                            ? g === '남'
+                              ? 'bg-blue-500/20 text-blue-300'
+                              : 'bg-pink-500/20 text-pink-300'
+                            : 'text-gray-500 hover:text-gray-300'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">나이 <span className="text-rose-400">*</span></label>
+                  <input
+                    required
+                    type="number"
+                    min={10}
+                    max={99}
+                    placeholder="25"
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* 입실일 + 퇴실일 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-rose-400">*</span></label>
-                <input
-                  required
-                  type="date"
-                  value={form.moveInDate}
-                  onChange={(e) => set('moveInDate', e.target.value)}
-                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none transition-colors [color-scheme:dark]"
-                />
+            {/* 계약 정보 */}
+            <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 space-y-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400">계약 정보</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">계약일(시작) <span className="text-rose-400">*</span></label>
+                  <input
+                    type="date"
+                    value={contractMoveInDate}
+                    onChange={(e) => handleContractStartChange(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">개월 수 <span className="text-rose-400">*</span></label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      placeholder="3"
+                      value={contractMonths}
+                      onChange={(e) => handleContractMonthsChange(e.target.value)}
+                      className={inputCls}
+                    />
+                    <span className="text-xs text-gray-500 shrink-0">개월</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">계약일(끝) <span className="text-gray-600 font-normal">(자동)</span></label>
+                  <input
+                    type="date"
+                    value={contractEndDate}
+                    onChange={(e) => setContractEndDate(e.target.value)}
+                    className={`${inputCls} ${contractEndDate ? 'text-indigo-300' : ''}`}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5">퇴실 예정일 <span className="text-rose-400">*</span></label>
-                <input
-                  required
-                  type="date"
-                  value={form.moveOutDate}
-                  onChange={(e) => set('moveOutDate', e.target.value)}
-                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none transition-colors [color-scheme:dark]"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">실제 납부 월세</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="70"
+                      value={rentAmount}
+                      onChange={(e) => setRentAmount(e.target.value)}
+                      className={inputCls}
+                    />
+                    <span className="text-xs text-gray-500 shrink-0">만원</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">계약금</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      step={10000}
+                      placeholder="200000"
+                      value={contractDeposit}
+                      onChange={(e) => setContractDeposit(e.target.value)}
+                      className={inputCls}
+                    />
+                    <span className="text-xs text-gray-500 shrink-0">원</span>
+                  </div>
+                </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">거주 목적</label>
+                  <select
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value as ResidencePurpose | '')}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none"
+                  >
+                    <option value="">선택 안 함</option>
+                    {RESIDENCE_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">부동산</label>
+                  <select
+                    value={realEstateAgency}
+                    onChange={(e) => setRealEstateAgency(e.target.value as RealEstateAgency | '')}
+                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none"
+                  >
+                    <option value="">선택 안 함</option>
+                    {REAL_ESTATE_AGENCIES.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+              </div>
+              {contractMoveInDate && contractEndDate && (
+                <p className="text-[10px] text-indigo-400/70">
+                  {contractMoveInDate} ~ {contractEndDate} ({contractMonths}개월)
+                </p>
+              )}
             </div>
 
-            {/* 월세 납부일 */}
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5">월세 납부일 (매월 몇 일)</label>
-              <div className="relative">
-                <select
-                  value={form.paymentDay}
-                  onChange={(e) => set('paymentDay', e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none transition-colors pr-8"
-                >
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                    <option key={d} value={d}>매월 {d}일</option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            {/* 입실 정보 */}
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">입실 정보</p>
+                <span className="text-[10px] text-gray-600">입실일 변경이 없으면 계약일(시작)이 자동 적용됩니다</span>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-gray-600 font-normal">(변경 시만 입력)</span></label>
+                  <input
+                    type="date"
+                    value={actualMoveInDate}
+                    onChange={(e) => handleActualMoveInChange(e.target.value)}
+                    className={`${inputCls} focus:border-amber-500 ${actualMoveInDate ? 'text-amber-300' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">퇴실일 <span className="text-gray-600 font-normal">(자동 계산)</span></label>
+                  <input
+                    type="date"
+                    value={moveOutDate}
+                    onChange={(e) => setMoveOutDate(e.target.value)}
+                    className={`${inputCls} ${moveOutDate ? 'text-emerald-300' : ''}`}
+                  />
+                </div>
+              </div>
+              {effectiveMoveIn && effectiveMoveOut && (
+                <p className="text-[10px] text-amber-400/70">
+                  입실 기준: <span className="font-semibold">{effectiveMoveIn}</span>
+                  {actualMoveInDate && actualMoveInDate !== contractMoveInDate && (
+                    <span className="text-gray-600 ml-1">(계약일 {contractMoveInDate}에서 변경)</span>
+                  )}
+                  {!actualMoveInDate && <span className="text-gray-600 ml-1">(계약일(시작) 자동 적용)</span>}
+                  {' '}→ 월세 납부일 <span className="font-semibold">매월 {new Date(effectiveMoveIn).getDate()}일</span>
+                </p>
+              )}
             </div>
+
           </div>
 
-          {/* Footer */}
+          {/* 푸터 */}
           <div className="px-6 py-4 border-t border-[#2A2A2A] flex gap-3">
             <button
               type="button"
@@ -230,7 +397,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
             </button>
             <button
               type="submit"
-              disabled={!form.gender}
+              disabled={!canSubmit}
               className="flex-1 rounded-lg bg-indigo-500 py-2.5 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               등록하기

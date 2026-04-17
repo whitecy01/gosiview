@@ -10,9 +10,49 @@ import {
   type Room,
   type ScheduledResident,
   type MaintenanceRecord,
+  type ResidencePurpose,
+  type RealEstateAgency,
 } from "../lib/mock-data";
+import { useToday } from "../context/MockDateContext";
 
 const DETAIL_OPTIONS = ["도배", "매트리스교체", "에어컨청소", "전구교체", "장판교체", "화장실청소"];
+
+/** 월세 납부일 계산: 입실일 기준 매월 N일, 다음 납부일까지 며칠 남았는지 반환 */
+function getRentDueInfo(moveInDate: string | null, today: Date): { day: number; nextDue: Date; daysUntil: number } | null {
+  if (!moveInDate) return null;
+  const day = new Date(moveInDate).getDate();
+  const thisMonthDue = new Date(today.getFullYear(), today.getMonth(), day);
+  const nextDue = thisMonthDue >= today
+    ? thisMonthDue
+    : new Date(today.getFullYear(), today.getMonth() + 1, day);
+  const daysUntil = Math.round((nextDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return { day, nextDue, daysUntil };
+}
+
+/** 입실일 + N개월 - 1일 (월말 자동 처리) */
+function calcEndDate(startDate: string, months: number): string {
+  const d = new Date(startDate);
+  d.setMonth(d.getMonth() + months);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 실제 유효 입실일 결정:
+ * - actualMoveInDate 있으면 그 값
+ * - 없고 오늘 >= contractMoveInDate 이면 contractMoveInDate (자동 적용)
+ * - 없고 아직 미래이면 null (아직 입실 전)
+ */
+function getEffectiveMoveInDate(r: { contractMoveInDate: string; actualMoveInDate?: string }, today: Date): string {
+  if (r.actualMoveInDate) return r.actualMoveInDate;
+  const contract = new Date(r.contractMoveInDate);
+  return contract <= today ? r.contractMoveInDate : r.contractMoveInDate;
+}
+
+/** 예약/계약 기준 납부일 */
+function getScheduledDueDay(r: { contractMoveInDate: string; actualMoveInDate?: string }, today: Date): number {
+  return new Date(getEffectiveMoveInDate(r, today)).getDate();
+}
 
 const DETAIL_COLOR: Record<string, string> = {
   "도배": "bg-violet-500/10 text-violet-400 border-violet-500/20",
@@ -24,86 +64,210 @@ const DETAIL_COLOR: Record<string, string> = {
 };
 
 
+const RESIDENCE_PURPOSES: ResidencePurpose[] = [
+  "공시생(임용)", "공시생(일행)", "공시생(소방)", "공시생(경찰)",
+  "세무·회계·계리", "취준생", "수능", "직장",
+];
+const REAL_ESTATE_AGENCIES: RealEstateAgency[] = ["부동산 A", "부동산 B", "부동산 C", "직거래"];
+
 function ResidentForm({
   initial,
   onSave,
   onCancel,
-  labelColor = "indigo",
 }: {
   initial: Partial<ScheduledResident>;
   onSave: (r: ScheduledResident) => void;
   onCancel: () => void;
-  labelColor?: string;
 }) {
+  const inputCls = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-indigo-500 [color-scheme:dark]";
+  const selectCls = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none";
+
   const [name, setName] = useState(initial.name ?? "");
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [gender, setGender] = useState<'남' | '여'>(initial.gender ?? '남');
   const [age, setAge] = useState(String(initial.age ?? ""));
+
+  // 계약 정보
   const [contractMoveInDate, setContractMoveInDate] = useState(initial.contractMoveInDate ?? "");
+  const [contractMonths, setContractMonths] = useState(String(initial.contractMonths ?? ""));
+  const [contractEndDate, setContractEndDate] = useState(initial.contractEndDate ?? "");
+
+  // 입실 정보
   const [actualMoveInDate, setActualMoveInDate] = useState(initial.actualMoveInDate ?? "");
   const [moveOutDate, setMoveOutDate] = useState(initial.moveOutDate ?? "");
 
-  const accentCls = labelColor === "indigo" ? "focus:border-indigo-500" : "focus:border-indigo-500";
-  const inputCls = `w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-gray-600 ${accentCls}`;
+  // 추가 계약 정보
+  const [purpose, setPurpose] = useState<ResidencePurpose | "">(initial.purpose ?? "");
+  const [monthlyRent, setMonthlyRent] = useState(String(initial.monthlyRent ?? ""));
+  const [contractDeposit, setContractDeposit] = useState(String(initial.contractDeposit ?? ""));
+  const [realEstateAgency, setRealEstateAgency] = useState<RealEstateAgency | "">(initial.realEstateAgency ?? "");
+
+  function handleContractStartChange(val: string) {
+    setContractMoveInDate(val);
+    const months = Number(contractMonths);
+    if (val && months > 0) setContractEndDate(calcEndDate(val, months));
+  }
+  function handleContractMonthsChange(val: string) {
+    setContractMonths(val);
+    const months = Number(val);
+    if (contractMoveInDate && months > 0) setContractEndDate(calcEndDate(contractMoveInDate, months));
+    const base = actualMoveInDate || contractMoveInDate;
+    if (base && months > 0) setMoveOutDate(calcEndDate(base, months));
+  }
+  function handleActualMoveInChange(val: string) {
+    setActualMoveInDate(val);
+    const months = Number(contractMonths);
+    if (val && months > 0) setMoveOutDate(calcEndDate(val, months));
+  }
+
+  const canSave = !!(name && phone && age && contractMoveInDate && contractMonths);
 
   function handleSave() {
-    if (!name || !phone || !age || !contractMoveInDate) return;
+    if (!canSave) return;
     onSave({
       name, phone, gender, age: Number(age),
       contractMoveInDate,
+      contractEndDate: contractEndDate || undefined,
+      contractMonths: Number(contractMonths) || undefined,
       actualMoveInDate: actualMoveInDate || undefined,
       moveOutDate: moveOutDate || undefined,
+      purpose: purpose || undefined,
+      monthlyRent: monthlyRent ? Number(monthlyRent) : undefined,
+      contractDeposit: contractDeposit ? Number(contractDeposit) : undefined,
+      realEstateAgency: realEstateAgency || undefined,
     });
   }
 
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">이름 <span className="text-rose-500">*</span></label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="홍길동" className={inputCls} />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">연락처 <span className="text-rose-500">*</span></label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="010-0000-0000" className={inputCls} />
-        </div>
-      </div>
+  const effectiveMoveIn = actualMoveInDate || contractMoveInDate;
+  const effectiveMoveOut = moveOutDate || contractEndDate;
 
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">성별</label>
-          <div className="flex rounded-lg border border-[#2A2A2A] overflow-hidden">
-            {(['남', '여'] as const).map((g) => (
-              <button key={g} onClick={() => setGender(g)} className={`flex-1 py-2 text-xs font-semibold transition-colors ${gender === g ? (g === '남' ? 'bg-blue-500/20 text-blue-300' : 'bg-pink-500/20 text-pink-300') : 'text-gray-500 hover:text-gray-300'}`}>
-                {g}
-              </button>
-            ))}
+  return (
+    <div className="space-y-4">
+      {/* 기본 정보 */}
+      <div>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-600">기본 정보</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">이름 <span className="text-rose-500">*</span></label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="홍길동" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">연락처 <span className="text-rose-500">*</span></label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="010-0000-0000" className={inputCls} />
           </div>
         </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">나이 <span className="text-rose-500">*</span></label>
-          <input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="25" className={inputCls} />
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">성별</label>
+            <div className="flex rounded-lg border border-[#2A2A2A] overflow-hidden">
+              {(['남', '여'] as const).map((g) => (
+                <button key={g} type="button" onClick={() => setGender(g)} className={`flex-1 py-2 text-xs font-semibold transition-colors ${gender === g ? (g === '남' ? 'bg-blue-500/20 text-blue-300' : 'bg-pink-500/20 text-pink-300') : 'text-gray-500 hover:text-gray-300'}`}>
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">나이 <span className="text-rose-500">*</span></label>
+            <input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="25" className={inputCls} />
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">계약 입실일 <span className="text-rose-500">*</span></label>
-          <input type="date" value={contractMoveInDate} onChange={(e) => setContractMoveInDate(e.target.value)} className={inputCls} />
+      {/* 계약 정보 */}
+      <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 space-y-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400">계약 정보</p>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">계약일(시작) <span className="text-rose-500">*</span></label>
+            <input type="date" value={contractMoveInDate} onChange={(e) => handleContractStartChange(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">개월 수 <span className="text-rose-500">*</span></label>
+            <div className="flex items-center gap-1.5">
+              <input type="number" min={1} max={60} value={contractMonths} onChange={(e) => handleContractMonthsChange(e.target.value)} placeholder="3" className={inputCls} />
+              <span className="text-xs text-gray-500 shrink-0">개월</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">계약일(끝) <span className="text-gray-600 font-normal">(자동)</span></label>
+            <input type="date" value={contractEndDate} onChange={(e) => setContractEndDate(e.target.value)} className={`${inputCls} ${contractEndDate ? 'text-indigo-300' : ''}`} />
+          </div>
         </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">실제 입실일 <span className="text-gray-600">(선택)</span></label>
-          <input type="date" value={actualMoveInDate} onChange={(e) => setActualMoveInDate(e.target.value)} className={`${inputCls} focus:border-amber-500`} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">실제 납부 월세</label>
+            <div className="flex items-center gap-1.5">
+              <input type="number" min={0} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} placeholder="70" className={inputCls} />
+              <span className="text-xs text-gray-500 shrink-0">만원</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">계약금</label>
+            <div className="flex items-center gap-1.5">
+              <input type="number" min={0} step={10000} value={contractDeposit} onChange={(e) => setContractDeposit(e.target.value)} placeholder="200000" className={inputCls} />
+              <span className="text-xs text-gray-500 shrink-0">원</span>
+            </div>
+          </div>
         </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">퇴실 예정일 <span className="text-gray-600">(선택)</span></label>
-          <input type="date" value={moveOutDate} onChange={(e) => setMoveOutDate(e.target.value)} className={inputCls} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">거주 목적</label>
+            <div className="relative">
+              <select value={purpose} onChange={(e) => setPurpose(e.target.value as ResidencePurpose | "")} className={selectCls}>
+                <option value="">선택 안 함</option>
+                {RESIDENCE_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">부동산</label>
+            <div className="relative">
+              <select value={realEstateAgency} onChange={(e) => setRealEstateAgency(e.target.value as RealEstateAgency | "")} className={selectCls}>
+                <option value="">선택 안 함</option>
+                {REAL_ESTATE_AGENCIES.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+          </div>
         </div>
+        {contractMoveInDate && contractEndDate && (
+          <p className="text-[10px] text-indigo-400/70">
+            {contractMoveInDate} ~ {contractEndDate} ({contractMonths}개월)
+          </p>
+        )}
+      </div>
+
+      {/* 입실 정보 */}
+      <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">입실 정보</p>
+          <span className="text-[10px] text-gray-600">입실일 변경이 없으면 계약일(시작)이 자동 적용됩니다</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-gray-600 font-normal">(변경 시만 입력)</span></label>
+            <input type="date" value={actualMoveInDate} onChange={(e) => handleActualMoveInChange(e.target.value)} className={`${inputCls} focus:border-amber-500 ${actualMoveInDate ? 'text-amber-300' : ''}`} />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">퇴실일 <span className="text-gray-600 font-normal">(자동 계산)</span></label>
+            <input type="date" value={moveOutDate} onChange={(e) => setMoveOutDate(e.target.value)} className={`${inputCls} ${moveOutDate ? 'text-emerald-300' : ''}`} />
+          </div>
+        </div>
+        {effectiveMoveIn && effectiveMoveOut && (
+          <p className="text-[10px] text-amber-400/70">
+            입실 기준: <span className="font-semibold">{effectiveMoveIn}</span>
+            {actualMoveInDate && actualMoveInDate !== contractMoveInDate && (
+              <span className="text-gray-600 ml-1">(계약일 {contractMoveInDate}에서 변경)</span>
+            )}
+            {!actualMoveInDate && <span className="text-gray-600 ml-1">(계약일(시작) 자동 적용)</span>}
+            {" "}→ 월세 납부일 <span className="font-semibold">매월 {new Date(effectiveMoveIn).getDate()}일</span>
+          </p>
+        )}
       </div>
 
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
-        <button onClick={handleSave} disabled={!name || !phone || !age || !contractMoveInDate} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed">저장</button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
+        <button type="button" onClick={handleSave} disabled={!canSave} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed">저장</button>
       </div>
     </div>
   );
@@ -128,20 +292,24 @@ function ScheduledInfoModal({
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const { today } = useToday();
 
   const sortedReservations = [...records]
     .map((r, i) => ({ ...r, originalIdx: i }))
-    .sort((a, b) => a.contractMoveInDate.localeCompare(b.contractMoveInDate));
+    .sort((a, b) => {
+      const aDate = a.actualMoveInDate ?? a.contractMoveInDate;
+      const bDate = b.actualMoveInDate ?? b.contractMoveInDate;
+      return aDate.localeCompare(bDate);
+    });
 
-  // 타임라인 범위 계산
+  // 타임라인 범위 계산 — 전부 입실일(actualMoveInDate) 기준
   const allDates: Date[] = [today];
   if (room.moveInDate) allDates.push(new Date(room.moveInDate));
   if (room.moveOutDate) allDates.push(new Date(room.moveOutDate));
   sortedReservations.forEach((r) => {
-    allDates.push(new Date(r.contractMoveInDate));
-    if (r.moveOutDate) allDates.push(new Date(r.moveOutDate));
+    allDates.push(new Date(r.actualMoveInDate ?? r.contractMoveInDate));
+    const endDate = r.moveOutDate ?? r.contractEndDate;
+    if (endDate) allDates.push(new Date(endDate));
   });
 
   const earliest = new Date(Math.min(...allDates.map((d) => d.getTime())));
@@ -285,16 +453,15 @@ function ScheduledInfoModal({
                             ? 'bg-indigo-500/30 border border-indigo-400/60'
                             : 'bg-indigo-500/15 border border-indigo-500/30 group-hover:bg-indigo-500/25'
                         }`}
-                        style={{ left: `${toPercent(res.contractMoveInDate)}%`, width: `${barWidth(res.contractMoveInDate, res.moveOutDate)}%` }}
+                        style={{ left: `${toPercent(res.actualMoveInDate ?? res.contractMoveInDate)}%`, width: `${barWidth(res.actualMoveInDate ?? res.contractMoveInDate, res.moveOutDate ?? res.contractEndDate)}%` }}
                       >
                         <span className="text-[10px] font-bold text-indigo-200 shrink-0">{res.name}</span>
-                        <span className="text-[10px] text-indigo-400/70 shrink-0">계약일 {res.contractMoveInDate}</span>
-                        {res.actualMoveInDate
-                          ? <span className={`text-[10px] shrink-0 ${res.actualMoveInDate !== res.contractMoveInDate ? 'text-amber-400/80' : 'text-indigo-400/50'}`}>
-                              입실일 {res.actualMoveInDate}
-                            </span>
-                          : <span className="text-[10px] text-indigo-500/40 shrink-0 italic">입실일 미정</span>
-                        }
+                        <span className="text-[10px] text-indigo-300/80 shrink-0">
+                          입실 {res.actualMoveInDate ?? res.contractMoveInDate}
+                        </span>
+                        {res.actualMoveInDate && res.actualMoveInDate !== res.contractMoveInDate && (
+                          <span className="text-[10px] text-gray-500/70 shrink-0">계약 {res.contractMoveInDate}</span>
+                        )}
                       </div>
                       <div className="absolute top-0 bottom-0 w-px bg-rose-500/70 z-10" style={{ left: `${todayPercent}%` }} />
                     </div>
@@ -354,26 +521,53 @@ function ScheduledInfoModal({
                       </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
-                      <span className="text-gray-500 block mb-0.5">계약일</span>
-                      <span className="text-indigo-400 font-semibold">{records[selectedIdx].contractMoveInDate}</span>
-                    </div>
-                    <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
-                      <span className="text-gray-500 block mb-0.5">입실일</span>
-                      {records[selectedIdx].actualMoveInDate
-                        ? <span className={`font-semibold ${records[selectedIdx].actualMoveInDate !== records[selectedIdx].contractMoveInDate ? 'text-amber-400' : 'text-gray-300'}`}>{records[selectedIdx].actualMoveInDate}</span>
-                        : <span className="text-gray-600 italic text-[10px]">미입력</span>
-                      }
-                    </div>
-                    <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
-                      <span className="text-gray-500 block mb-0.5">계약일(퇴실)</span>
-                      {records[selectedIdx].moveOutDate
-                        ? <span className="text-gray-300 font-semibold">{records[selectedIdx].moveOutDate}</span>
-                        : <span className="text-gray-600 italic text-[10px]">미정</span>
-                      }
-                    </div>
-                  </div>
+                  {(() => {
+                    const r = records[selectedIdx];
+                    const effectiveMoveIn = r.actualMoveInDate ?? r.contractMoveInDate;
+                    const effectiveMoveOut = r.moveOutDate ?? r.contractEndDate;
+                    const isActualDiff = r.actualMoveInDate && r.actualMoveInDate !== r.contractMoveInDate;
+                    return (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                            <span className="text-gray-500 block mb-0.5">계약일(시작)</span>
+                            <span className="text-indigo-400 font-semibold">{r.contractMoveInDate}</span>
+                            {r.contractMonths && <span className="text-gray-600 ml-1.5">({r.contractMonths}개월)</span>}
+                          </div>
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                            <span className="text-gray-500 block mb-0.5">계약일(끝)</span>
+                            {r.contractEndDate
+                              ? <span className="text-indigo-300 font-semibold">{r.contractEndDate}</span>
+                              : <span className="text-gray-600 italic">미정</span>
+                            }
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className={`rounded-lg px-3 py-2 text-xs border ${isActualDiff ? 'bg-amber-500/10 border-amber-500/20' : 'bg-[#1A1A1A] border-transparent'}`}>
+                            <span className="text-gray-500 block mb-0.5">입실일</span>
+                            {r.actualMoveInDate
+                              ? <span className="text-amber-400 font-semibold">{r.actualMoveInDate}</span>
+                              : <span className="text-gray-500 text-[10px]">계약일(시작) 자동 적용</span>
+                            }
+                          </div>
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                            <span className="text-gray-500 block mb-0.5">퇴실일</span>
+                            {effectiveMoveOut
+                              ? <span className="text-emerald-400 font-semibold">{effectiveMoveOut}</span>
+                              : <span className="text-gray-600 italic">미정</span>
+                            }
+                          </div>
+                          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs">
+                            <span className="text-gray-500 block mb-0.5">월세 납부일</span>
+                            <span className="text-amber-400 font-semibold">매월 {new Date(effectiveMoveIn).getDate()}일</span>
+                            <span className="text-gray-600 block text-[10px] mt-0.5">
+                              {r.actualMoveInDate ? "입실일 기준" : "계약일(시작) 기준"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -583,6 +777,7 @@ function RoomManagementModal({
 
 export default function TenantListTable() {
   const router = useRouter();
+  const { today } = useToday();
   const [search, setSearch] = useState("");
   const [scheduledRoom, setScheduledRoom] = useState<Room | null>(null);
   const [managementRoom, setManagementRoom] = useState<Room | null>(null);
@@ -629,8 +824,44 @@ export default function TenantListTable() {
     }));
   }
 
+  // 날짜 기반으로 예정 입실자가 이미 입실했으면 현재 입실자로 교체
+  const effectiveRooms = ALL_ROOMS.map((room) => {
+    // 현재 입실자가 이미 퇴실했는지 확인
+    const currentMoveOut = room.moveOutDate ? new Date(room.moveOutDate) : null;
+    const currentMoveOutPassed = currentMoveOut && currentMoveOut < today;
+
+    // 공실이거나 퇴실 완료된 경우, 예정 입실자 중 이미 입실한 사람 찾기
+    if (room.status !== "occupied" || currentMoveOutPassed) {
+      const scheduled = scheduledData[room.id] ?? [];
+      const movedIn = scheduled.find((s) => {
+        const effectiveDate = s.actualMoveInDate ?? s.contractMoveInDate;
+        return new Date(effectiveDate) <= today;
+      });
+      if (movedIn) {
+        const effectiveMoveIn = movedIn.actualMoveInDate ?? movedIn.contractMoveInDate;
+        return {
+          ...room,
+          status: "occupied" as const,
+          resident: movedIn.name,
+          phone: movedIn.phone,
+          gender: movedIn.gender,
+          age: movedIn.age,
+          moveInDate: effectiveMoveIn,
+          moveOutDate: movedIn.moveOutDate ?? null,
+          paymentStatus: "upcoming" as const,
+          rentStatus: "paid" as const,
+        };
+      }
+      // 예정 입실자가 없으면 퇴실된 방은 공실로 표시
+      if (currentMoveOutPassed) {
+        return { ...room, status: "vacant" as const, resident: null, phone: null };
+      }
+    }
+    return room;
+  });
+
   const keyword = search.trim().toLowerCase();
-  const filtered = ALL_ROOMS.filter((room) => {
+  const filtered = effectiveRooms.filter((room) => {
     if (!keyword) return true;
     return (
       room.id.includes(keyword) ||
@@ -680,6 +911,7 @@ export default function TenantListTable() {
                 <th className="px-6 py-4 font-medium bg-violet-500/10 text-violet-400">이름</th>
                 <th className="px-6 py-4 font-medium bg-teal-500/10 text-teal-400">연락처</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">상태</th>
+                <th className="px-6 py-4 font-medium bg-amber-500/10 text-amber-400">월세 납부일</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">예약(예정 입실)</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">방 관리</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">상세</th>
@@ -717,6 +949,43 @@ export default function TenantListTable() {
                       <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${statusStyle[room.status]}`}>
                         {statusLabel[room.status]}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 bg-amber-500/5">
+                      {(() => {
+                        if (room.status === "occupied") {
+                          const info = getRentDueInfo(room.moveInDate, today);
+                          if (!info) return <span className="text-gray-600">-</span>;
+                          const { day, nextDue, daysUntil } = info;
+                          const label = `${nextDue.getMonth() + 1}/${nextDue.getDate()}`;
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs text-gray-500">매월 <span className="text-amber-300 font-semibold">{day}일</span></span>
+                              <span className={`text-xs font-medium ${
+                                daysUntil === 0 ? "text-amber-400" :
+                                daysUntil <= 5  ? "text-yellow-400" :
+                                "text-gray-500"
+                              }`}>
+                                {daysUntil === 0 ? "🔔 오늘" : `${daysUntil}일 후 (${label})`}
+                              </span>
+                            </div>
+                          );
+                        }
+                        // 공실인데 예약자 있으면 예약자 기준 납부일 표시
+                        const scheduled = scheduledData[room.id] ?? [];
+                        if (scheduled.length > 0) {
+                          const next = [...scheduled].sort((a, b) => a.contractMoveInDate.localeCompare(b.contractMoveInDate))[0];
+                          const day = getScheduledDueDay(next, today);
+                          const base = next.actualMoveInDate ?? next.contractMoveInDate;
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs text-gray-600">예약자 기준</span>
+                              <span className="text-xs text-indigo-400 font-medium">매월 {day}일</span>
+                              <span className="text-[10px] text-gray-600">{base} 입실</span>
+                            </div>
+                          );
+                        }
+                        return <span className="text-gray-600">-</span>;
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <button
@@ -767,7 +1036,7 @@ export default function TenantListTable() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={9} className="px-6 py-12 text-center text-sm text-gray-500">
                     검색 결과가 없습니다.
                   </td>
                 </tr>

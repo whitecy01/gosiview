@@ -66,6 +66,14 @@ function fmtDate(d: string) {
   return `${y.slice(2)}/${m}/${dd}`;
 }
 
+/** 입실일 + N개월 - 1일 → 퇴실일 (월말 자동 처리) */
+function calcMoveOutDate(moveInDate: string, months: number): string {
+  const d = new Date(moveInDate);
+  d.setMonth(d.getMonth() + months);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function fmtMonthKo(m: string) {
   const [y, mo] = m.split("-");
   return `${y}년 ${parseInt(mo)}월`;
@@ -91,6 +99,7 @@ export default function ResidentDetailPage() {
   // 기본 정보 수정 모드
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState<Partial<ResidentDetail>>({});
+  const [contractMonths, setContractMonths] = useState<string>("");
 
   // 보증금 폼
   const [showDepForm, setShowDepForm] = useState(false);
@@ -131,6 +140,7 @@ export default function ResidentDetailPage() {
   function startEditInfo() {
     if (!detail) return;
     setInfoForm({ ...detail });
+    setContractMonths("");
     setEditingInfo(true);
   }
 
@@ -352,16 +362,100 @@ export default function ResidentDetailPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">계약 만료일</label>
-                    <input
-                      type="date"
-                      value={infoForm.contractExpiry ?? ""}
-                      onChange={(e) => setInfoForm((f) => ({ ...f, contractExpiry: e.target.value }))}
-                      className={INPUT}
-                    />
+                {/* 계약 기간 */}
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">계약 기간</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-xs text-gray-400">계약일(시작)</label>
+                      <input
+                        type="date"
+                        value={infoForm.contractMoveInDate ?? ""}
+                        onChange={(e) => setInfoForm((f) => ({ ...f, contractMoveInDate: e.target.value }))}
+                        className={INPUT}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs text-gray-400">계약일(끝)</label>
+                      <input
+                        type="date"
+                        value={infoForm.contractExpiry ?? ""}
+                        onChange={(e) => setInfoForm((f) => ({ ...f, contractExpiry: e.target.value }))}
+                        className={INPUT}
+                      />
+                    </div>
                   </div>
+                </div>
+
+                {/* 실제 입·퇴실일 */}
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">실제 입·퇴실</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-xs text-gray-400">입실일</label>
+                      <input
+                        type="date"
+                        value={infoForm.actualMoveInDate ?? ""}
+                        onChange={(e) => {
+                          const moveIn = e.target.value;
+                          const months = Number(contractMonths);
+                          setInfoForm((f) => ({
+                            ...f,
+                            actualMoveInDate: moveIn,
+                            actualMoveOutDate: moveIn && months > 0 ? calcMoveOutDate(moveIn, months) : f.actualMoveOutDate,
+                          }));
+                        }}
+                        className={INPUT}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs text-gray-400">계약 개월 수</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={60}
+                          value={contractMonths}
+                          onChange={(e) => {
+                            const months = e.target.value;
+                            setContractMonths(months);
+                            const moveIn = infoForm.actualMoveInDate;
+                            if (moveIn && Number(months) > 0) {
+                              setInfoForm((f) => ({
+                                ...f,
+                                actualMoveOutDate: calcMoveOutDate(moveIn, Number(months)),
+                              }));
+                            }
+                          }}
+                          placeholder="3"
+                          className={INPUT}
+                        />
+                        <span className="shrink-0 text-xs text-gray-500">개월</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs text-gray-400">
+                        퇴실일 <span className="text-gray-600 font-normal">(자동 계산)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={infoForm.actualMoveOutDate ?? ""}
+                        onChange={(e) => setInfoForm((f) => ({ ...f, actualMoveOutDate: e.target.value }))}
+                        className={`${INPUT} ${infoForm.actualMoveOutDate ? "text-emerald-400" : ""}`}
+                      />
+                    </div>
+                  </div>
+                  {infoForm.actualMoveInDate && infoForm.actualMoveOutDate && (
+                    <p className="mt-2 text-xs text-gray-500">
+                      입실일 <span className="text-white">{infoForm.actualMoveInDate}</span> +{" "}
+                      {contractMonths || "?"} 개월 − 1일 →{" "}
+                      퇴실일 <span className="text-emerald-400 font-semibold">{infoForm.actualMoveOutDate}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* 계약금 */}
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                   <div>
                     <label className="mb-1.5 block text-xs text-gray-400">계약금 날짜</label>
                     <input
@@ -445,10 +539,11 @@ export default function ResidentDetailPage() {
                   <InfoField icon={<Home className="h-3.5 w-3.5" />} label="방 유형" value={room.roomType} />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.utilityIncludedRent}만원`} highlight="emerald" />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="실제 납부 월세" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={room.moveInDate ? fmtDate(room.moveInDate) : "-"} />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={room.moveOutDate ? fmtDate(room.moveOutDate) : "-"} />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약 만료일" value={fmtDate(detail.contractExpiry)} />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="납부 대상 월일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(시작)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(끝)" value={fmtDate(detail.contractExpiry)} />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={detail.actualMoveInDate ? fmtDate(detail.actualMoveInDate) : (room.moveInDate ? fmtDate(room.moveInDate) : "-")} />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : (room.moveOutDate ? fmtDate(room.moveOutDate) : "-")} />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${new Date(detail.actualMoveInDate ?? room.moveInDate ?? detail.contractMoveInDate ?? detail.contractDeposit.date).getDate()}일`} highlight="indigo" />
                   <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="계약금" value={`${fmtDate(detail.contractDeposit.date)} · ₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
                   <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
