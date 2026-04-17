@@ -2,6 +2,25 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  // console.log('===== middleware start =====');
+  // console.log('pathname:', request.nextUrl.pathname);
+  // console.log('full url:', request.url);
+  // console.log('method:', request.method);
+
+  // console.log(
+  //   'headers:',
+  //   Object.fromEntries(request.headers.entries())
+  // );
+
+  // console.log(
+  //   'cookies:',
+  //   request.cookies.getAll().map((cookie) => ({
+  //     name: cookie.name,
+  //     value: cookie.value.length > 20
+  //       ? cookie.value.slice(0, 20) + '...'
+  //       : cookie.value,
+  //   }))
+  // );
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
