@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { ROOMS_BY_FLOOR, ALL_ROOMS, ROOM_TENANT_HISTORY, FloorNumber, getDashboardStats, type Room, type TenantBar } from '../lib/mock-data';
-import RoomListModal, { type RoomModalType } from '../components/RoomListModal';
-import RoomDetailDrawer from '../components/RoomDetailDrawer';
+import { ROOMS_BY_FLOOR, ALL_ROOMS, ROOM_TENANT_HISTORY, FloorNumber, getDashboardStats, type Room, type TenantBar } from '@/app/lib/mock-data';
+import RoomListModal, { type RoomModalType } from '@/app/components/RoomListModal';
+import RoomDetailDrawer from '@/app/components/RoomDetailDrawer';
 
 // ──────────── 상수 ────────────
 

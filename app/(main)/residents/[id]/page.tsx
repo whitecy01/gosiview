@@ -23,7 +23,7 @@ import {
   type ResidencePurpose,
   type RealEstateAgency,
   type CashSuccessionRecord,
-} from "../../lib/mock-data";
+} from "@/app/lib/mock-data";
 
 // ────────────── 상수 ──────────────
 

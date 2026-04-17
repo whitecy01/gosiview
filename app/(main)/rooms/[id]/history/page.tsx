@@ -11,7 +11,7 @@ import {
   ROOM_TENANT_HISTORY,
   MAINTENANCE_BY_ROOM,
   type TenantBar,
-} from "../../../lib/mock-data";
+} from "@/app/lib/mock-data";
 
 // ────────────── 헬퍼 ──────────────
 

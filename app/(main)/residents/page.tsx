@@ -1,30 +1,33 @@
 'use client';
 
 import { useState } from "react";
-import FloorPlan from "../components/FloorPlan";
-import RoomListModal, { type RoomModalType } from "../components/RoomListModal";
-import { getDashboardStats, ALL_ROOMS } from "../lib/mock-data";
+import TenantListTable from "@/app/components/TenantListTable";
+import RoomListModal, { type RoomModalType } from "@/app/components/RoomListModal";
+import { getDashboardStats, ALL_ROOMS } from "@/app/lib/mock-data";
 
-export default function DashboardPage() {
+export default function ResidentsPage() {
   const stats = getDashboardStats();
   const [activeModal, setActiveModal] = useState<RoomModalType>(null);
 
   const modalRooms = activeModal ? ALL_ROOMS.filter((r) => r.status === activeModal) : [];
 
   const statCards = [
-    { key: null,                        title: "총 방 개수",   value: `${stats.totalRooms}개`,    subtitle: "전체 관리 방" },
+    { key: null,          title: "총 방 개수",   value: `${stats.totalRooms}개`,    subtitle: "전체 관리 방" },
     { key: "occupied" as RoomModalType, title: "총 입실자 수", value: `${stats.occupiedRooms}명`, subtitle: `${stats.occupancyRate}% 입실률` },
     { key: "vacant"   as RoomModalType, title: "현재 공실",   value: `${stats.vacantRooms}개`,   subtitle: "즉시 입실 가능" },
     { key: "contract" as RoomModalType, title: "계약",        value: `${stats.contractRooms}개`, subtitle: "계약 진행 방" },
   ];
 
   return (
-    <main className="w-full">
-      <div className="mb-6 flex flex-col items-start justify-between sm:flex-row sm:items-center">
-        <h1 className="text-2xl font-semibold tracking-tight text-white mb-2 sm:mb-0">대시보드 개요</h1>
+    <main className="w-full space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-white">입실자 관리</h1>
+        <p className="mt-1 text-sm text-gray-400">
+          전체 호실의 입실 현황과 예정 일정, 방 관리 이력을 확인할 수 있습니다.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat, idx) => (
           <div
             key={idx}
@@ -40,9 +43,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div className="mb-8">
-        <FloorPlan />
-      </div>
+      <TenantListTable />
 
       <RoomListModal
         type={activeModal}

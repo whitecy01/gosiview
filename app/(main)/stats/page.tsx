@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ALL_ROOMS, MAINTENANCE_BY_ROOM, getDashboardStats } from '../lib/mock-data';
+import { ALL_ROOMS, MAINTENANCE_BY_ROOM, getDashboardStats } from '@/app/lib/mock-data';
 
 // ──────────── 헬퍼 ────────────
 
