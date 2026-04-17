@@ -16,12 +16,25 @@ const MockDateContext = createContext<MockDateContextValue>({
   setMockDate: () => {},
 });
 
+function toLocalMidnight(dateStr: string): Date {
+  // "YYYY-MM-DD" → 로컬 자정 (UTC 오프셋 문제 없이)
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+function todayLocalStr(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function MockDateProvider({ children }: { children: React.ReactNode }) {
   const [mockDate, setMockDate] = useState<string | null>(null);
 
-  const today = mockDate ? new Date(mockDate) : new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = mockDate ?? todayLocalStr();
+  const today = toLocalMidnight(todayStr);
 
   return (
     <MockDateContext.Provider value={{ today, todayStr, mockDate, setMockDate }}>

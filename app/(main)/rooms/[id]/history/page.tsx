@@ -7,11 +7,11 @@ import {
   Banknote, Zap, Clock,
 } from "lucide-react";
 import {
-  ALL_ROOMS,
   ROOM_TENANT_HISTORY,
   MAINTENANCE_BY_ROOM,
   type TenantBar,
 } from "@/app/lib/mock-data";
+import { useRooms } from "@/app/context/RoomsContext";
 
 // ────────────── 헬퍼 ──────────────
 
@@ -161,8 +161,9 @@ function ExpandedRow({ t, maintenance }: { t: TenantBar; maintenance: typeof MAI
 export default function RoomHistoryPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { rooms } = useRooms();
 
-  const room = ALL_ROOMS.find((r) => r.id === id);
+  const room = rooms.find((r) => r.id === id);
   const rawHistory: TenantBar[] = ROOM_TENANT_HISTORY[id] ?? [];
   const maintenance = MAINTENANCE_BY_ROOM[id] ?? [];
 

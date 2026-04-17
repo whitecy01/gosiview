@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { X, UserPlus, CheckCircle2, ChevronDown } from 'lucide-react';
-import { ALL_ROOMS, ROOM_TYPE_INFO, type ResidencePurpose, type RealEstateAgency } from '@/app/lib/mock-data';
+import { ROOM_TYPE_INFO, type ResidencePurpose, type RealEstateAgency } from '@/app/lib/mock-data';
+import { useRooms } from '@/app/context/RoomsContext';
 
 const RESIDENCE_PURPOSES: ResidencePurpose[] = [
   "공시생(임용)", "공시생(일행)", "공시생(소방)", "공시생(경찰)",
@@ -28,7 +29,8 @@ function calcEndDate(startDate: string, months: number): string {
 }
 
 export default function NewResidentModal({ onClose, initialRoomId = '' }: NewResidentModalProps) {
-  const vacantRooms = ALL_ROOMS.filter((r) => r.status === 'vacant');
+  const { rooms, addContract } = useRooms();
+  const vacantRooms = rooms.filter((r) => r.status === 'vacant' || r.status === 'contract');
   const isRoomFixed = !!initialRoomId;
 
   // 기본 정보
@@ -55,7 +57,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
 
   const [submitted, setSubmitted] = useState(false);
 
-  const selectedRoom = ALL_ROOMS.find((r) => r.id === roomId);
+  const selectedRoom = rooms.find((r) => r.id === roomId);
   const typeInfo = selectedRoom ? ROOM_TYPE_INFO[selectedRoom.roomType] : null;
   const monthlyRent = typeInfo ? `₩${typeInfo.price.toLocaleString()}` : null;
 
@@ -89,6 +91,25 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!canSubmit) return;
+
+    addContract({
+      room_id: roomId,
+      name,
+      phone,
+      gender: gender as '남' | '여',
+      age: Number(age),
+      purpose: purpose || null,
+      real_estate_agency: realEstateAgency || null,
+      contract_start_date: contractMoveInDate,
+      contract_end_date: contractEndDate || null,
+      contract_months: contractMonths ? Number(contractMonths) : null,
+      actual_move_in_date: actualMoveInDate || null,
+      actual_move_out_date: moveOutDate || null,
+      monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
+      contract_deposit: contractDeposit ? Number(contractDeposit) : null,
+      status: 'scheduled',
+    });
+
     setSubmitted(true);
   }
 

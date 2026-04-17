@@ -3,19 +3,20 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { CalendarDays, CheckCircle2, Clock3, Home, Search, UserRound, X, XCircle } from "lucide-react";
-import { getOccupiedRooms, ALL_ROOMS, type PaymentHistoryEntry, type PaymentStatus, type Room } from "../lib/mock-data";
+import { type PaymentHistoryEntry, type PaymentStatus, type Room } from "../lib/mock-data";
+import { useRooms } from "../context/RoomsContext";
 import PaymentEditModal from "./PaymentEditModal";
 
 type FilterMode = "all" | "overdue" | "paid";
 
-const ledgerEntries = getOccupiedRooms();
-const totalResidents = ledgerEntries.length;
-const totalRooms = ALL_ROOMS.length;
-const paidResidents = ledgerEntries.filter((entry) => entry.paymentStatus === "paid").length;
-const overdueResidents = ledgerEntries.filter((entry) => entry.paymentStatus === "overdue").length;
-
 export default function LedgerList() {
-  const [entries, setEntries] = useState<Room[]>(ledgerEntries);
+  const { rooms } = useRooms();
+  const ledgerEntries = rooms.filter((r) => r.status === 'occupied');
+  const totalResidents = ledgerEntries.length;
+  const totalRooms = rooms.length;
+  const paidResidents = ledgerEntries.filter((entry) => entry.paymentStatus === "paid").length;
+  const overdueResidents = ledgerEntries.filter((entry) => entry.paymentStatus === "overdue").length;
+  const [entries, setEntries] = useState<Room[]>([]);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [selectedEntry, setSelectedEntry] = useState<Room | null>(null);

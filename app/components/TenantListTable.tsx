@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History } from "lucide-react";
 import {
-  ALL_ROOMS,
-  SCHEDULED_BY_ROOM,
   MAINTENANCE_BY_ROOM,
   type Room,
   type ScheduledResident,
@@ -13,6 +11,8 @@ import {
   type ResidencePurpose,
   type RealEstateAgency,
 } from "../lib/mock-data";
+import { useEffectiveRooms } from "../context/useEffectiveRooms";
+import { useRooms } from "../context/RoomsContext";
 import { useToday } from "../context/MockDateContext";
 
 const DETAIL_OPTIONS = ["도배", "매트리스교체", "에어컨청소", "전구교체", "장판교체", "화장실청소"];
@@ -777,37 +777,84 @@ function RoomManagementModal({
 
 export default function TenantListTable() {
   const router = useRouter();
-  const { today } = useToday();
   const [search, setSearch] = useState("");
   const [scheduledRoom, setScheduledRoom] = useState<Room | null>(null);
   const [managementRoom, setManagementRoom] = useState<Room | null>(null);
-  const [scheduledData, setScheduledData] = useState<Record<string, ScheduledResident[]>>(
-    () => ({ ...SCHEDULED_BY_ROOM })
-  );
+  const { effectiveRooms, today } = useEffectiveRooms();
+  const { contracts, addContract, editContract, removeContract } = useRooms();
   const [maintenanceData, setMaintenanceData] = useState<Record<string, MaintenanceRecord[]>>(
     () => ({ ...MAINTENANCE_BY_ROOM })
   );
 
+  // contracts에서 scheduled 항목을 ScheduledResident 형태로 변환
+  const scheduledData = useMemo<Record<string, ScheduledResident[]>>(() => {
+    const result: Record<string, ScheduledResident[]> = {};
+    for (const c of contracts.filter((c) => c.status === 'scheduled')) {
+      const r: ScheduledResident = {
+        name: c.name,
+        phone: c.phone,
+        gender: c.gender ?? '남',
+        age: c.age ?? 0,
+        contractMoveInDate: c.contract_start_date,
+        contractEndDate: c.contract_end_date ?? undefined,
+        contractMonths: c.contract_months ?? undefined,
+        actualMoveInDate: c.actual_move_in_date ?? undefined,
+        moveOutDate: c.actual_move_out_date ?? undefined,
+        purpose: (c.purpose as ResidencePurpose) ?? undefined,
+        monthlyRent: c.monthly_rent ?? undefined,
+        contractDeposit: c.contract_deposit ?? undefined,
+        realEstateAgency: (c.real_estate_agency as RealEstateAgency) ?? undefined,
+      };
+      result[c.room_id] = [...(result[c.room_id] ?? []), r];
+    }
+    return result;
+  }, [contracts]);
 
-  function handleAddScheduled(roomId: string, record: ScheduledResident) {
-    setScheduledData((prev) => ({
-      ...prev,
-      [roomId]: [...(prev[roomId] ?? []), record],
-    }));
+  async function handleAddScheduled(roomId: string, record: ScheduledResident) {
+    await addContract({
+      room_id: roomId,
+      name: record.name,
+      phone: record.phone,
+      gender: record.gender ?? null,
+      age: record.age ?? null,
+      purpose: record.purpose ?? null,
+      real_estate_agency: record.realEstateAgency ?? null,
+      contract_start_date: record.contractMoveInDate,
+      contract_end_date: record.contractEndDate ?? null,
+      contract_months: record.contractMonths ?? null,
+      actual_move_in_date: record.actualMoveInDate ?? null,
+      actual_move_out_date: record.moveOutDate ?? null,
+      monthly_rent: record.monthlyRent ?? null,
+      contract_deposit: record.contractDeposit ?? null,
+      status: 'scheduled',
+    });
   }
 
-  function handleDeleteScheduled(roomId: string, index: number) {
-    setScheduledData((prev) => ({
-      ...prev,
-      [roomId]: (prev[roomId] ?? []).filter((_, i) => i !== index),
-    }));
+  async function handleDeleteScheduled(roomId: string, index: number) {
+    const roomContracts = contracts.filter((c) => c.status === 'scheduled' && c.room_id === roomId);
+    const target = roomContracts[index];
+    if (target) await removeContract(target.id);
   }
 
-  function handleUpdateScheduled(roomId: string, index: number, record: ScheduledResident) {
-    setScheduledData((prev) => ({
-      ...prev,
-      [roomId]: (prev[roomId] ?? []).map((r, i) => (i === index ? record : r)),
-    }));
+  async function handleUpdateScheduled(roomId: string, index: number, record: ScheduledResident) {
+    const roomContracts = contracts.filter((c) => c.status === 'scheduled' && c.room_id === roomId);
+    const target = roomContracts[index];
+    if (!target) return;
+    await editContract(target.id, {
+      name: record.name,
+      phone: record.phone,
+      gender: record.gender ?? null,
+      age: record.age ?? null,
+      purpose: record.purpose ?? null,
+      real_estate_agency: record.realEstateAgency ?? null,
+      contract_start_date: record.contractMoveInDate,
+      contract_end_date: record.contractEndDate ?? null,
+      contract_months: record.contractMonths ?? null,
+      actual_move_in_date: record.actualMoveInDate ?? null,
+      actual_move_out_date: record.moveOutDate ?? null,
+      monthly_rent: record.monthlyRent ?? null,
+      contract_deposit: record.contractDeposit ?? null,
+    });
   }
 
   function handleAddRecord(roomId: string, record: MaintenanceRecord) {
@@ -823,42 +870,6 @@ export default function TenantListTable() {
       [roomId]: (prev[roomId] ?? []).filter((_, i) => i !== index),
     }));
   }
-
-  // 날짜 기반으로 예정 입실자가 이미 입실했으면 현재 입실자로 교체
-  const effectiveRooms = ALL_ROOMS.map((room) => {
-    // 현재 입실자가 이미 퇴실했는지 확인
-    const currentMoveOut = room.moveOutDate ? new Date(room.moveOutDate) : null;
-    const currentMoveOutPassed = currentMoveOut && currentMoveOut < today;
-
-    // 공실이거나 퇴실 완료된 경우, 예정 입실자 중 이미 입실한 사람 찾기
-    if (room.status !== "occupied" || currentMoveOutPassed) {
-      const scheduled = scheduledData[room.id] ?? [];
-      const movedIn = scheduled.find((s) => {
-        const effectiveDate = s.actualMoveInDate ?? s.contractMoveInDate;
-        return new Date(effectiveDate) <= today;
-      });
-      if (movedIn) {
-        const effectiveMoveIn = movedIn.actualMoveInDate ?? movedIn.contractMoveInDate;
-        return {
-          ...room,
-          status: "occupied" as const,
-          resident: movedIn.name,
-          phone: movedIn.phone,
-          gender: movedIn.gender,
-          age: movedIn.age,
-          moveInDate: effectiveMoveIn,
-          moveOutDate: movedIn.moveOutDate ?? null,
-          paymentStatus: "upcoming" as const,
-          rentStatus: "paid" as const,
-        };
-      }
-      // 예정 입실자가 없으면 퇴실된 방은 공실로 표시
-      if (currentMoveOutPassed) {
-        return { ...room, status: "vacant" as const, resident: null, phone: null };
-      }
-    }
-    return room;
-  });
 
   const keyword = search.trim().toLowerCase();
   const filtered = effectiveRooms.filter((room) => {

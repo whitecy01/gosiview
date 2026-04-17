@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
-import { getRoomsByFloor, type FloorNumber, type Room } from "../lib/mock-data";
+import { type FloorNumber, type Room } from "../lib/mock-data";
+import { useEffectiveRooms } from "../context/useEffectiveRooms";
 import RoomDetailDrawer from "./RoomDetailDrawer";
 import { useNewResident } from "./NewResidentContext";
 import Floor1 from "./floor-plans/Floor1";
@@ -24,7 +25,8 @@ const FLOOR_PLAN_PDF_SRC = "/floor-plans/spacehorim-floorplan.pdf";
 
 export default function FloorPlan() {
   const [currentFloor, setCurrentFloor] = useState<FloorNumber>(1);
-  const rooms = getRoomsByFloor(currentFloor);
+  const { effectiveRooms } = useEffectiveRooms();
+  const rooms = effectiveRooms.filter((r) => r.floor === currentFloor);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [isRealPlanOpen, setIsRealPlanOpen] = useState(false);
   const currentRealPlan = REAL_FLOOR_PLANS[currentFloor];

@@ -15,7 +15,6 @@ import {
   Printer,
 } from "lucide-react";
 import {
-  ALL_ROOMS,
   RESIDENT_DETAIL_BY_ROOM,
   type ResidentDetail,
   type DepositDeductionReason,
@@ -24,6 +23,7 @@ import {
   type RealEstateAgency,
   type CashSuccessionRecord,
 } from "@/app/lib/mock-data";
+import { useRooms } from "@/app/context/RoomsContext";
 
 // ────────────── 상수 ──────────────
 
@@ -90,8 +90,9 @@ const INPUT = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 
 export default function ResidentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { rooms } = useRooms();
 
-  const room = ALL_ROOMS.find((r) => r.id === id);
+  const room = rooms.find((r) => r.id === id);
   const [detail, setDetail] = useState<ResidentDetail | null>(
     () => RESIDENT_DETAIL_BY_ROOM[id] ?? null
   );

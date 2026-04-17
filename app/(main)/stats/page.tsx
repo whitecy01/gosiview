@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ALL_ROOMS, MAINTENANCE_BY_ROOM, getDashboardStats } from '@/app/lib/mock-data';
+import { MAINTENANCE_BY_ROOM } from '@/app/lib/mock-data';
+import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 
 // ──────────── 헬퍼 ────────────
 
@@ -251,10 +252,11 @@ const DETAIL_COLOR: Record<string, string> = {
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
 function MaintenanceGrid() {
+  const { effectiveRooms } = useEffectiveRooms();
   const [year, setYear] = useState(new Date().getFullYear());
 
   // 해당 연도에 기록이 하나라도 있는 방만
-  const roomsWithData = ALL_ROOMS.filter(room => {
+  const roomsWithData = effectiveRooms.filter(room => {
     const records = MAINTENANCE_BY_ROOM[room.id] ?? [];
     return records.some(r => r.date.startsWith(String(year)));
   });
@@ -364,11 +366,11 @@ function StatCard({ title, value, subtitle, color }: { title: string; value: str
 // ──────────── Main Page ────────────
 
 export default function StatsPage() {
-  const stats = getDashboardStats();
+  const { effectiveRooms, stats } = useEffectiveRooms();
   const [detailIdx, setDetailIdx] = useState<number | null>(null);
   const [paymentMonthIdx, setPaymentMonthIdx] = useState(5); // 마지막 달 (현재)
 
-  const occupiedRooms = useMemo(() => ALL_ROOMS.filter(r => r.status === 'occupied'), []);
+  const occupiedRooms = useMemo(() => effectiveRooms.filter(r => r.status === 'occupied'), [effectiveRooms]);
 
   // 월별 수입 (최근 6개월) - 방별 납부 내역 포함
   const monthlyRevenue: MonthData[] = useMemo(() => {
@@ -389,7 +391,7 @@ export default function StatsPage() {
       const rows = baseRows.map(r => {
         let status: '납부 완료' | '납부 예정' | '미납';
         if (isCurrent) {
-          const room = ALL_ROOMS.find(room => room.id === r.id);
+          const room = effectiveRooms.find(room => room.id === r.id);
           const ps = room?.paymentStatus;
           status = ps === 'paid' ? '납부 완료' : ps === 'overdue' ? '미납' : '납부 예정';
         } else {
@@ -409,10 +411,10 @@ export default function StatsPage() {
         rows,
       };
     });
-  }, [occupiedRooms]);
+  }, [occupiedRooms, effectiveRooms]);
 
   const thisMonthRevenue = monthlyRevenue[monthlyRevenue.length - 1]?.value ?? 0;
-  const overdueCount = ALL_ROOMS.filter(r => r.paymentStatus === 'overdue').length;
+  const overdueCount = effectiveRooms.filter(r => r.paymentStatus === 'overdue').length;
 
   return (
     <main className="w-full space-y-6">

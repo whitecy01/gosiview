@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { ROOMS_BY_FLOOR, ALL_ROOMS, ROOM_TENANT_HISTORY, FloorNumber, getDashboardStats, type Room, type TenantBar } from '@/app/lib/mock-data';
+import { ROOM_TENANT_HISTORY, type FloorNumber, type Room, type TenantBar } from '@/app/lib/mock-data';
+import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 import RoomListModal, { type RoomModalType } from '@/app/components/RoomListModal';
 import RoomDetailDrawer from '@/app/components/RoomDetailDrawer';
 
@@ -10,10 +11,10 @@ import RoomDetailDrawer from '@/app/components/RoomDetailDrawer';
 const FLOORS: FloorNumber[] = [1, 2, 3, 4, 5, 6];
 
 // 실제 데이터 기반으로 연도 범위 자동 계산
-function calcYearRange() {
+function calcYearRange(rooms: Room[]) {
   let minYear = 9999;
   let maxYear = 0;
-  for (const room of ALL_ROOMS) {
+  for (const room of rooms) {
     if (room.moveInDate) {
       const y = parseInt(room.moveInDate.slice(0, 4), 10);
       if (y < minYear) minYear = y;
@@ -23,13 +24,10 @@ function calcYearRange() {
       if (y > maxYear) maxYear = y;
     }
   }
-  // 데이터가 없을 경우 fallback
   if (minYear === 9999) minYear = new Date().getFullYear();
   if (maxYear === 0) maxYear = minYear;
   return { startYear: minYear, endYear: maxYear };
 }
-
-const { startYear: TIMELINE_START_YEAR, endYear: TIMELINE_END_YEAR } = calcYearRange();
 
 const ROOM_COL_WIDTH = 100;
 const ROW_HEIGHT = 34;
@@ -51,10 +49,10 @@ function getDaysInMonth(year: number, month: number) {
 
 type MonthInfo = { year: number; month: number; days: number; startDay: number };
 
-function buildAllMonths(): MonthInfo[] {
+function buildAllMonths(startYear: number, endYear: number): MonthInfo[] {
   const months: MonthInfo[] = [];
   let startDay = 0;
-  for (let y = TIMELINE_START_YEAR; y <= TIMELINE_END_YEAR; y++) {
+  for (let y = startYear; y <= endYear; y++) {
     for (let m = 1; m <= 12; m++) {
       const days = getDaysInMonth(y, m);
       months.push({ year: y, month: m, days, startDay });
@@ -64,16 +62,11 @@ function buildAllMonths(): MonthInfo[] {
   return months;
 }
 
-const ALL_MONTHS = buildAllMonths();
-const TIMELINE_START = new Date(TIMELINE_START_YEAR, 0, 1);
-const TOTAL_DAYS = ALL_MONTHS.reduce((s, m) => s + m.days, 0);
-
-// 연도 그룹 (년도 헤더용)
 type YearGroup = { year: number; startDay: number; totalDays: number };
-function buildYearGroups(): YearGroup[] {
+function buildYearGroups(startYear: number, endYear: number, allMonths: MonthInfo[]): YearGroup[] {
   const groups: YearGroup[] = [];
-  for (let y = TIMELINE_START_YEAR; y <= TIMELINE_END_YEAR; y++) {
-    const months = ALL_MONTHS.filter((m) => m.year === y);
+  for (let y = startYear; y <= endYear; y++) {
+    const months = allMonths.filter((m) => m.year === y);
     groups.push({
       year: y,
       startDay: months[0].startDay,
@@ -82,22 +75,25 @@ function buildYearGroups(): YearGroup[] {
   }
   return groups;
 }
-const YEAR_GROUPS = buildYearGroups();
 
-function getBarGeometry(moveInDate: string | null, moveOutDate: string | null) {
+function getBarGeometry(
+  moveInDate: string | null,
+  moveOutDate: string | null,
+  timelineStart: Date,
+  timelineEnd: Date,
+) {
   if (!moveInDate || !moveOutDate) return null;
 
-  const timelineEnd = new Date(TIMELINE_END_YEAR, 11, 31);
   const moveIn = new Date(moveInDate);
   const moveOut = new Date(moveOutDate);
 
-  if (moveOut < TIMELINE_START || moveIn > timelineEnd) return null;
+  if (moveOut < timelineStart || moveIn > timelineEnd) return null;
 
-  const clampedStart = moveIn < TIMELINE_START ? TIMELINE_START : moveIn;
+  const clampedStart = moveIn < timelineStart ? timelineStart : moveIn;
   const clampedEnd = moveOut > timelineEnd ? timelineEnd : moveOut;
 
-  const startIdx = Math.round((clampedStart.getTime() - TIMELINE_START.getTime()) / 86400000);
-  const endIdx = Math.round((clampedEnd.getTime() - TIMELINE_START.getTime()) / 86400000);
+  const startIdx = Math.round((clampedStart.getTime() - timelineStart.getTime()) / 86400000);
+  const endIdx = Math.round((clampedEnd.getTime() - timelineStart.getTime()) / 86400000);
 
   return {
     left: startIdx * DAY_WIDTH,
@@ -105,11 +101,9 @@ function getBarGeometry(moveInDate: string | null, moveOutDate: string | null) {
   };
 }
 
-function getTodayOffset(): number | null {
-  const now = new Date();
-  const timelineEnd = new Date(TIMELINE_END_YEAR, 11, 31);
-  if (now < TIMELINE_START || now > timelineEnd) return null;
-  return Math.round((now.getTime() - TIMELINE_START.getTime()) / 86400000);
+function getTodayOffset(today: Date, timelineStart: Date, timelineEnd: Date): number | null {
+  if (today < timelineStart || today > timelineEnd) return null;
+  return Math.round((today.getTime() - timelineStart.getTime()) / 86400000);
 }
 
 function fmtRent(rent: string | number | null | undefined): string | null {
@@ -121,10 +115,22 @@ function fmtRent(rent: string | number | null | undefined): string | null {
 
 // ──────────── CalendarGrid ────────────
 
-function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNumber[]; onSelectRoom: (room: Room) => void }) {
+type CalendarGridProps = {
+  visibleFloors: FloorNumber[];
+  onSelectRoom: (room: Room) => void;
+  effectiveRooms: Room[];
+  allMonths: MonthInfo[];
+  yearGroups: YearGroup[];
+  timelineStart: Date;
+  timelineEnd: Date;
+  totalDays: number;
+  today: Date;
+};
+
+function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, yearGroups, timelineStart, timelineEnd, totalDays, today }: CalendarGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const todayOffset = useMemo(() => getTodayOffset(), []);
-  const totalWidth = TOTAL_DAYS * DAY_WIDTH;
+  const todayOffset = useMemo(() => getTodayOffset(today, timelineStart, timelineEnd), [today, timelineStart, timelineEnd]);
+  const totalWidth = totalDays * DAY_WIDTH;
   const HEADER_H = MONTH_H + DAY_H;
 
   // 오늘 날짜로 초기 스크롤 위치
@@ -152,7 +158,7 @@ function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNum
             >
               호수
             </div>
-            {ALL_MONTHS.map((m, i) => (
+            {allMonths.map((m, i) => (
               <div
                 key={i}
                 className="relative flex flex-col items-center justify-center gap-0.5 border-r border-[#222222]"
@@ -173,7 +179,7 @@ function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNum
               className="sticky left-0 z-30 border-r border-[#222222]"
               style={{ width: ROOM_COL_WIDTH, minWidth: ROOM_COL_WIDTH, backgroundColor: '#0D0D0D' }}
             />
-            {ALL_MONTHS.map((m, mi) =>
+            {allMonths.map((m, mi) =>
               Array.from({ length: m.days }, (_, d) => {
                 const day = d + 1;
                 const isLastOfMonth = day === m.days;
@@ -226,7 +232,7 @@ function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNum
                   </div>
                   <div className="relative" style={{ width: totalWidth }}>
                     {/* 연도 구분선 */}
-                    {YEAR_GROUPS.slice(0, -1).map((yg) => (
+                    {yearGroups.slice(0, -1).map((yg) => (
                       <div
                         key={yg.year}
                         className="absolute top-0 bottom-0"
@@ -243,8 +249,8 @@ function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNum
                 </div>
 
                 {/* Room rows */}
-                {ROOMS_BY_FLOOR[floor].map((room, ri) => {
-                  const bar = getBarGeometry(room.moveInDate, room.moveOutDate);
+                {effectiveRooms.filter((r) => r.floor === floor).map((room, ri) => {
+                  const bar = getBarGeometry(room.moveInDate, room.moveOutDate, timelineStart, timelineEnd);
                   const color = BAR_COLOR;
                   const isEven = ri % 2 === 0;
                   const rentLabel = fmtRent(room.monthlyRent);
@@ -286,7 +292,7 @@ function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNum
                         }}
                       >
                         {/* 월 구분선 */}
-                        {ALL_MONTHS.slice(0, -1).map((m, i) => (
+                        {allMonths.slice(0, -1).map((m, i) => (
                           <div
                             key={i}
                             className="absolute top-0 bottom-0"
@@ -308,7 +314,7 @@ function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNum
 
                         {/* 과거 입실자 바 */}
                         {pastTenants.map((pt, pti) => {
-                          const ptBar = getBarGeometry(pt.moveInDate, pt.moveOutDate);
+                          const ptBar = getBarGeometry(pt.moveInDate, pt.moveOutDate, timelineStart, timelineEnd);
                           if (!ptBar) return null;
                           const ptRent = fmtRent(pt.monthlyRent ?? null);
                           return (
@@ -411,12 +417,21 @@ function CalendarGrid({ visibleFloors, onSelectRoom }: { visibleFloors: FloorNum
 // ──────────── Page ────────────
 
 export default function CalendarPage() {
-  const stats = getDashboardStats();
+  const { effectiveRooms, stats, today } = useEffectiveRooms();
+  const { startYear: TIMELINE_START_YEAR, endYear: TIMELINE_END_YEAR } = useMemo(
+    () => calcYearRange(effectiveRooms),
+    [effectiveRooms]
+  );
+  const allMonths = useMemo(() => buildAllMonths(TIMELINE_START_YEAR, TIMELINE_END_YEAR), [TIMELINE_START_YEAR, TIMELINE_END_YEAR]);
+  const timelineStart = useMemo(() => new Date(TIMELINE_START_YEAR, 0, 1), [TIMELINE_START_YEAR]);
+  const timelineEnd = useMemo(() => new Date(TIMELINE_END_YEAR, 11, 31), [TIMELINE_END_YEAR]);
+  const totalDays = useMemo(() => allMonths.reduce((s, m) => s + m.days, 0), [allMonths]);
+  const yearGroups = useMemo(() => buildYearGroups(TIMELINE_START_YEAR, TIMELINE_END_YEAR, allMonths), [TIMELINE_START_YEAR, TIMELINE_END_YEAR, allMonths]);
   const [selectedFloors, setSelectedFloors] = useState<Set<FloorNumber>>(new Set(FLOORS));
   const [activeModal, setActiveModal] = useState<RoomModalType>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
-  const modalRooms = activeModal ? ALL_ROOMS.filter((r) => r.status === activeModal) : [];
+  const modalRooms = activeModal ? effectiveRooms.filter((r) => r.status === activeModal) : [];
   const visibleFloors = FLOORS.filter((f) => selectedFloors.has(f));
 
   function toggleFloor(floor: FloorNumber) {
@@ -513,7 +528,17 @@ export default function CalendarPage() {
       </div>
 
       {/* 타임라인 */}
-      <CalendarGrid visibleFloors={visibleFloors} onSelectRoom={setSelectedRoom} />
+      <CalendarGrid
+        visibleFloors={visibleFloors}
+        onSelectRoom={setSelectedRoom}
+        effectiveRooms={effectiveRooms}
+        allMonths={allMonths}
+        yearGroups={yearGroups}
+        timelineStart={timelineStart}
+        timelineEnd={timelineEnd}
+        totalDays={totalDays}
+        today={today}
+      />
 
       <RoomListModal
         type={activeModal}

@@ -3,13 +3,13 @@
 import { useState } from "react";
 import TenantListTable from "@/app/components/TenantListTable";
 import RoomListModal, { type RoomModalType } from "@/app/components/RoomListModal";
-import { getDashboardStats, ALL_ROOMS } from "@/app/lib/mock-data";
+import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
 
 export default function ResidentsPage() {
-  const stats = getDashboardStats();
+  const { effectiveRooms, stats } = useEffectiveRooms();
   const [activeModal, setActiveModal] = useState<RoomModalType>(null);
 
-  const modalRooms = activeModal ? ALL_ROOMS.filter((r) => r.status === activeModal) : [];
+  const modalRooms = activeModal ? effectiveRooms.filter((r) => r.status === activeModal) : [];
 
   const statCards = [
     { key: null,          title: "총 방 개수",   value: `${stats.totalRooms}개`,    subtitle: "전체 관리 방" },
