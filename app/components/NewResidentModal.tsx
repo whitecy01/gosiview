@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { X, UserPlus, CheckCircle2, ChevronDown } from 'lucide-react';
 import { ROOM_TYPE_INFO, type ResidencePurpose, type RealEstateAgency } from '@/app/lib/mock-data';
 import { useRooms } from '@/app/context/RoomsContext';
+import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 
 const RESIDENCE_PURPOSES: ResidencePurpose[] = [
   "공시생(임용)", "공시생(일행)", "공시생(소방)", "공시생(경찰)",
@@ -36,8 +37,18 @@ function calcEndDate(startDate: string, months: number): string {
 }
 
 export default function NewResidentModal({ onClose, initialRoomId = '' }: NewResidentModalProps) {
-  const { rooms, addContract } = useRooms();
-  const vacantRooms = rooms.filter((r) => r.status === 'vacant' || r.status === 'contract');
+  const { addContract, contracts } = useRooms();
+  const { effectiveRooms } = useEffectiveRooms();
+
+  const extraPurposes = useMemo(() => {
+    const vals = contracts.map((c) => c.purpose).filter((p): p is string => !!p && !RESIDENCE_PURPOSES.includes(p as ResidencePurpose));
+    return [...new Set(vals)];
+  }, [contracts]);
+  const extraAgencies = useMemo(() => {
+    const vals = contracts.map((c) => c.real_estate_agency).filter((a): a is string => !!a && !REAL_ESTATE_AGENCIES.includes(a as RealEstateAgency));
+    return [...new Set(vals)];
+  }, [contracts]);
+  const vacantRooms = effectiveRooms.filter((r) => r.status === 'vacant' || r.status === 'contract');
   const isRoomFixed = !!initialRoomId;
 
   // 기본 정보
@@ -66,7 +77,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
 
   const [submitted, setSubmitted] = useState(false);
 
-  const selectedRoom = rooms.find((r) => r.id === roomId);
+  const selectedRoom = effectiveRooms.find((r) => r.id === roomId);
   const typeInfo = selectedRoom ? ROOM_TYPE_INFO[selectedRoom.roomType] : null;
   const monthlyRent = typeInfo ? `₩${typeInfo.price.toLocaleString()}` : null;
 
@@ -369,6 +380,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     }} className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none">
                       <option value="">선택 안 함</option>
                       {RESIDENCE_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
+                      {extraPurposes.map((p) => <option key={p} value={p}>{p}</option>)}
                       <option value="__custom__">+ 직접 입력</option>
                     </select>
                   )}
@@ -396,6 +408,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     }} className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none">
                       <option value="">선택 안 함</option>
                       {REAL_ESTATE_AGENCIES.map((a) => <option key={a} value={a}>{a}</option>)}
+                      {extraAgencies.map((a) => <option key={a} value={a}>{a}</option>)}
                       <option value="__custom__">+ 직접 입력</option>
                     </select>
                   )}

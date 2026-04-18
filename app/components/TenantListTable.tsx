@@ -94,6 +94,18 @@ function ResidentForm({
   const inputCls = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-indigo-500 [color-scheme:dark]";
   const selectCls = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none";
 
+  const { contracts } = useRooms();
+
+  // DB에 저장된 커스텀 거주 목적·부동산 옵션 추출
+  const extraPurposes = useMemo(() => {
+    const vals = contracts.map((c) => c.purpose).filter((p): p is string => !!p && !RESIDENCE_PURPOSES.includes(p as ResidencePurpose));
+    return [...new Set(vals)];
+  }, [contracts]);
+  const extraAgencies = useMemo(() => {
+    const vals = contracts.map((c) => c.real_estate_agency).filter((a): a is string => !!a && !REAL_ESTATE_AGENCIES.includes(a as RealEstateAgency));
+    return [...new Set(vals)];
+  }, [contracts]);
+
   const [name, setName] = useState(initial.name ?? "");
   const [phone, setPhone] = useState(formatPhone(initial.phone ?? ""));
   const [gender, setGender] = useState<'남' | '여'>(initial.gender ?? '남');
@@ -252,6 +264,7 @@ function ResidentForm({
               }} className={selectCls}>
                 <option value="">선택 안 함</option>
                 {RESIDENCE_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
+                {extraPurposes.map((p) => <option key={p} value={p}>{p}</option>)}
                 <option value="__custom__">+ 직접 입력</option>
               </select>
             )}
@@ -279,6 +292,7 @@ function ResidentForm({
               }} className={selectCls}>
                 <option value="">선택 안 함</option>
                 {REAL_ESTATE_AGENCIES.map((a) => <option key={a} value={a}>{a}</option>)}
+                {extraAgencies.map((a) => <option key={a} value={a}>{a}</option>)}
                 <option value="__custom__">+ 직접 입력</option>
               </select>
             )}
@@ -969,15 +983,22 @@ export default function TenantListTable() {
     });
   }
 
+  // scheduledData와 동일한 필터(미래 예약만)로 인덱스 정합성 유지
+  function pendingContractsForRoom(roomId: string) {
+    return contracts.filter((c) => {
+      if (c.status !== 'scheduled' || c.room_id !== roomId) return false;
+      const moveInStr = (c.actual_move_in_date ?? c.contract_start_date).slice(0, 10);
+      return moveInStr > todayStr;
+    });
+  }
+
   async function handleDeleteScheduled(roomId: string, index: number) {
-    const roomContracts = contracts.filter((c) => c.status === 'scheduled' && c.room_id === roomId);
-    const target = roomContracts[index];
+    const target = pendingContractsForRoom(roomId)[index];
     if (target) await removeContract(target.id);
   }
 
   async function handleUpdateScheduled(roomId: string, index: number, record: ScheduledResident) {
-    const roomContracts = contracts.filter((c) => c.status === 'scheduled' && c.room_id === roomId);
-    const target = roomContracts[index];
+    const target = pendingContractsForRoom(roomId)[index];
     if (!target) return;
     await editContract(target.id, {
       name: record.name,

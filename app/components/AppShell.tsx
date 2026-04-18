@@ -13,7 +13,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [newResidentRoomId, setNewResidentRoomId] = useState<string | undefined>(undefined);
 
   function openNewResident(roomId?: string) {
-    setNewResidentRoomId(roomId);
+    setNewResidentRoomId(roomId ?? '');
   }
 
   return (
