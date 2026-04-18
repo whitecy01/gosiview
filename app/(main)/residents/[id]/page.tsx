@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -17,6 +17,7 @@ import {
 import {
   RESIDENT_DETAIL_BY_ROOM,
   type ResidentDetail,
+  type RentPayment,
   type DepositDeductionReason,
   type RentPaymentMethod,
   type ResidencePurpose,
@@ -24,6 +25,7 @@ import {
   type CashSuccessionRecord,
 } from "@/app/lib/mock-data";
 import { useRooms } from "@/app/context/RoomsContext";
+import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
 
 // ────────────── 상수 ──────────────
 
@@ -90,12 +92,65 @@ const INPUT = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 
 export default function ResidentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { rooms } = useRooms();
+  const { contracts, loading } = useRooms();
+  const { effectiveRooms } = useEffectiveRooms();
 
-  const room = rooms.find((r) => r.id === id);
+  const room = effectiveRooms.find((r) => r.id === id);
+  const activeContract = contracts.find(
+    (c) => c.room_id === id && (c.status === "active" || c.status === "scheduled")
+  );
   const [detail, setDetail] = useState<ResidentDetail | null>(
     () => RESIDENT_DETAIL_BY_ROOM[id] ?? null
   );
+
+  // 데이터 로드 완료 후 detail 자동 초기화
+  useEffect(() => {
+    if (!loading && detail === null) initDetail();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, activeContract]);
+
+  // 계약 데이터로 detail 초기화
+  function initDetail() {
+    const moveIn = activeContract?.actual_move_in_date ?? activeContract?.contract_start_date ?? "";
+    const moveOut = activeContract?.actual_move_out_date ?? activeContract?.contract_end_date ?? "";
+    const rent = activeContract?.monthly_rent ?? 0;
+    const dueDay = moveIn ? new Date(moveIn).getDate() : 1;
+
+    // 입실일~퇴실일 사이 월별 납부 항목 자동 생성
+    const rentPayments: RentPayment[] = [];
+    if (moveIn && moveOut) {
+      let cur = new Date(moveIn.slice(0, 7) + "-01");
+      const end = new Date(moveOut.slice(0, 7) + "-01");
+      while (cur <= end) {
+        const monthStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+        rentPayments.push({ month: monthStr, paidAt: null, amount: rent, paymentMethod: null, status: "upcoming" });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+    }
+
+    setDetail({
+      roomId: id,
+      purpose: (activeContract?.purpose as ResidencePurpose) ?? "공시생(임용)",
+      utilityIncludedRent: Math.round(rent / 10000),
+      actualMonthlyRent: Math.round(rent / 10000),
+      paymentDueDay: dueDay,
+      contractMoveInDate: activeContract?.contract_start_date,
+      contractExpiry: activeContract?.contract_end_date ?? "",
+      actualMoveInDate: activeContract?.actual_move_in_date ?? undefined,
+      actualMoveOutDate: activeContract?.actual_move_out_date ?? undefined,
+      contractDeposit: {
+        date: activeContract?.contract_start_date ?? "",
+        amount: activeContract?.contract_deposit ?? 0,
+      },
+      realEstateAgency: (activeContract?.real_estate_agency as RealEstateAgency) ?? "직거래",
+      depositTotal: activeContract?.deposit_total ?? 0,
+      depositDeductions: [],
+      depositReturn: { returned: false, returnedAt: null },
+      rentPayments,
+      gasBills: [],
+      cashSuccessions: [],
+    });
+  }
 
   // 기본 정보 수정 모드
   const [editingInfo, setEditingInfo] = useState(false);
@@ -273,9 +328,9 @@ export default function ResidentDetailPage() {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="text-xl font-extrabold tracking-tight text-[#111827]">{id}호</h1>
-          {room.resident && (
-            <span className="text-xl font-extrabold tracking-tight text-[#111827]">· {room.resident}</span>
+          <h1 className="text-xl font-extrabold tracking-tight text-black-100">{id}호</h1>
+          {(room.resident ?? activeContract?.name) && (
+            <span className="text-xl font-extrabold tracking-tight text-black-100">· {room.resident ?? activeContract?.name}</span>
           )}
           <span
             className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
@@ -283,10 +338,12 @@ export default function ResidentDetailPage() {
                 ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
                 : room.status === "vacant"
                 ? "border-gray-500/20 bg-gray-500/10 text-gray-400"
+                : room.status === "contract"
+                ? "border-indigo-500/20 bg-indigo-500/10 text-indigo-400"
                 : "border-amber-500/20 bg-amber-500/10 text-amber-400"
             }`}
           >
-            {room.status === "occupied" ? "입실중" : room.status === "vacant" ? "공실" : "점검"}
+            {room.status === "occupied" ? "입실중" : room.status === "vacant" ? "공실" : room.status === "contract" ? "계약" : "점검"}
           </span>
           <span className="rounded-full border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-1 text-xs text-gray-400">
             {room.roomType}
@@ -294,13 +351,7 @@ export default function ResidentDetailPage() {
         </div>
       </div>
 
-      {!detail ? (
-        <div className={CARD}>
-          <div className="px-6 py-12 text-center text-sm text-gray-500">
-            등록된 상세 정보가 없습니다.
-          </div>
-        </div>
-      ) : (
+      {detail && (
         <>
           {/* ── 기본 정보 ── */}
           <div className={CARD}>
@@ -517,23 +568,31 @@ export default function ResidentDetailPage() {
               /* ── 조회 뷰 ── */
               <div className="p-6">
                 {/* 입실자 프로필 */}
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-indigo-500/20 bg-indigo-500/10 text-xl font-bold text-indigo-400">
-                    {room.resident?.[0] ?? "?"}
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-white">{room.resident ?? "-"}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-3">
-                      {room.gender && (
-                        <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${room.gender === "남" ? "border-blue-500/20 bg-blue-500/10 text-blue-400" : "border-pink-500/20 bg-pink-500/10 text-pink-400"}`}>
-                          {room.gender}
-                        </span>
-                      )}
-                      {room.age && <span className="text-xs text-gray-500">{room.age}세</span>}
-                      <span className="text-xs text-teal-400">{room.phone ?? "-"}</span>
+                {(() => {
+                  const name    = room.resident   ?? activeContract?.name   ?? "-";
+                  const gender  = room.gender     ?? activeContract?.gender ?? null;
+                  const age     = room.age        ?? activeContract?.age    ?? null;
+                  const phone   = room.phone      ?? activeContract?.phone  ?? "-";
+                  return (
+                    <div className="mb-6 flex items-center gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-indigo-500/20 bg-indigo-500/10 text-xl font-bold text-indigo-400">
+                        {name[0] !== "-" ? name[0] : "?"}
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-white">{name}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-3">
+                          {gender && (
+                            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${gender === "남" ? "border-blue-500/20 bg-blue-500/10 text-blue-400" : "border-pink-500/20 bg-pink-500/10 text-pink-400"}`}>
+                              {gender}
+                            </span>
+                          )}
+                          {age && <span className="text-xs text-gray-500">{age}세</span>}
+                          <span className="text-xs text-teal-400">{phone}</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
                 {/* 정보 그리드 */}
                 <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
                   <InfoField icon={<Home className="h-3.5 w-3.5" />} label="호실" value={`${id}호`} />

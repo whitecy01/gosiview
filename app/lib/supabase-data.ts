@@ -90,7 +90,6 @@ export function buildRooms(dbRooms: DbRoom[], dbContracts: DbContract[]): Room[]
           ? `₩${activeContract.monthly_rent.toLocaleString('ko-KR')}`
           : roomPrice,
         contractId: activeContract.id,
-        // 납부 관련은 추후 rent_payments 테이블 연동 시 추가
         paidMonth: null,
         paidAt: null,
         paymentStatus: 'upcoming',

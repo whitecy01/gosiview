@@ -20,6 +20,13 @@ const FLOOR_LABELS: Record<number, string> = {
   1: '1층', 2: '2층', 3: '3층', 4: '4층', 5: '5층', 6: '6층',
 };
 
+function formatPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 11);
+  if (digits.length < 4) return digits;
+  if (digits.length < 8) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
 /** 입실일 + N개월 - 1일 */
 function calcEndDate(startDate: string, months: number): string {
   const d = new Date(startDate);
@@ -50,10 +57,12 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   const [moveOutDate, setMoveOutDate] = useState('');
 
   // 추가 계약 정보
-  const [purpose, setPurpose] = useState<ResidencePurpose | ''>('');
+  const [purpose, setPurpose] = useState('');
+  const [purposeCustom, setPurposeCustom] = useState(false);
   const [rentAmount, setRentAmount] = useState('');
   const [contractDeposit, setContractDeposit] = useState('');
-  const [realEstateAgency, setRealEstateAgency] = useState<RealEstateAgency | ''>('');
+  const [realEstateAgency, setRealEstateAgency] = useState('');
+  const [agencyCustom, setAgencyCustom] = useState(false);
 
   const [submitted, setSubmitted] = useState(false);
 
@@ -224,7 +233,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     type="text"
                     placeholder="010-0000-0000"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(formatPhone(e.target.value))}
                     className={inputCls}
                   />
                 </div>
@@ -339,25 +348,57 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1.5">거주 목적</label>
-                  <select
-                    value={purpose}
-                    onChange={(e) => setPurpose(e.target.value as ResidencePurpose | '')}
-                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none"
-                  >
-                    <option value="">선택 안 함</option>
-                    {RESIDENCE_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                  {purposeCustom ? (
+                    <div className="flex gap-1.5">
+                      <input
+                        autoFocus
+                        value={purpose}
+                        onChange={(e) => setPurpose(e.target.value)}
+                        placeholder="직접 입력"
+                        className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500 transition-colors placeholder:text-gray-600"
+                      />
+                      <button type="button" onClick={() => { setPurposeCustom(false); setPurpose(''); }}
+                        className="shrink-0 flex items-center justify-center h-10 w-10 rounded-lg border border-[#2A2A2A] text-gray-500 hover:text-white transition-colors">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <select value={purpose} onChange={(e) => {
+                      if (e.target.value === '__custom__') { setPurposeCustom(true); setPurpose(''); }
+                      else setPurpose(e.target.value);
+                    }} className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none">
+                      <option value="">선택 안 함</option>
+                      {RESIDENCE_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
+                      <option value="__custom__">+ 직접 입력</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1.5">부동산</label>
-                  <select
-                    value={realEstateAgency}
-                    onChange={(e) => setRealEstateAgency(e.target.value as RealEstateAgency | '')}
-                    className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none"
-                  >
-                    <option value="">선택 안 함</option>
-                    {REAL_ESTATE_AGENCIES.map((a) => <option key={a} value={a}>{a}</option>)}
-                  </select>
+                  {agencyCustom ? (
+                    <div className="flex gap-1.5">
+                      <input
+                        autoFocus
+                        value={realEstateAgency}
+                        onChange={(e) => setRealEstateAgency(e.target.value)}
+                        placeholder="직접 입력"
+                        className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500 transition-colors placeholder:text-gray-600"
+                      />
+                      <button type="button" onClick={() => { setAgencyCustom(false); setRealEstateAgency(''); }}
+                        className="shrink-0 flex items-center justify-center h-10 w-10 rounded-lg border border-[#2A2A2A] text-gray-500 hover:text-white transition-colors">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <select value={realEstateAgency} onChange={(e) => {
+                      if (e.target.value === '__custom__') { setAgencyCustom(true); setRealEstateAgency(''); }
+                      else setRealEstateAgency(e.target.value);
+                    }} className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none">
+                      <option value="">선택 안 함</option>
+                      {REAL_ESTATE_AGENCIES.map((a) => <option key={a} value={a}>{a}</option>)}
+                      <option value="__custom__">+ 직접 입력</option>
+                    </select>
+                  )}
                 </div>
               </div>
               {contractMoveInDate && contractEndDate && (
