@@ -1,17 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Home, CheckCircle2, XCircle, ChevronDown, ChevronUp,
-  Banknote, Zap, Clock,
+  Banknote, RotateCcw, Loader2,
 } from "lucide-react";
-import {
-  ROOM_TENANT_HISTORY,
-  MAINTENANCE_BY_ROOM,
-  type TenantBar,
-} from "@/app/lib/mock-data";
 import { useRooms } from "@/app/context/RoomsContext";
+import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
+import { fetchCompletedContracts, updateContract, type DbContract } from "@/app/lib/supabase-data";
 
 // ────────────── 헬퍼 ──────────────
 
@@ -40,47 +37,39 @@ const GENDER_STYLE = {
 
 // ────────────── 확장 행 ──────────────
 
-function ExpandedRow({ t, maintenance }: { t: TenantBar; maintenance: typeof MAINTENANCE_BY_ROOM[string] }) {
-  const tenantCost =
-    t.electricityHandover?.giroCost != null && t.electricityHandover?.vacancyCost != null
-      ? t.electricityHandover.giroCost - t.electricityHandover.vacancyCost
-      : null;
-
-  const relatedMaintenance = maintenance.filter((m) => {
-    const md = new Date(m.date);
-    return md >= new Date(t.moveInDate) && md <= new Date(t.moveOutDate);
-  });
-
+function ExpandedRow({
+  contract,
+  onRestore,
+  restoring,
+}: {
+  contract: DbContract;
+  onRestore: () => void;
+  restoring: boolean;
+}) {
   return (
     <tr className="border-t border-[#1E1E1E]">
       <td colSpan={8} className="px-6 py-4 bg-[#0D0D0D]">
         <div className="grid gap-3 sm:grid-cols-3">
           {/* 보증금 */}
-          {t.depositTotal != null && (
+          {contract.deposit_total != null && (
             <div className="rounded-xl border border-[#2A2A2A] overflow-hidden">
               <div className="flex items-center gap-2 border-b border-[#2A2A2A] bg-[#111] px-4 py-2.5">
                 <Banknote className="h-3.5 w-3.5 text-emerald-400" />
                 <span className="text-xs font-semibold text-gray-300">보증금</span>
               </div>
-              <div className="grid grid-cols-3 divide-x divide-[#1E1E1E]">
+              <div className="grid grid-cols-2 divide-x divide-[#1E1E1E]">
                 <div className="px-3 py-2.5">
                   <p className="mb-0.5 text-xs text-gray-500">총액</p>
-                  <p className="text-sm font-bold text-white">₩{t.depositTotal.toLocaleString("ko-KR")}</p>
-                </div>
-                <div className="px-3 py-2.5">
-                  <p className="mb-0.5 text-xs text-gray-500">차감</p>
-                  <p className={`text-sm font-bold ${(t.depositDeducted ?? 0) > 0 ? "text-rose-400" : "text-gray-600"}`}>
-                    {(t.depositDeducted ?? 0) > 0 ? `–₩${(t.depositDeducted ?? 0).toLocaleString("ko-KR")}` : "없음"}
-                  </p>
+                  <p className="text-sm font-bold text-white">₩{contract.deposit_total.toLocaleString("ko-KR")}</p>
                 </div>
                 <div className="px-3 py-2.5">
                   <p className="mb-0.5 text-xs text-gray-500">반환</p>
                   <div className="flex items-center gap-1">
-                    {t.depositReturned ? (
+                    {contract.deposit_returned ? (
                       <>
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                         <span className="text-xs text-emerald-400">
-                          {t.depositReturnedAt ? fmtDate(t.depositReturnedAt) : "완료"}
+                          {contract.deposit_returned_at ? fmtDate(contract.deposit_returned_at) : "완료"}
                         </span>
                       </>
                     ) : (
@@ -95,61 +84,56 @@ function ExpandedRow({ t, maintenance }: { t: TenantBar; maintenance: typeof MAI
             </div>
           )}
 
-          {/* 한전 */}
-          {t.electricityHandover && (
-            <div className="rounded-xl border border-yellow-500/20 overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-yellow-500/10 bg-yellow-500/5 px-4 py-2.5">
-                <Zap className="h-3.5 w-3.5 text-yellow-400" />
-                <span className="text-xs font-semibold text-yellow-400">한전 현금 승계</span>
-              </div>
-              <div className="grid grid-cols-3 divide-x divide-[#1E1E1E]">
-                <div className="px-3 py-2.5">
-                  <p className="mb-0.5 text-xs text-gray-500">사용량</p>
-                  <p className="text-sm font-bold text-white">
-                    {t.electricityHandover.vacancyMeter - t.electricityHandover.moveOutMeter} kWh
-                  </p>
+          {/* 계약 정보 */}
+          <div className="rounded-xl border border-[#2A2A2A] overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-[#2A2A2A] bg-[#111] px-4 py-2.5">
+              <Home className="h-3.5 w-3.5 text-indigo-400" />
+              <span className="text-xs font-semibold text-gray-300">계약 정보</span>
+            </div>
+            <div className="divide-y divide-[#1E1E1E]">
+              {contract.purpose && (
+                <div className="px-3 py-2">
+                  <p className="text-xs text-gray-500">거주 목적</p>
+                  <p className="text-xs text-white mt-0.5">{contract.purpose}</p>
                 </div>
-                {t.electricityHandover.vacancyCost != null && (
-                  <div className="px-3 py-2.5">
-                    <p className="mb-0.5 text-xs text-gray-500">공백 요금</p>
-                    <p className="text-sm font-bold text-white">
-                      ₩{t.electricityHandover.vacancyCost.toLocaleString("ko-KR")}
-                    </p>
-                  </div>
-                )}
-                {tenantCost != null && (
-                  <div className="px-3 py-2.5">
-                    <p className="mb-0.5 text-xs text-gray-500">입주자 부담</p>
-                    <p className="text-sm font-bold text-yellow-400">₩{tenantCost.toLocaleString("ko-KR")}</p>
-                  </div>
-                )}
-              </div>
+              )}
+              {contract.real_estate_agency && (
+                <div className="px-3 py-2">
+                  <p className="text-xs text-gray-500">부동산</p>
+                  <p className="text-xs text-white mt-0.5">{contract.real_estate_agency}</p>
+                </div>
+              )}
+              {contract.contract_deposit != null && (
+                <div className="px-3 py-2">
+                  <p className="text-xs text-gray-500">계약금</p>
+                  <p className="text-xs text-white mt-0.5">₩{contract.contract_deposit.toLocaleString("ko-KR")}</p>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
-          {/* 유지보수 */}
-          {relatedMaintenance.length > 0 && (
-            <div className="rounded-xl border border-[#2A2A2A] overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-[#2A2A2A] bg-[#111] px-4 py-2.5">
-                <Clock className="h-3.5 w-3.5 text-orange-400" />
-                <span className="text-xs font-semibold text-gray-300">유지보수</span>
-                <span className="ml-auto text-xs text-orange-400 font-semibold">
-                  ₩{relatedMaintenance.reduce((s, m) => s + m.amount, 0).toLocaleString("ko-KR")}
-                </span>
-              </div>
-              <div className="divide-y divide-[#1A1A1A]">
-                {relatedMaintenance.map((m, i) => (
-                  <div key={i} className="flex items-center justify-between px-3 py-2.5">
-                    <div>
-                      <p className="text-xs text-gray-500">{fmtDate(m.date)}</p>
-                      <p className="mt-0.5 text-xs text-gray-300">{m.details.join(", ")}</p>
-                    </div>
-                    <p className="text-sm font-semibold text-orange-400">₩{m.amount.toLocaleString("ko-KR")}</p>
-                  </div>
-                ))}
-              </div>
+          {/* 다시 입실 처리 */}
+          <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 flex flex-col justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-indigo-400 mb-1">다시 입실 처리</p>
+              <p className="text-xs text-gray-500">
+                이 계약을 <span className="text-indigo-400">scheduled</span> 상태로 복원합니다.
+                퇴실 처리 취소 또는 재입실 시 사용하세요.
+              </p>
             </div>
-          )}
+            <button
+              onClick={onRestore}
+              disabled={restoring}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-xs font-medium text-indigo-400 hover:bg-indigo-500/20 transition-colors disabled:opacity-40"
+            >
+              {restoring ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5" />
+              )}
+              {restoring ? "처리 중…" : "다시 입실 처리"}
+            </button>
+          </div>
         </div>
       </td>
     </tr>
@@ -162,38 +146,73 @@ export default function RoomHistoryPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { rooms } = useRooms();
+  const { effectiveRooms, refetch } = useEffectiveRooms();
 
-  const room = rooms.find((r) => r.id === id);
-  const rawHistory: TenantBar[] = ROOM_TENANT_HISTORY[id] ?? [];
-  const maintenance = MAINTENANCE_BY_ROOM[id] ?? [];
+  const room = effectiveRooms.find((r) => r.id === id) ?? rooms.find((r) => r.id === id);
 
-  const history = useMemo(
-    () => [...rawHistory].sort((a, b) => new Date(b.moveInDate).getTime() - new Date(a.moveInDate).getTime()),
-    [rawHistory]
-  );
-
+  const [history, setHistory] = useState<DbContract[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
-  if (!room) {
-    return (
-      <main className="flex items-center justify-center py-20">
-        <p className="text-gray-500">호실을 찾을 수 없습니다.</p>
-      </main>
-    );
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const data = await fetchCompletedContracts(id);
+      setHistory(data);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : "이력을 불러오지 못했습니다.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  async function handleRestore(contract: DbContract) {
+    setRestoringId(contract.id);
+    try {
+      await updateContract(contract.id, {
+        status: 'scheduled',
+        actual_move_out_date: null,
+      });
+      await Promise.all([loadHistory(), refetch()]);
+      setExpandedIdx(null);
+    } finally {
+      setRestoringId(null);
+    }
   }
 
   const totalVacancy = (() => {
-    const sorted = [...history].sort((a, b) => new Date(a.moveInDate).getTime() - new Date(b.moveInDate).getTime());
+    const sorted = [...history].sort((a, b) => {
+      const aDate = a.actual_move_in_date ?? a.contract_start_date;
+      const bDate = b.actual_move_in_date ?? b.contract_start_date;
+      return aDate.localeCompare(bDate);
+    });
     let days = 0;
     for (let i = 0; i < sorted.length - 1; i++) {
-      const gap = daysBetween(sorted[i].moveOutDate, sorted[i + 1].moveInDate);
-      if (gap > 0) days += gap;
+      const aOut = sorted[i].actual_move_out_date ?? sorted[i].contract_end_date;
+      const bIn = sorted[i + 1].actual_move_in_date ?? sorted[i + 1].contract_start_date;
+      if (aOut && bIn) {
+        const gap = daysBetween(aOut, bIn);
+        if (gap > 0) days += gap;
+      }
     }
     return days;
   })();
 
   const avgStay = history.length > 0
-    ? Math.round(history.reduce((s, t) => s + daysBetween(t.moveInDate, t.moveOutDate), 0) / history.length)
+    ? Math.round(
+        history.reduce((s, c) => {
+          const moveIn = c.actual_move_in_date ?? c.contract_start_date;
+          const moveOut = c.actual_move_out_date ?? c.contract_end_date;
+          return s + (moveOut ? daysBetween(moveIn, moveOut) : 0);
+        }, 0) / history.length
+      )
     : 0;
 
   return (
@@ -209,8 +228,8 @@ export default function RoomHistoryPage() {
         </button>
         <div className="flex items-center gap-2.5">
           <Home className="h-4 w-4 text-indigo-400" />
-          <h1 className="text-xl font-bold text-gray-900">{room.name} 입실 이력</h1>
-          <span className="rounded-full border border-[#2A2A2A] px-2.5 py-0.5 text-xs text-gray-500">{room.roomType}</span>
+          <h1 className="text-xl font-bold text-white">{id}호 입실 이력</h1>
+          {room && <span className="rounded-full border border-[#2A2A2A] px-2.5 py-0.5 text-xs text-gray-500">{room.roomType}</span>}
         </div>
       </div>
 
@@ -220,7 +239,7 @@ export default function RoomHistoryPage() {
           { label: "총 입실 횟수", value: `${history.length}건`, color: "text-indigo-400" },
           { label: "총 공실 기간", value: `${totalVacancy}일`, color: "text-gray-400" },
           { label: "평균 거주 기간", value: avgStay > 0 ? `${avgStay}일` : "—", color: "text-emerald-400" },
-          { label: "보증금 미반환", value: `${history.filter((t) => !t.depositReturned).length}건`, color: "text-rose-400" },
+          { label: "보증금 미반환", value: `${history.filter((c) => !c.deposit_returned).length}건`, color: "text-rose-400" },
         ].map((s, i) => (
           <div key={i} className="rounded-xl border border-[#2A2A2A] bg-[#111] px-4 py-3.5">
             <p className="text-xs text-gray-500">{s.label}</p>
@@ -230,9 +249,17 @@ export default function RoomHistoryPage() {
       </div>
 
       {/* 테이블 */}
-      {history.length === 0 ? (
+      {historyLoading ? (
+        <div className="flex items-center justify-center rounded-2xl border border-[#2A2A2A] bg-[#111] py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+        </div>
+      ) : historyError ? (
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 px-6 py-8 text-center">
+          <p className="text-sm text-rose-400">{historyError}</p>
+        </div>
+      ) : history.length === 0 ? (
         <div className="rounded-2xl border border-[#2A2A2A] bg-[#111] px-6 py-16 text-center">
-          <p className="text-sm text-gray-500">등록된 입실 이력이 없습니다.</p>
+          <p className="text-sm text-gray-500">퇴실 처리된 이력이 없습니다.</p>
         </div>
       ) : (
         <div className="rounded-xl border border-[#2A2A2A] overflow-hidden">
@@ -250,66 +277,63 @@ export default function RoomHistoryPage() {
               </tr>
             </thead>
             <tbody>
-              {history.map((t, i) => {
+              {history.map((contract, i) => {
                 const isExpanded = expandedIdx === i;
-                const isEven = i % 2 === 0;
+                const moveIn = contract.actual_move_in_date ?? contract.contract_start_date;
+                const moveOut = contract.actual_move_out_date ?? contract.contract_end_date;
 
                 return (
                   <>
                     <tr
-                      key={i}
+                      key={contract.id}
                       onClick={() => setExpandedIdx(isExpanded ? null : i)}
                       className="cursor-pointer border-t border-[#1A1A1A] transition-colors hover:bg-[#161616]"
-                      style={{ backgroundColor: isEven ? "#0C0C0C" : "#0A0A0A" }}
+                      style={{ backgroundColor: i % 2 === 0 ? "#0C0C0C" : "#0A0A0A" }}
                     >
                       {/* 이름 */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
-                          <div
-                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                              t.gender === "여"
-                                ? "bg-rose-500/10 text-rose-400"
-                                : "bg-indigo-500/10 text-indigo-400"
-                            }`}
-                          >
-                            {t.name[0]}
+                          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${contract.gender === "여" ? "bg-rose-500/10 text-rose-400" : "bg-indigo-500/10 text-indigo-400"}`}>
+                            {contract.name[0]}
                           </div>
-                          <span className="font-semibold text-white">{t.name}</span>
+                          <span className="font-semibold text-white">{contract.name}</span>
                         </div>
                       </td>
 
                       {/* 성별·나이 */}
                       <td className="px-4 py-3.5">
-                        {t.gender && (
-                          <span className={`rounded-full border px-2 py-0.5 text-xs ${GENDER_STYLE[t.gender]}`}>
-                            {t.gender}{t.age ? ` · ${t.age}세` : ""}
+                        {contract.gender && (
+                          <span className={`rounded-full border px-2 py-0.5 text-xs ${GENDER_STYLE[contract.gender]}`}>
+                            {contract.gender}{contract.age ? ` · ${contract.age}세` : ""}
                           </span>
                         )}
                       </td>
 
                       {/* 입실일 */}
-                      <td className="px-4 py-3.5 text-gray-300 tabular-nums">{fmtDate(t.moveInDate)}</td>
+                      <td className="px-4 py-3.5 text-gray-300 tabular-nums">{fmtDate(moveIn)}</td>
 
                       {/* 퇴실일 */}
-                      <td className="px-4 py-3.5 text-gray-300 tabular-nums">{fmtDate(t.moveOutDate)}</td>
+                      <td className="px-4 py-3.5 text-gray-300 tabular-nums">
+                        {moveOut ? fmtDate(moveOut) : <span className="text-gray-600">—</span>}
+                      </td>
 
                       {/* 거주 기간 */}
                       <td className="px-4 py-3.5 text-indigo-400 font-medium tabular-nums">
-                        {fmtStay(t.moveInDate, t.moveOutDate)}
+                        {moveOut ? fmtStay(moveIn, moveOut) : <span className="text-gray-600">—</span>}
                       </td>
 
                       {/* 월세 */}
                       <td className="px-4 py-3.5 text-gray-300 tabular-nums">
-                        {t.monthlyRent != null ? `₩${t.monthlyRent.toLocaleString("ko-KR")}` : "—"}
+                        {contract.monthly_rent != null ? `₩${contract.monthly_rent.toLocaleString("ko-KR")}` : "—"}
                       </td>
 
                       {/* 보증금 반환 */}
                       <td className="px-4 py-3.5">
-                        {t.depositReturned ? (
+                        {contract.deposit_returned ? (
                           <div className="flex items-center gap-1">
                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                             <span className="text-xs text-emerald-400">
-                              {t.depositReturnedAt ? fmtDate(t.depositReturnedAt) : "완료"}
+                              {contract.deposit_returned_at ? fmtDate(contract.deposit_returned_at) : "완료"}
                             </span>
                           </div>
                         ) : (
@@ -322,14 +346,17 @@ export default function RoomHistoryPage() {
 
                       {/* 펼치기 */}
                       <td className="px-4 py-3.5 text-gray-600">
-                        {isExpanded
-                          ? <ChevronUp className="h-4 w-4" />
-                          : <ChevronDown className="h-4 w-4" />}
+                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       </td>
                     </tr>
 
                     {isExpanded && (
-                      <ExpandedRow key={`exp-${i}`} t={t} maintenance={maintenance} />
+                      <ExpandedRow
+                        key={`exp-${contract.id}`}
+                        contract={contract}
+                        onRestore={() => handleRestore(contract)}
+                        restoring={restoringId === contract.id}
+                      />
                     )}
                   </>
                 );

@@ -31,7 +31,7 @@ export type DbContract = {
   deposit_total: number | null;
   deposit_returned: boolean;
   deposit_returned_at: string | null;
-  status: 'scheduled' | 'active' | 'completed';
+  status: 'scheduled' | 'completed';
   created_at: string;
   updated_at: string;
 };
@@ -50,18 +50,12 @@ export function buildRooms(dbRooms: DbRoom[], dbContracts: DbContract[]): Room[]
     const roomPrice = `₩${dbRoom.monthly_price.toLocaleString('ko-KR')}`;
     const floor = dbRoom.floor as FloorNumber;
 
-    // 이 방의 계약 (active → occupied, scheduled → contract)
-    const activeContract = dbContracts.find(
-      (c) => c.room_id === dbRoom.id && c.status === 'active'
-    );
     const scheduledContracts = dbContracts.filter(
       (c) => c.room_id === dbRoom.id && c.status === 'scheduled'
     );
 
     let status: RoomStatus;
-    if (activeContract) {
-      status = 'occupied';
-    } else if (scheduledContracts.length > 0) {
+    if (scheduledContracts.length > 0) {
       status = 'contract';
     } else {
       status = 'vacant';
@@ -69,34 +63,6 @@ export function buildRooms(dbRooms: DbRoom[], dbContracts: DbContract[]): Room[]
 
     const typeInfo = ROOM_TYPE_INFO[roomType];
     const amenities = typeInfo?.amenities ?? [];
-
-    if (status === 'occupied' && activeContract) {
-      const moveIn = activeContract.actual_move_in_date ?? activeContract.contract_start_date;
-      return {
-        id: dbRoom.id,
-        name: dbRoom.name,
-        floor,
-        status,
-        roomType,
-        roomPrice,
-        amenities,
-        resident: activeContract.name,
-        phone: activeContract.phone,
-        gender: activeContract.gender,
-        age: activeContract.age,
-        moveInDate: moveIn,
-        moveOutDate: activeContract.actual_move_out_date ?? activeContract.contract_end_date ?? null,
-        monthlyRent: activeContract.monthly_rent
-          ? `₩${activeContract.monthly_rent.toLocaleString('ko-KR')}`
-          : roomPrice,
-        contractId: activeContract.id,
-        paidMonth: null,
-        paidAt: null,
-        paymentStatus: 'upcoming',
-        rentStatus: 'upcoming',
-        paymentHistory: [],
-      };
-    }
 
     return {
       id: dbRoom.id,
@@ -129,7 +95,7 @@ export async function fetchRoomsAndContracts() {
   const supabase = createClient();
   const [{ data: rooms, error: re }, { data: contracts, error: ce }] = await Promise.all([
     supabase.from('rooms').select('*').order('id'),
-    supabase.from('contracts').select('*').in('status', ['active', 'scheduled']).order('contract_start_date'),
+    supabase.from('contracts').select('*').in('status', ['scheduled']).order('contract_start_date'),
   ]);
   if (re) throw re;
   if (ce) throw ce;
@@ -151,7 +117,8 @@ export type NewContractInput = {
   actual_move_out_date: string | null;
   monthly_rent: number | null;
   contract_deposit: number | null;
-  status: 'scheduled' | 'active';
+  deposit_total: number | null;
+  status: 'scheduled' | 'completed';
 };
 
 export async function insertContract(input: NewContractInput): Promise<DbContract> {
@@ -181,4 +148,16 @@ export async function deleteContract(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from('contracts').delete().eq('id', id);
   if (error) throw error;
+}
+
+export async function fetchCompletedContracts(roomId: string): Promise<DbContract[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('*')
+    .eq('room_id', roomId)
+    .eq('status', 'completed')
+    .order('actual_move_in_date', { ascending: false });
+  if (error) throw error;
+  return data as DbContract[];
 }

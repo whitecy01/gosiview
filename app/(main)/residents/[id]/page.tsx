@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import {
   RESIDENT_DETAIL_BY_ROOM,
+  ROOM_TYPE_INFO,
   type ResidentDetail,
   type RentPayment,
   type DepositDeductionReason,
@@ -26,6 +27,7 @@ import {
 } from "@/app/lib/mock-data";
 import { useRooms } from "@/app/context/RoomsContext";
 import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
+import { calcEndDate as calcMoveOutDate, formatPhone } from "@/app/lib/utils";
 
 // ────────────── 상수 ──────────────
 
@@ -68,13 +70,6 @@ function fmtDate(d: string) {
   return `${y.slice(2)}/${m}/${dd}`;
 }
 
-/** 입실일 + N개월 - 1일 → 퇴실일 (월말 자동 처리) */
-function calcMoveOutDate(moveInDate: string, months: number): string {
-  const d = new Date(moveInDate);
-  d.setMonth(d.getMonth() + months);
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
 
 function fmtMonthKo(m: string) {
   const [y, mo] = m.split("-");
@@ -92,22 +87,32 @@ const INPUT = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 
 export default function ResidentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { contracts, loading } = useRooms();
-  const { effectiveRooms } = useEffectiveRooms();
+  const { contracts, loading, editContract } = useRooms();
+  const { effectiveRooms, todayStr } = useEffectiveRooms();
 
   const room = effectiveRooms.find((r) => r.id === id);
-  const activeContract = contracts.find(
-    (c) => c.room_id === id && (c.status === "active" || c.status === "scheduled")
-  );
+  // room.contractId는 useEffectiveRooms가 오늘 날짜 기준으로 계산한 현재 입실자의 계약 ID
+  const activeContract = (room?.contractId
+    ? contracts.find((c) => c.id === room.contractId)
+    : contracts.find((c) => c.room_id === id && c.status === "scheduled")
+  ) ?? null;
   const [detail, setDetail] = useState<ResidentDetail | null>(
     () => RESIDENT_DETAIL_BY_ROOM[id] ?? null
   );
+
+  // 계약이 바뀌면 detail 리셋 후 재초기화 (날짜 변경으로 입실자 전환 시 반영)
+  useEffect(() => {
+    if (!loading) {
+      setDetail(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeContract?.id]);
 
   // 데이터 로드 완료 후 detail 자동 초기화
   useEffect(() => {
     if (!loading && detail === null) initDetail();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, activeContract]);
+  }, [loading, detail, activeContract]);
 
   // 계약 데이터로 detail 초기화
   function initDetail() {
@@ -130,8 +135,8 @@ export default function ResidentDetailPage() {
 
     setDetail({
       roomId: id,
-      purpose: (activeContract?.purpose as ResidencePurpose) ?? "공시생(임용)",
-      utilityIncludedRent: Math.round(rent / 10000),
+      purpose: (activeContract?.purpose as ResidencePurpose) ?? undefined,
+      utilityIncludedRent: Math.round((ROOM_TYPE_INFO[room?.roomType ?? "Cozy"]?.price ?? 0) / 10000),
       actualMonthlyRent: Math.round(rent / 10000),
       paymentDueDay: dueDay,
       contractMoveInDate: activeContract?.contract_start_date,
@@ -142,7 +147,7 @@ export default function ResidentDetailPage() {
         date: activeContract?.contract_start_date ?? "",
         amount: activeContract?.contract_deposit ?? 0,
       },
-      realEstateAgency: (activeContract?.real_estate_agency as RealEstateAgency) ?? "직거래",
+      realEstateAgency: (activeContract?.real_estate_agency as RealEstateAgency) ?? undefined,
       depositTotal: activeContract?.deposit_total ?? 0,
       depositDeductions: [],
       depositReturn: { returned: false, returnedAt: null },
@@ -156,6 +161,33 @@ export default function ResidentDetailPage() {
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState<Partial<ResidentDetail>>({});
   const [contractMonths, setContractMonths] = useState<string>("");
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editAge, setEditAge] = useState("");
+
+  // 퇴실 처리
+  const [confirmCheckout, setConfirmCheckout] = useState(false);
+
+  async function handleCheckout() {
+    if (!activeContract) return;
+    await editContract(activeContract.id, {
+      status: 'completed',
+      actual_move_out_date: todayStr,
+    });
+    router.push('/residents');
+  }
+
+  // 총 보증금 수정
+  const [editingDepTotal, setEditingDepTotal] = useState(false);
+  const [depTotalInput, setDepTotalInput] = useState("");
+
+  async function saveDepTotal() {
+    if (!activeContract) return;
+    const amount = Number(depTotalInput);
+    setDetail((prev) => prev ? { ...prev, depositTotal: amount } : prev);
+    setEditingDepTotal(false);
+    await editContract(activeContract.id, { deposit_total: amount });
+  }
 
   // 보증금 폼
   const [showDepForm, setShowDepForm] = useState(false);
@@ -197,13 +229,34 @@ export default function ResidentDetailPage() {
     if (!detail) return;
     setInfoForm({ ...detail });
     setContractMonths("");
+    setEditName(activeContract?.name ?? "");
+    setEditPhone(activeContract?.phone ?? "");
+    setEditAge(String(activeContract?.age ?? ""));
     setEditingInfo(true);
   }
 
-  function saveInfo() {
-    if (!detail) return;
-    setDetail((prev) => prev ? { ...prev, ...infoForm } : prev);
+  async function saveInfo() {
+    if (!detail || !activeContract) return;
+    setDetail((prev) => prev ? {
+      ...prev,
+      ...infoForm,
+      depositTotal: infoForm.contractDeposit?.amount ?? prev.depositTotal,
+    } : prev);
     setEditingInfo(false);
+    await editContract(activeContract.id, {
+      name: editName || activeContract.name,
+      phone: editPhone || activeContract.phone,
+      age: editAge ? Number(editAge) : activeContract.age ?? undefined,
+      monthly_rent: infoForm.actualMonthlyRent ? infoForm.actualMonthlyRent * 10000 : undefined,
+      contract_start_date: infoForm.contractMoveInDate ?? activeContract.contract_start_date,
+      contract_end_date: infoForm.contractExpiry || null,
+      actual_move_in_date: infoForm.actualMoveInDate || null,
+      actual_move_out_date: infoForm.actualMoveOutDate || null,
+      contract_deposit: infoForm.contractDeposit?.amount ?? null,
+      deposit_total: infoForm.contractDeposit?.amount ?? null,
+      purpose: infoForm.purpose || null,
+      real_estate_agency: infoForm.realEstateAgency || null,
+    });
   }
 
   // ── 보증금 차감 ──
@@ -343,8 +396,34 @@ export default function ResidentDetailPage() {
                 : "border-amber-500/20 bg-amber-500/10 text-amber-400"
             }`}
           >
-            {room.status === "occupied" ? "입실중" : room.status === "vacant" ? "공실" : room.status === "contract" ? "계약" : "점검"}
+            {room.status === "occupied" ? "입실중" : room.status === "vacant" ? "공실" : room.status === "contract" ? "입실 전" : "점검"}
           </span>
+          {room.status === "occupied" && activeContract && (
+            confirmCheckout ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">퇴실 처리할까요?</span>
+                <button
+                  onClick={handleCheckout}
+                  className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-400 hover:bg-rose-500/20 transition-colors"
+                >
+                  확인
+                </button>
+                <button
+                  onClick={() => setConfirmCheckout(false)}
+                  className="rounded-lg border border-[#2A2A2A] px-3 py-1 text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  취소
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmCheckout(true)}
+                className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-400 hover:bg-rose-500/20 transition-colors"
+              >
+                퇴실 처리
+              </button>
+            )
+          )}
           <span className="rounded-full border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-1 text-xs text-gray-400">
             {room.roomType}
           </span>
@@ -379,6 +458,36 @@ export default function ResidentDetailPage() {
             {editingInfo ? (
               /* ── 수정 폼 ── */
               <div className="p-6 space-y-5">
+                {/* 인적 사항 */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-400">이름</label>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className={INPUT}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-400">연락처</label>
+                    <input
+                      type="text"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(formatPhone(e.target.value))}
+                      className={INPUT}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs text-gray-400">나이</label>
+                    <input
+                      type="number"
+                      value={editAge}
+                      onChange={(e) => setEditAge(e.target.value)}
+                      className={INPUT}
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                   <div>
                     <label className="mb-1.5 block text-xs text-gray-400">금액(관포) <span className="text-gray-600">만원</span></label>
@@ -526,7 +635,7 @@ export default function ResidentDetailPage() {
                     <label className="mb-1.5 block text-xs text-gray-400">계약금 금액 <span className="text-gray-600">원</span></label>
                     <input
                       type="number"
-                      value={infoForm.contractDeposit?.amount ?? ""}
+                      value={infoForm.contractDeposit?.amount || ""}
                       onChange={(e) =>
                         setInfoForm((f) => ({
                           ...f,
@@ -561,7 +670,7 @@ export default function ResidentDetailPage() {
                 </div>
                 <div className="flex justify-end gap-2">
                   <button onClick={() => setEditingInfo(false)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
-                  <button onClick={saveInfo} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400">저장</button>
+                  <button onClick={saveInfo} disabled={!activeContract} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed">저장</button>
                 </div>
               </div>
             ) : (
@@ -597,8 +706,8 @@ export default function ResidentDetailPage() {
                 <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
                   <InfoField icon={<Home className="h-3.5 w-3.5" />} label="호실" value={`${id}호`} />
                   <InfoField icon={<Home className="h-3.5 w-3.5" />} label="방 유형" value={room.roomType} />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.utilityIncludedRent}만원`} highlight="emerald" />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="실제 납부 월세" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
+                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="기존 금액" value={`${detail.utilityIncludedRent}만원`} />
+                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(시작)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(끝)" value={fmtDate(detail.contractExpiry)} />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={detail.actualMoveInDate ? fmtDate(detail.actualMoveInDate) : (room.moveInDate ? fmtDate(room.moveInDate) : "-")} />
@@ -629,8 +738,33 @@ export default function ResidentDetailPage() {
 
             {/* 요약 카드 */}
             <div className="grid grid-cols-3 divide-x divide-[#2A2A2A] border-b border-[#2A2A2A]">
+              {/* 총 보증금 — 클릭해서 수정 */}
+              <div className="px-6 py-4 text-center">
+                <p className="text-xs text-gray-500">총 보증금</p>
+                {editingDepTotal ? (
+                  <div className="mt-1 flex items-center gap-1 justify-center">
+                    <input
+                      autoFocus
+                      type="number"
+                      value={depTotalInput}
+                      onChange={(e) => setDepTotalInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') saveDepTotal(); if (e.key === 'Escape') setEditingDepTotal(false); }}
+                      className="w-28 rounded border border-indigo-500/50 bg-[#1A1A1A] px-2 py-1 text-sm text-white outline-none text-center"
+                    />
+                    <button onClick={saveDepTotal} className="text-xs text-indigo-400 hover:text-indigo-300">✓</button>
+                    <button onClick={() => setEditingDepTotal(false)} className="text-xs text-gray-500 hover:text-white">✕</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setDepTotalInput(String(detail.depositTotal)); setEditingDepTotal(true); }}
+                    className="mt-1 text-base font-bold text-white hover:text-indigo-300 transition-colors"
+                    title="클릭해서 수정"
+                  >
+                    ₩{detail.depositTotal.toLocaleString("ko-KR")}
+                  </button>
+                )}
+              </div>
               {[
-                { label: "총 보증금", value: `₩${detail.depositTotal.toLocaleString("ko-KR")}`, color: "text-white" },
                 { label: "총 차감액", value: `₩${depositDeducted.toLocaleString("ko-KR")}`, color: "text-rose-400" },
                 { label: "잔여 보증금", value: `₩${depositRemaining.toLocaleString("ko-KR")}`, color: "text-emerald-400" },
               ].map(({ label, value, color }) => (
@@ -1343,10 +1477,12 @@ function InfoField({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: string | null | undefined;
   highlight?: "emerald" | "indigo";
 }) {
+  const isEmpty = !value;
   const valueColor =
+    isEmpty ? "text-gray-600" :
     highlight === "emerald" ? "text-emerald-400" :
     highlight === "indigo"  ? "text-indigo-400"  :
     "text-white";
@@ -1357,7 +1493,7 @@ function InfoField({
         {icon}
         <span className="text-xs">{label}</span>
       </div>
-      <p className={`text-base font-semibold ${valueColor}`}>{value}</p>
+      <p className={`text-base font-semibold ${valueColor}`}>{value || "없음"}</p>
     </div>
   );
 }

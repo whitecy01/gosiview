@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { X, UserPlus, CheckCircle2, ChevronDown } from 'lucide-react';
 import { ROOM_TYPE_INFO, type ResidencePurpose, type RealEstateAgency } from '@/app/lib/mock-data';
+import { calcEndDate } from '@/app/lib/utils';
 import { useRooms } from '@/app/context/RoomsContext';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 
@@ -28,13 +29,6 @@ function formatPhone(raw: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
-/** 입실일 + N개월 - 1일 */
-function calcEndDate(startDate: string, months: number): string {
-  const d = new Date(startDate);
-  d.setMonth(d.getMonth() + months);
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
 
 export default function NewResidentModal({ onClose, initialRoomId = '' }: NewResidentModalProps) {
   const { addContract, contracts } = useRooms();
@@ -106,7 +100,8 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   const effectiveMoveIn = actualMoveInDate || contractMoveInDate;
   const effectiveMoveOut = moveOutDate || contractEndDate;
 
-  const canSubmit = !!(roomId && name && phone && gender && age && contractMoveInDate && contractMonths);
+  const moveInError = !!(actualMoveInDate && contractMoveInDate && actualMoveInDate < contractMoveInDate);
+  const canSubmit = !!(roomId && name && phone && gender && age && contractMoveInDate && contractMonths) && !moveInError;
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -127,6 +122,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
       actual_move_out_date: moveOutDate || null,
       monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
       contract_deposit: contractDeposit ? Number(contractDeposit) : null,
+      deposit_total: contractDeposit ? Number(contractDeposit) : null,
       status: 'scheduled',
     });
 
@@ -434,8 +430,11 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     type="date"
                     value={actualMoveInDate}
                     onChange={(e) => handleActualMoveInChange(e.target.value)}
-                    className={`${inputCls} focus:border-amber-500 ${actualMoveInDate ? 'text-amber-300' : ''}`}
+                    className={`${inputCls} focus:border-amber-500 ${moveInError ? 'border-rose-500 text-rose-400' : actualMoveInDate ? 'text-amber-300' : ''}`}
                   />
+                  {moveInError && (
+                    <p className="mt-1 text-[10px] text-rose-400">입실일은 계약일(시작) 이후여야 합니다</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1.5">퇴실일 <span className="text-gray-600 font-normal">(자동 계산)</span></label>

@@ -15,6 +15,7 @@ import {
 import { useEffectiveRooms } from "../context/useEffectiveRooms";
 import { useRooms } from "../context/RoomsContext";
 import { useToday } from "../context/MockDateContext";
+import { calcEndDate } from "../lib/utils";
 
 const DETAIL_OPTIONS = ["도배", "매트리스교체", "에어컨청소", "전구교체", "장판교체", "화장실청소"];
 
@@ -37,13 +38,6 @@ function getRentDueInfo(moveInDate: string | null, today: Date): { day: number; 
   return { day, nextDue, daysUntil };
 }
 
-/** 입실일 + N개월 - 1일 (월말 자동 처리) */
-function calcEndDate(startDate: string, months: number): string {
-  const d = new Date(startDate);
-  d.setMonth(d.getMonth() + months);
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * 실제 유효 입실일 결정:
@@ -125,7 +119,9 @@ function ResidentForm({
   const [purposeCustom, setPurposeCustom] = useState(
     !!initial.purpose && !RESIDENCE_PURPOSES.includes(initial.purpose as ResidencePurpose)
   );
-  const [monthlyRent, setMonthlyRent] = useState(String(initial.monthlyRent ?? ""));
+  const [monthlyRent, setMonthlyRent] = useState(
+    initial.monthlyRent ? String(initial.monthlyRent / 10000) : ""
+  );
   const [contractDeposit, setContractDeposit] = useState(String(initial.contractDeposit ?? ""));
   const [realEstateAgency, setRealEstateAgency] = useState<string>(initial.realEstateAgency ?? "");
   const [agencyCustom, setAgencyCustom] = useState(
@@ -150,7 +146,8 @@ function ResidentForm({
     if (val && months > 0) setMoveOutDate(calcEndDate(val, months));
   }
 
-  const canSave = !!(name && phone && age && contractMoveInDate && contractMonths);
+  const moveInError = !!(actualMoveInDate && contractMoveInDate && actualMoveInDate < contractMoveInDate);
+  const canSave = !!(name && phone && age && contractMoveInDate && contractMonths) && !moveInError;
 
   function handleSave() {
     if (!canSave) return;
@@ -162,7 +159,7 @@ function ResidentForm({
       actualMoveInDate: actualMoveInDate || undefined,
       moveOutDate: moveOutDate || undefined,
       purpose: (purpose || undefined) as ResidencePurpose | undefined,
-      monthlyRent: monthlyRent ? Number(monthlyRent) : undefined,
+      monthlyRent: monthlyRent ? Number(monthlyRent) * 10000 : undefined,
       contractDeposit: contractDeposit ? Number(contractDeposit) : undefined,
       realEstateAgency: (realEstateAgency || undefined) as RealEstateAgency | undefined,
     });
@@ -226,7 +223,7 @@ function ResidentForm({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">실제 납부 월세</label>
+            <label className="block text-xs text-gray-400 mb-1.5">금액(관포)</label>
             <div className="flex items-center gap-1.5">
               <input type="number" min={0} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} placeholder="70" className={inputCls} />
               <span className="text-xs text-gray-500 shrink-0">만원</span>
@@ -314,7 +311,10 @@ function ResidentForm({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-gray-600 font-normal">(변경 시만 입력)</span></label>
-            <input type="date" value={actualMoveInDate} onChange={(e) => handleActualMoveInChange(e.target.value)} className={`${inputCls} focus:border-amber-500 ${actualMoveInDate ? 'text-amber-300' : ''}`} />
+            <input type="date" value={actualMoveInDate} onChange={(e) => handleActualMoveInChange(e.target.value)} className={`${inputCls} focus:border-amber-500 ${moveInError ? 'border-rose-500 text-rose-400' : actualMoveInDate ? 'text-amber-300' : ''}`} />
+            {moveInError && (
+              <p className="mt-1 text-[10px] text-rose-400">입실일은 계약일(시작) 이후여야 합니다</p>
+            )}
           </div>
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">퇴실일 <span className="text-gray-600 font-normal">(자동 계산)</span></label>
@@ -979,6 +979,7 @@ export default function TenantListTable() {
       actual_move_out_date: record.moveOutDate ?? null,
       monthly_rent: record.monthlyRent ?? null,
       contract_deposit: record.contractDeposit ?? null,
+      deposit_total: record.contractDeposit ?? null,
       status: 'scheduled',
     });
   }
@@ -1042,12 +1043,14 @@ export default function TenantListTable() {
   });
 
   const statusLabel: Record<string, string> = {
-    occupied: "입실",
+    occupied: "입실중",
+    contract: "입실 전",
     vacant: "공실",
     maintenance: "점검",
   };
   const statusStyle: Record<string, string> = {
     occupied: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    contract: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
     vacant: "bg-gray-500/10 text-gray-400 border-gray-500/20",
     maintenance: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   };
