@@ -20,10 +20,10 @@ export function useEffectiveRooms() {
       // ── Case 1: active 계약이 있는 방 — 퇴실일이 안 지났으면 그대로 ──
       if (room.status === 'occupied') {
         const moveOut = room.moveOutDate;
-        if (!moveOut || moveOut.slice(0, 10) > todayStr) {
-          return room; // 아직 거주 중
+        if (!moveOut || moveOut.slice(0, 10) >= todayStr) {
+          return room; // 퇴실일 당일 포함 거주 중
         }
-        // 퇴실일 경과 → 아래 scheduled 검색으로 fall-through
+        // 퇴실일 다음날부터 → 아래 scheduled 검색으로 fall-through
       } else if (room.status !== 'contract') {
         return room; // vacant 등 변경 불필요
       }
@@ -40,7 +40,7 @@ export function useEffectiveRooms() {
           const moveInStr = (c.actual_move_in_date ?? c.contract_start_date).slice(0, 10);
           if (moveInStr > todayStr) return false; // 아직 입실 전
           const moveOutDate = c.actual_move_out_date ?? c.contract_end_date;
-          if (moveOutDate && moveOutDate.slice(0, 10) <= todayStr) return false; // 이미 퇴실
+          if (moveOutDate && moveOutDate.slice(0, 10) < todayStr) return false; // 퇴실일 다음날부터 제외
           return true;
         })
         .sort((a, b) => {

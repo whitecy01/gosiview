@@ -28,6 +28,17 @@ import {
 import { useRooms } from "@/app/context/RoomsContext";
 import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
 import { calcEndDate as calcMoveOutDate, formatPhone } from "@/app/lib/utils";
+import {
+  fetchDeductions,
+  insertDeduction,
+  deleteDeductionById,
+  fetchCashSuccessions,
+  insertCashSuccession,
+  updateCashSuccession,
+  deleteCashSuccession,
+  type DbDepositDeduction,
+  type DbCashSuccession,
+} from "@/app/lib/supabase-data";
 
 // ────────────── 상수 ──────────────
 
@@ -76,6 +87,51 @@ function fmtMonthKo(m: string) {
   return `${y}년 ${parseInt(mo)}월`;
 }
 
+function fromDbCash(db: DbCashSuccession): CashSuccessionRecord {
+  return {
+    billingStart: db.billing_start ?? undefined,
+    billingEnd: db.billing_end ?? undefined,
+    landlordStart: db.landlord_start ?? undefined,
+    landlordEnd: db.landlord_end ?? undefined,
+    tenantStart: db.tenant_start ?? undefined,
+    tenantEnd: db.tenant_end ?? undefined,
+    totalAmount: db.total_amount ?? undefined,
+    totalKwh: db.total_kwh ?? undefined,
+    landlordAmount: db.landlord_amount ?? undefined,
+    landlordKwh: db.landlord_kwh ?? undefined,
+    tenantAmount: db.tenant_amount ?? undefined,
+    tenantKwh: db.tenant_kwh ?? undefined,
+    bankName: db.bank_name ?? undefined,
+    accountHolder: db.account_holder ?? undefined,
+    accountNumber: db.account_number ?? undefined,
+    paymentDate: db.payment_date ?? undefined,
+    notes: db.notes ?? undefined,
+  };
+}
+
+function toDbCashInput(contractId: string, rec: CashSuccessionRecord) {
+  return {
+    contract_id: contractId,
+    billing_start: rec.billingStart ?? null,
+    billing_end: rec.billingEnd ?? null,
+    landlord_start: rec.landlordStart ?? null,
+    landlord_end: rec.landlordEnd ?? null,
+    tenant_start: rec.tenantStart ?? null,
+    tenant_end: rec.tenantEnd ?? null,
+    total_amount: rec.totalAmount ?? null,
+    total_kwh: rec.totalKwh ?? null,
+    landlord_amount: rec.landlordAmount ?? null,
+    landlord_kwh: rec.landlordKwh ?? null,
+    tenant_amount: rec.tenantAmount ?? null,
+    tenant_kwh: rec.tenantKwh ?? null,
+    bank_name: rec.bankName ?? null,
+    account_holder: rec.accountHolder ?? null,
+    account_number: rec.accountNumber ?? null,
+    payment_date: rec.paymentDate ?? null,
+    notes: rec.notes ?? null,
+  };
+}
+
 // ────────────── 공통 스타일 ──────────────
 
 const CARD = "rounded-xl border border-[#2A2A2A] bg-[#111] overflow-hidden";
@@ -114,6 +170,13 @@ export default function ResidentDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, detail, activeContract]);
 
+  // 계약 변경 시 보증금 차감 이력 로드
+  useEffect(() => {
+    if (!activeContract) { setDbDeductions([]); return; }
+    fetchDeductions(activeContract.id).then(setDbDeductions).catch(console.error);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeContract?.id]);
+
   // 계약 데이터로 detail 초기화
   function initDetail() {
     const moveIn = activeContract?.actual_move_in_date ?? activeContract?.contract_start_date ?? "";
@@ -150,7 +213,10 @@ export default function ResidentDetailPage() {
       realEstateAgency: (activeContract?.real_estate_agency as RealEstateAgency) ?? undefined,
       depositTotal: activeContract?.deposit_total ?? 0,
       depositDeductions: [],
-      depositReturn: { returned: false, returnedAt: null },
+      depositReturn: {
+        returned: activeContract?.deposit_returned ?? false,
+        returnedAt: activeContract?.deposit_returned_at ?? null,
+      },
       rentPayments,
       gasBills: [],
       cashSuccessions: [],
@@ -177,17 +243,8 @@ export default function ResidentDetailPage() {
     router.push('/residents');
   }
 
-  // 총 보증금 수정
-  const [editingDepTotal, setEditingDepTotal] = useState(false);
-  const [depTotalInput, setDepTotalInput] = useState("");
-
-  async function saveDepTotal() {
-    if (!activeContract) return;
-    const amount = Number(depTotalInput);
-    setDetail((prev) => prev ? { ...prev, depositTotal: amount } : prev);
-    setEditingDepTotal(false);
-    await editContract(activeContract.id, { deposit_total: amount });
-  }
+  // 보증금 차감 이력 (DB)
+  const [dbDeductions, setDbDeductions] = useState<DbDepositDeduction[]>([]);
 
   // 보증금 폼
   const [showDepForm, setShowDepForm] = useState(false);
@@ -200,7 +257,16 @@ export default function ResidentDetailPage() {
   const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
 
 
-  // 현금 승계
+  // 현금 승계 (DB)
+  const [dbCashSuccessions, setDbCashSuccessions] = useState<DbCashSuccession[]>([]);
+
+  // 계약 변경 시 현금 승계 이력 로드
+  useEffect(() => {
+    if (!activeContract) { setDbCashSuccessions([]); return; }
+    fetchCashSuccessions(activeContract.id).then(setDbCashSuccessions).catch(console.error);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeContract?.id]);
+
   const [showCashNew, setShowCashNew] = useState(false);
   // 섹션별 편집: { [recordIdx]: { [section]: localValue } }
   type CashSection = 'billing' | 'landlord' | 'tenant' | 'amount' | 'account';
@@ -261,59 +327,62 @@ export default function ResidentDetailPage() {
 
   // ── 보증금 차감 ──
 
-  function addDeduction() {
-    if (!detail || !depDate || !depAmount) return;
-    setDetail((prev) =>
-      prev
-        ? {
-            ...prev,
-            depositDeductions: [
-              ...prev.depositDeductions,
-              { date: depDate, amount: Number(depAmount), reason: depReason },
-            ],
-          }
-        : prev
-    );
+  async function addDeduction() {
+    if (!activeContract || !depDate || !depAmount) return;
+    const amount = Number(depAmount);
+    const saved = await insertDeduction({
+      contract_id: activeContract.id,
+      date: depDate,
+      amount,
+      reason: depReason,
+    });
+    setDbDeductions((prev) => [...prev, saved]);
+    // deposit_total = 잔여 보증금, 차감 시 줄어듦
+    const newTotal = (detail?.depositTotal ?? 0) - amount;
+    setDetail((prev) => prev ? { ...prev, depositTotal: newTotal } : prev);
+    await editContract(activeContract.id, { deposit_total: newTotal });
     setDepAmount("");
     setShowDepForm(false);
   }
 
-  function deleteDeduction(i: number) {
-    setDetail((prev) =>
-      prev ? { ...prev, depositDeductions: prev.depositDeductions.filter((_, idx) => idx !== i) } : prev
-    );
+  async function deleteDeduction(deductionId: string) {
+    const target = dbDeductions.find((d) => d.id === deductionId);
+    if (!target || !activeContract) return;
+    await deleteDeductionById(deductionId);
+    setDbDeductions((prev) => prev.filter((d) => d.id !== deductionId));
+    // 차감 취소 → deposit_total 복구
+    const newTotal = (detail?.depositTotal ?? 0) + target.amount;
+    setDetail((prev) => prev ? { ...prev, depositTotal: newTotal } : prev);
+    await editContract(activeContract.id, { deposit_total: newTotal });
   }
 
 
   // ── 현금 승계 ──
 
   // 새 항목 추가
-  function addNewCash() {
-    setDetail((prev) => {
-      if (!prev) return prev;
-      return { ...prev, cashSuccessions: [...prev.cashSuccessions, { ...newCashForm }] };
-    });
+  async function addNewCash() {
+    if (!activeContract) return;
+    const saved = await insertCashSuccession(toDbCashInput(activeContract.id, newCashForm));
+    setDbCashSuccessions((prev) => [...prev, saved]);
     setNewCashForm({});
     setShowCashNew(false);
   }
 
   // 섹션별 저장
-  function saveCashSection(i: number) {
+  async function saveCashSection(i: number) {
+    const dbRec = dbCashSuccessions[i];
+    if (!dbRec) return;
     const patch = cashSectionForm[i] ?? {};
-    setDetail((prev) => {
-      if (!prev) return prev;
-      const updated = [...prev.cashSuccessions];
-      updated[i] = { ...updated[i], ...patch };
-      return { ...prev, cashSuccessions: updated };
-    });
+    const merged = { ...fromDbCash(dbRec), ...patch };
+    const updated = await updateCashSuccession(dbRec.id, toDbCashInput(activeContract!.id, merged));
+    setDbCashSuccessions((prev) => prev.map((r, idx) => (idx === i ? updated : r)));
     setCashSectionEdit((p) => ({ ...p, [i]: null }));
     setCashSectionForm((p) => ({ ...p, [i]: {} }));
   }
 
   function startCashSection(i: number, section: CashSection) {
-    if (!detail) return;
     setCashSectionEdit((p) => ({ ...p, [i]: section }));
-    setCashSectionForm((p) => ({ ...p, [i]: { ...detail.cashSuccessions[i] } }));
+    setCashSectionForm((p) => ({ ...p, [i]: { ...fromDbCash(dbCashSuccessions[i]) } }));
   }
 
   function cancelCashSection(i: number) {
@@ -321,10 +390,11 @@ export default function ResidentDetailPage() {
     setCashSectionForm((p) => ({ ...p, [i]: {} }));
   }
 
-  function deleteCash(i: number) {
-    setDetail((prev) =>
-      prev ? { ...prev, cashSuccessions: prev.cashSuccessions.filter((_, idx) => idx !== i) } : prev
-    );
+  async function deleteCash(i: number) {
+    const dbRec = dbCashSuccessions[i];
+    if (!dbRec) return;
+    await deleteCashSuccession(dbRec.id);
+    setDbCashSuccessions((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   function printCashSuccessions() {
@@ -366,7 +436,7 @@ export default function ResidentDetailPage() {
     setPayingMonthIdx(null);
   }
 
-  const depositDeducted = detail?.depositDeductions.reduce((s, d) => s + d.amount, 0) ?? 0;
+  const depositDeducted = dbDeductions.reduce((s, d) => s + d.amount, 0);
   const depositRemaining = (detail?.depositTotal ?? 0) - depositDeducted;
 
   return (
@@ -738,35 +808,16 @@ export default function ResidentDetailPage() {
 
             {/* 요약 카드 */}
             <div className="grid grid-cols-3 divide-x divide-[#2A2A2A] border-b border-[#2A2A2A]">
-              {/* 총 보증금 — 클릭해서 수정 */}
+              {/* 총 보증금 — contract_deposit (원금, 고정) */}
               <div className="px-6 py-4 text-center">
                 <p className="text-xs text-gray-500">총 보증금</p>
-                {editingDepTotal ? (
-                  <div className="mt-1 flex items-center gap-1 justify-center">
-                    <input
-                      autoFocus
-                      type="number"
-                      value={depTotalInput}
-                      onChange={(e) => setDepTotalInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') saveDepTotal(); if (e.key === 'Escape') setEditingDepTotal(false); }}
-                      className="w-28 rounded border border-indigo-500/50 bg-[#1A1A1A] px-2 py-1 text-sm text-white outline-none text-center"
-                    />
-                    <button onClick={saveDepTotal} className="text-xs text-indigo-400 hover:text-indigo-300">✓</button>
-                    <button onClick={() => setEditingDepTotal(false)} className="text-xs text-gray-500 hover:text-white">✕</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setDepTotalInput(String(detail.depositTotal)); setEditingDepTotal(true); }}
-                    className="mt-1 text-base font-bold text-white hover:text-indigo-300 transition-colors"
-                    title="클릭해서 수정"
-                  >
-                    ₩{detail.depositTotal.toLocaleString("ko-KR")}
-                  </button>
-                )}
+                <p className="mt-1 text-base font-bold text-white">
+                  ₩{(detail.contractDeposit?.amount ?? 0).toLocaleString("ko-KR")}
+                </p>
               </div>
               {[
                 { label: "총 차감액", value: `₩${depositDeducted.toLocaleString("ko-KR")}`, color: "text-rose-400" },
-                { label: "잔여 보증금", value: `₩${depositRemaining.toLocaleString("ko-KR")}`, color: "text-emerald-400" },
+                { label: "잔여 보증금", value: `₩${detail.depositTotal.toLocaleString("ko-KR")}`, color: "text-emerald-400" },
               ].map(({ label, value, color }) => (
                 <div key={label} className="px-6 py-4 text-center">
                   <p className="text-xs text-gray-500">{label}</p>
@@ -802,11 +853,11 @@ export default function ResidentDetailPage() {
             )}
 
             <div className="divide-y divide-[#1E1E1E]">
-              {detail.depositDeductions.length === 0 ? (
+              {dbDeductions.length === 0 ? (
                 <div className="px-6 py-8 text-center text-sm text-gray-500">차감 이력이 없습니다.</div>
               ) : (
-                detail.depositDeductions.map((d, i) => (
-                  <div key={i} className="flex items-center justify-between px-6 py-3.5">
+                dbDeductions.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between px-6 py-3.5">
                     <div className="flex items-center gap-3">
                       <span className="font-mono text-xs text-gray-400">{fmtDate(d.date)}</span>
                       <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${REASON_COLOR[d.reason] ?? "border-gray-500/20 bg-gray-500/10 text-gray-400"}`}>
@@ -815,7 +866,7 @@ export default function ResidentDetailPage() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold text-rose-400">-₩{d.amount.toLocaleString("ko-KR")}</span>
-                      <button onClick={() => deleteDeduction(i)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-rose-500/10 hover:text-rose-400">
+                      <button onClick={() => deleteDeduction(d.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-rose-500/10 hover:text-rose-400">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -860,9 +911,15 @@ export default function ResidentDetailPage() {
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setShowReturnForm(false)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 hover:text-white">취소</button>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         setDetail((p) => p ? { ...p, depositReturn: { returned: true, returnedAt: returnDate } } : p);
                         setShowReturnForm(false);
+                        if (activeContract) {
+                          await editContract(activeContract.id, {
+                            deposit_returned: true,
+                            deposit_returned_at: returnDate,
+                          });
+                        }
                       }}
                       disabled={!returnDate}
                       className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400 disabled:opacity-40"
@@ -973,7 +1030,7 @@ export default function ResidentDetailPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {detail.cashSuccessions.length > 0 && (
+                {dbCashSuccessions.length > 0 && (
                   <button
                     onClick={printCashSuccessions}
                     className="flex items-center gap-1.5 rounded-lg border border-gray-500/40 bg-gray-500/10 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-500/20"
@@ -1133,14 +1190,15 @@ export default function ResidentDetailPage() {
             )}
 
             {/* 목록 */}
-            {detail.cashSuccessions.length === 0 && !showCashNew ? (
+            {dbCashSuccessions.length === 0 && !showCashNew ? (
               <div className="px-5 py-10 text-center">
                 <Banknote className="mx-auto mb-3 h-8 w-8 text-gray-600" />
                 <p className="text-sm text-gray-500">현금 승계 내역이 없습니다.</p>
               </div>
             ) : (
               <div className="divide-y divide-[#1E1E1E]">
-                {detail.cashSuccessions.map((rec, i) => {
+                {dbCashSuccessions.map((dbRec, i) => {
+                  const rec = fromDbCash(dbRec);
                   const sec = cashSectionEdit[i] ?? null;
                   const sf = cashSectionForm[i] ?? {};
                   return (
@@ -1407,7 +1465,7 @@ export default function ResidentDetailPage() {
                 다음달 부터는 임차인에게서 직접 납부하시면 됩니다.(종이 청구서 배부 예정)<br />
                 실 사용 금액(형광펜 부분)만 저희 계좌로 입금 부탁드립니다. 감사합니다.
               </p>
-              {detail.cashSuccessions.map((rec, i) => (
+              {dbCashSuccessions.map((dbRec, i) => { const rec = fromDbCash(dbRec); return (
                 <div key={i} style={{ marginBottom: "24px" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
                     <thead>
@@ -1459,7 +1517,7 @@ export default function ResidentDetailPage() {
                     </tbody>
                   </table>
                 </div>
-              ))}
+              ); })}
             </div>
           </div>
 
