@@ -233,6 +233,8 @@ export type CashSuccessionRecord = {
   totalKwh?: number;
   landlordAmount?: number;
   landlordKwh?: number;
+  landlordStartMeter?: number;
+  landlordEndMeter?: number;
   tenantAmount?: number;
   tenantKwh?: number;
   bankName?: string;

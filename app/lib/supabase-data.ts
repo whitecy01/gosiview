@@ -223,6 +223,8 @@ export type DbCashSuccession = {
   total_kwh: number | null;
   landlord_amount: number | null;
   landlord_kwh: number | null;
+  landlord_start_meter: number | null;
+  landlord_end_meter: number | null;
   tenant_amount: number | null;
   tenant_kwh: number | null;
   bank_name: string | null;

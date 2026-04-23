@@ -99,6 +99,8 @@ function fromDbCash(db: DbCashSuccession): CashSuccessionRecord {
     totalKwh: db.total_kwh ?? undefined,
     landlordAmount: db.landlord_amount ?? undefined,
     landlordKwh: db.landlord_kwh ?? undefined,
+    landlordStartMeter: db.landlord_start_meter ?? undefined,
+    landlordEndMeter: db.landlord_end_meter ?? undefined,
     tenantAmount: db.tenant_amount ?? undefined,
     tenantKwh: db.tenant_kwh ?? undefined,
     bankName: db.bank_name ?? undefined,
@@ -122,6 +124,8 @@ function toDbCashInput(contractId: string, rec: CashSuccessionRecord) {
     total_kwh: rec.totalKwh ?? null,
     landlord_amount: rec.landlordAmount ?? null,
     landlord_kwh: rec.landlordKwh ?? null,
+    landlord_start_meter: rec.landlordStartMeter ?? null,
+    landlord_end_meter: rec.landlordEndMeter ?? null,
     tenant_amount: rec.tenantAmount ?? null,
     tenant_kwh: rec.tenantKwh ?? null,
     bank_name: rec.bankName ?? null,
@@ -268,6 +272,9 @@ export default function ResidentDetailPage() {
   }, [activeContract?.id]);
 
   const [showCashNew, setShowCashNew] = useState(false);
+  // 전체 수정 모드
+  const [cashFullEdit, setCashFullEdit] = useState<Record<number, boolean>>({});
+  const [cashFullForm, setCashFullForm] = useState<Record<number, CashSuccessionRecord>>({});
   // 섹션별 편집: { [recordIdx]: { [section]: localValue } }
   type CashSection = 'billing' | 'landlord' | 'tenant' | 'amount' | 'account';
   const [cashSectionEdit, setCashSectionEdit] = useState<Record<number, CashSection | null>>({});
@@ -397,22 +404,91 @@ export default function ResidentDetailPage() {
     setDbCashSuccessions((prev) => prev.filter((_, idx) => idx !== i));
   }
 
-  function printCashSuccessions() {
-    const printDiv = document.getElementById("cash-succession-print");
-    if (!printDiv) return;
+  function startCashFullEdit(i: number) {
+    setCashFullEdit((p) => ({ ...p, [i]: true }));
+    setCashFullForm((p) => ({ ...p, [i]: { ...fromDbCash(dbCashSuccessions[i]) } }));
+  }
+
+  function cancelCashFullEdit(i: number) {
+    setCashFullEdit((p) => ({ ...p, [i]: false }));
+    setCashFullForm((p) => ({ ...p, [i]: {} }));
+  }
+
+  async function saveCashFullEdit(i: number) {
+    const dbRec = dbCashSuccessions[i];
+    if (!dbRec) return;
+    const form = cashFullForm[i] ?? {};
+    const updated = await updateCashSuccession(dbRec.id, toDbCashInput(activeContract!.id, form));
+    setDbCashSuccessions((prev) => prev.map((r, idx) => (idx === i ? updated : r)));
+    setCashFullEdit((p) => ({ ...p, [i]: false }));
+    setCashFullForm((p) => ({ ...p, [i]: {} }));
+  }
+
+  const PRINT_STYLE = `
+    body{font-family:sans-serif;font-size:12px;color:#000;padding:24px;}
+    h2{font-size:16px;font-weight:bold;margin-bottom:4px;}
+    p{margin-bottom:16px;font-size:11px;color:#555;}
+    table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:24px;}
+    th,td{border:1px solid #ccc;padding:6px 8px;text-align:center;vertical-align:middle;}
+    th{background:#f5f5f5;}
+    .highlight{background:#fffde7;font-weight:bold;}
+    @page{margin:1cm;}
+  `;
+
+  function buildCashTableHtml(rec: CashSuccessionRecord): string {
+    return `
+      <div style="margin-bottom:24px;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead>
+            <tr style="background:#f5f5f5;">
+              <th style="border:1px solid #ccc;padding:6px 8px;">호실</th>
+              <th style="border:1px solid #ccc;padding:6px 8px;">청구기간</th>
+              <th style="border:1px solid #ccc;padding:6px 8px;">임대인<br/>현금승계 기간</th>
+              <th style="border:1px solid #ccc;padding:6px 8px;">임차인<br/>실 사용 기간</th>
+              <th style="border:1px solid #ccc;padding:6px 8px;">계좌번호</th>
+              <th style="border:1px solid #ccc;padding:6px 8px;">비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="border:1px solid #ccc;padding:6px 8px;" rowspan="2">${id}호</td>
+              <td style="border:1px solid #ccc;padding:6px 8px;">${rec.billingStart ?? ""} ~ ${rec.billingEnd ?? ""}</td>
+              <td style="border:1px solid #ccc;padding:6px 8px;">${rec.landlordStart ?? ""} ~ ${rec.landlordEnd ?? ""}</td>
+              <td style="border:1px solid #ccc;padding:6px 8px;background:#fffde7;">${rec.tenantStart ?? ""} ~ ${rec.tenantEnd ?? ""}</td>
+              <td style="border:1px solid #ccc;padding:6px 8px;" rowspan="2">${rec.bankName ?? ""} ${rec.accountHolder ?? ""}<br/>${rec.accountNumber ?? ""}</td>
+              <td style="border:1px solid #ccc;padding:6px 8px;" rowspan="2">${rec.paymentDate ? `<div style="font-weight:bold;margin-bottom:2px;">${rec.paymentDate}</div>` : ""}${rec.notes ?? ""}</td>
+            </tr>
+            <tr>
+              <td style="border:1px solid #ccc;padding:6px 8px;">₩${(rec.totalAmount ?? 0).toLocaleString("ko-KR")}<br/><span style="color:#666;">사용량 ${rec.totalKwh ?? 0}kWh</span></td>
+              <td style="border:1px solid #ccc;padding:6px 8px;">₩${(rec.landlordAmount ?? 0).toLocaleString("ko-KR")}<br/><span style="color:#666;">사용량 ${rec.landlordKwh ?? 0}kWh</span></td>
+              <td style="border:1px solid #ccc;padding:6px 8px;background:#fffde7;font-weight:bold;">₩${(rec.tenantAmount ?? 0).toLocaleString("ko-KR")}<br/><span style="color:#666;font-weight:normal;">사용량 ${rec.tenantKwh ?? 0}kWh</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  const PRINT_HEADER = `
+    <h2>${id}호 · ${room?.resident ?? ""} — 전기 현금 승계</h2>
+    <p>이번달 청구요금은 현금 승계만 가능하여 호림에서 직접 납부하고 있습니다.<br/>
+    다음달 부터는 임차인에게서 직접 납부하시면 됩니다.(종이 청구서 배부 예정)<br/>
+    실 사용 금액(형광펜 부분)만 저희 계좌로 입금 부탁드립니다. 감사합니다.</p>
+  `;
+
+  function printSingleCash(rec: CashSuccessionRecord) {
     const win = window.open("", "_blank");
     if (!win) return;
-    win.document.head.innerHTML = `<meta charset="utf-8"><title>${id}호 현금 승계</title><style>
-      body{font-family:sans-serif;font-size:12px;color:#000;padding:24px;}
-      h2{font-size:16px;font-weight:bold;margin-bottom:4px;}
-      p{margin-bottom:16px;font-size:11px;color:#555;}
-      table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:24px;}
-      th,td{border:1px solid #ccc;padding:6px 8px;text-align:center;vertical-align:middle;}
-      th{background:#f5f5f5;}
-      .highlight{background:#fffde7;font-weight:bold;}
-      @page{margin:1cm;}
-    </style>`;
-    win.document.body.innerHTML = printDiv.innerHTML;
+    win.document.head.innerHTML = `<meta charset="utf-8"><title>${id}호 현금 승계</title><style>${PRINT_STYLE}</style>`;
+    win.document.body.innerHTML = PRINT_HEADER + buildCashTableHtml(rec);
+    win.focus();
+    win.print();
+  }
+
+  function printCashSuccessions() {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.head.innerHTML = `<meta charset="utf-8"><title>${id}호 현금 승계 전체</title><style>${PRINT_STYLE}</style>`;
+    win.document.body.innerHTML = PRINT_HEADER + dbCashSuccessions.map((dbRec) => buildCashTableHtml(fromDbCash(dbRec))).join("");
     win.focus();
     win.print();
   }
@@ -1035,7 +1111,7 @@ export default function ResidentDetailPage() {
                     onClick={printCashSuccessions}
                     className="flex items-center gap-1.5 rounded-lg border border-gray-500/40 bg-gray-500/10 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-500/20"
                   >
-                    <Printer className="h-3.5 w-3.5" />PDF 출력
+                    <Printer className="h-3.5 w-3.5" />PDF 전체 출력
                   </button>
                 )}
                 <button
@@ -1061,11 +1137,11 @@ export default function ResidentDetailPage() {
                   <p className="mb-2 text-xs text-gray-500 font-medium">청구기간</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="mb-1 block text-xs text-gray-600">시작</label>
+                      <label className="mb-1 block text-xs text-gray-600">시작 (한전 고지서 기준)</label>
                       <input type="date" value={newCashForm.billingStart ?? ""} onChange={(e) => setNewCashForm(p => ({ ...p, billingStart: e.target.value }))} className={INPUT} />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs text-gray-600">종료</label>
+                      <label className="mb-1 block text-xs text-gray-600">종료 (한전 고지서 기준)</label>
                       <input type="date" value={newCashForm.billingEnd ?? ""} onChange={(e) => setNewCashForm(p => ({ ...p, billingEnd: e.target.value }))} className={INPUT} />
                     </div>
                   </div>
@@ -1120,33 +1196,46 @@ export default function ResidentDetailPage() {
                       <p className="text-xs font-semibold text-sky-400">임대인</p>
                       <div>
                         <label className="mb-1 block text-xs text-gray-600">금액 (원)</label>
-                        <input type="number" value={newCashForm.landlordAmount ?? ""} onChange={(e) => { const v = Number(e.target.value); setNewCashForm(p => ({ ...p, landlordAmount: v, totalAmount: v + (p.tenantAmount ?? 0) })); }} placeholder="0" className={INPUT} />
+                        <input type="number" value={newCashForm.landlordAmount ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); setNewCashForm(p => ({ ...p, landlordAmount: v, tenantAmount: v != null ? (p.totalAmount ?? 0) - v : undefined })); }} placeholder="0" className={INPUT} />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs text-gray-600">사용량 (kWh)</label>
-                        <input type="number" value={newCashForm.landlordKwh ?? ""} onChange={(e) => { const v = Number(e.target.value); setNewCashForm(p => ({ ...p, landlordKwh: v, totalKwh: v + (p.tenantKwh ?? 0) })); }} placeholder="0" className={INPUT} />
+                        <label className="mb-1 block text-xs text-gray-600">사용량 (kWh) <span className="text-gray-600 font-normal">검침 자동계산</span></label>
+                        <input type="number" value={newCashForm.landlordKwh ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); setNewCashForm(p => ({ ...p, landlordKwh: v, tenantKwh: v != null ? (p.totalKwh ?? 0) - v : undefined })); }} placeholder="0" className={INPUT} />
+                      </div>
+                      <div className="border-t border-[#2A2A2A] pt-2 space-y-2">
+                        <p className="text-[11px] text-gray-600">검침값 (kWh)</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-600">시작</label>
+                            <input type="number" value={newCashForm.landlordStartMeter ?? ""} onChange={(e) => { const s = e.target.value === "" ? undefined : Number(e.target.value); setNewCashForm(p => { const kwh = s != null && p.landlordEndMeter != null ? Math.max(0, p.landlordEndMeter - s) : p.landlordKwh; return { ...p, landlordStartMeter: s, landlordKwh: kwh, tenantKwh: kwh != null ? (p.totalKwh ?? 0) - kwh : undefined }; }); }} placeholder="0.00" className={INPUT} />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-600">종료</label>
+                            <input type="number" value={newCashForm.landlordEndMeter ?? ""} onChange={(e) => { const en = e.target.value === "" ? undefined : Number(e.target.value); setNewCashForm(p => { const kwh = en != null && p.landlordStartMeter != null ? Math.max(0, en - p.landlordStartMeter) : p.landlordKwh; return { ...p, landlordEndMeter: en, landlordKwh: kwh, tenantKwh: kwh != null ? (p.totalKwh ?? 0) - kwh : undefined }; }); }} placeholder="0.00" className={INPUT} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
+                      <p className="text-xs font-semibold text-gray-300">총 (지로 청구)</p>
+                      <div>
+                        <label className="mb-1 block text-xs text-gray-600">금액 (원) <span className="text-gray-600 font-normal">지로 입력</span></label>
+                        <input type="number" value={newCashForm.totalAmount ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); setNewCashForm(p => ({ ...p, totalAmount: v, tenantAmount: v != null ? v - (p.landlordAmount ?? 0) : undefined })); }} placeholder="0" className={INPUT} />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-gray-600">사용량 (kWh) <span className="text-gray-600 font-normal">지로 입력</span></label>
+                        <input type="number" value={newCashForm.totalKwh ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); setNewCashForm(p => ({ ...p, totalKwh: v, tenantKwh: v != null ? v - (p.landlordKwh ?? 0) : undefined })); }} placeholder="0" className={INPUT} />
                       </div>
                     </div>
                     <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
                       <p className="text-xs font-semibold text-emerald-400">임차인</p>
                       <div>
-                        <label className="mb-1 block text-xs text-gray-600">금액 (원)</label>
-                        <input type="number" value={newCashForm.tenantAmount ?? ""} onChange={(e) => { const v = Number(e.target.value); setNewCashForm(p => ({ ...p, tenantAmount: v, totalAmount: (p.landlordAmount ?? 0) + v })); }} placeholder="0" className={INPUT} />
+                        <label className="mb-1 block text-xs text-gray-600">금액 (원) <span className="text-gray-600 font-normal">총 - 임대인 자동계산</span></label>
+                        <input type="number" readOnly value={newCashForm.tenantAmount ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs text-gray-600">사용량 (kWh)</label>
-                        <input type="number" value={newCashForm.tenantKwh ?? ""} onChange={(e) => { const v = Number(e.target.value); setNewCashForm(p => ({ ...p, tenantKwh: v, totalKwh: (p.landlordKwh ?? 0) + v })); }} placeholder="0" className={INPUT} />
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] p-3 space-y-2 opacity-80">
-                      <p className="text-xs font-semibold text-gray-400">총 <span className="text-[10px] font-normal text-gray-600">(자동계산)</span></p>
-                      <div>
-                        <label className="mb-1 block text-xs text-gray-600">금액 (원)</label>
-                        <input type="number" readOnly value={newCashForm.totalAmount ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs text-gray-600">사용량 (kWh)</label>
-                        <input type="number" readOnly value={newCashForm.totalKwh ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} />
+                        <label className="mb-1 block text-xs text-gray-600">사용량 (kWh) <span className="text-gray-600 font-normal">총 - 임대인 자동계산</span></label>
+                        <input type="number" readOnly value={newCashForm.tenantKwh ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} />
                       </div>
                     </div>
                   </div>
@@ -1208,7 +1297,7 @@ export default function ResidentDetailPage() {
                       <div className="flex items-center justify-between">
                         {sec === 'billing' ? (
                           <div className="flex items-center gap-2 flex-1 mr-3">
-                            <p className="text-xs text-gray-500 shrink-0">청구기간</p>
+                            <p className="text-xs text-gray-500 shrink-0">청구기간 (한전 고지서 기준)</p>
                             <input type="date" value={sf.billingStart ?? rec.billingStart ?? ""} onChange={(e) => setCashSectionForm(p => ({ ...p, [i]: { ...sf, billingStart: e.target.value } }))} className={`${INPUT} text-xs py-1`} />
                             <span className="text-gray-600 shrink-0">~</span>
                             <input type="date" value={sf.billingEnd ?? rec.billingEnd ?? ""} onChange={(e) => setCashSectionForm(p => ({ ...p, [i]: { ...sf, billingEnd: e.target.value } }))} className={`${INPUT} text-xs py-1`} />
@@ -1217,16 +1306,32 @@ export default function ResidentDetailPage() {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <p className="text-xs text-gray-500">청구기간</p>
+                            <p className="text-xs text-gray-500">청구기간 (한전 고지서 기준)</p>
                             <p className="text-sm font-semibold text-white">{rec.billingStart ?? "-"} ~ {rec.billingEnd ?? "-"}</p>
                             <button onClick={() => startCashSection(i, 'billing')} className="flex h-6 w-6 items-center justify-center rounded text-gray-600 hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors">
                               <Pencil className="h-3 w-3" />
                             </button>
                           </div>
                         )}
-                        <button onClick={() => deleteCash(i)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 hover:bg-rose-500/10 hover:text-rose-400 transition-colors">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => printSingleCash(rec)}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-500/10 hover:text-gray-300 transition-colors"
+                            title="PDF 출력"
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => cashFullEdit[i] ? cancelCashFullEdit(i) : startCashFullEdit(i)}
+                            className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${cashFullEdit[i] ? "bg-indigo-500/20 text-indigo-400" : "text-gray-600 hover:bg-indigo-500/10 hover:text-indigo-400"}`}
+                            title="수정"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => deleteCash(i)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 hover:bg-rose-500/10 hover:text-rose-400 transition-colors" title="삭제">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {/* 테이블 */}
@@ -1369,33 +1474,46 @@ export default function ResidentDetailPage() {
                               <p className="text-xs font-semibold text-sky-400">임대인</p>
                               <div>
                                 <label className="mb-1 block text-xs text-gray-600">금액 (원)</label>
-                                <input type="number" value={sf.landlordAmount ?? rec.landlordAmount ?? ""} onChange={(e) => { const v = Number(e.target.value); setCashSectionForm(p => ({ ...p, [i]: { ...sf, landlordAmount: v, totalAmount: v + (sf.tenantAmount ?? rec.tenantAmount ?? 0) } })); }} placeholder="0" className={INPUT} />
+                                <input type="number" value={sf.landlordAmount ?? rec.landlordAmount ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); const total = sf.totalAmount ?? rec.totalAmount ?? 0; setCashSectionForm(p => ({ ...p, [i]: { ...sf, landlordAmount: v, tenantAmount: v != null ? total - v : undefined } })); }} placeholder="0" className={INPUT} />
                               </div>
                               <div>
-                                <label className="mb-1 block text-xs text-gray-600">사용량 (kWh)</label>
-                                <input type="number" value={sf.landlordKwh ?? rec.landlordKwh ?? ""} onChange={(e) => { const v = Number(e.target.value); setCashSectionForm(p => ({ ...p, [i]: { ...sf, landlordKwh: v, totalKwh: v + (sf.tenantKwh ?? rec.tenantKwh ?? 0) } })); }} placeholder="0" className={INPUT} />
+                                <label className="mb-1 block text-xs text-gray-600">사용량 (kWh) <span className="text-gray-600 font-normal">검침 자동계산</span></label>
+                                <input type="number" value={sf.landlordKwh ?? rec.landlordKwh ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); const total = sf.totalKwh ?? rec.totalKwh ?? 0; setCashSectionForm(p => ({ ...p, [i]: { ...sf, landlordKwh: v, tenantKwh: v != null ? total - v : undefined } })); }} placeholder="0" className={INPUT} />
+                              </div>
+                              <div className="border-t border-[#2A2A2A] pt-2 space-y-2">
+                                <p className="text-[11px] text-gray-600">검침값 (kWh)</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="mb-1 block text-xs text-gray-600">시작</label>
+                                    <input type="number" value={sf.landlordStartMeter ?? rec.landlordStartMeter ?? ""} onChange={(e) => { const s = e.target.value === "" ? undefined : Number(e.target.value); setCashSectionForm(p => { const end = sf.landlordEndMeter ?? rec.landlordEndMeter; const kwh = s != null && end != null ? Math.max(0, end - s) : (sf.landlordKwh ?? rec.landlordKwh); const total = sf.totalKwh ?? rec.totalKwh ?? 0; return { ...p, [i]: { ...sf, landlordStartMeter: s, landlordKwh: kwh, tenantKwh: kwh != null ? total - kwh : undefined } }; }); }} placeholder="0.00" className={INPUT} />
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-xs text-gray-600">종료</label>
+                                    <input type="number" value={sf.landlordEndMeter ?? rec.landlordEndMeter ?? ""} onChange={(e) => { const en = e.target.value === "" ? undefined : Number(e.target.value); setCashSectionForm(p => { const start = sf.landlordStartMeter ?? rec.landlordStartMeter; const kwh = en != null && start != null ? Math.max(0, en - start) : (sf.landlordKwh ?? rec.landlordKwh); const total = sf.totalKwh ?? rec.totalKwh ?? 0; return { ...p, [i]: { ...sf, landlordEndMeter: en, landlordKwh: kwh, tenantKwh: kwh != null ? total - kwh : undefined } }; }); }} placeholder="0.00" className={INPUT} />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
+                              <p className="text-xs font-semibold text-gray-300">총 (지로 청구)</p>
+                              <div>
+                                <label className="mb-1 block text-xs text-gray-600">금액 (원) <span className="text-gray-600 font-normal">지로 입력</span></label>
+                                <input type="number" value={sf.totalAmount ?? rec.totalAmount ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); const la = sf.landlordAmount ?? rec.landlordAmount ?? 0; setCashSectionForm(p => ({ ...p, [i]: { ...sf, totalAmount: v, tenantAmount: v != null ? v - la : undefined } })); }} placeholder="0" className={INPUT} />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs text-gray-600">사용량 (kWh) <span className="text-gray-600 font-normal">지로 입력</span></label>
+                                <input type="number" value={sf.totalKwh ?? rec.totalKwh ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); const lk = sf.landlordKwh ?? rec.landlordKwh ?? 0; setCashSectionForm(p => ({ ...p, [i]: { ...sf, totalKwh: v, tenantKwh: v != null ? v - lk : undefined } })); }} placeholder="0" className={INPUT} />
                               </div>
                             </div>
                             <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
                               <p className="text-xs font-semibold text-emerald-400">임차인</p>
                               <div>
-                                <label className="mb-1 block text-xs text-gray-600">금액 (원)</label>
-                                <input type="number" value={sf.tenantAmount ?? rec.tenantAmount ?? ""} onChange={(e) => { const v = Number(e.target.value); setCashSectionForm(p => ({ ...p, [i]: { ...sf, tenantAmount: v, totalAmount: (sf.landlordAmount ?? rec.landlordAmount ?? 0) + v } })); }} placeholder="0" className={INPUT} />
+                                <label className="mb-1 block text-xs text-gray-600">금액 (원) <span className="text-gray-600 font-normal">총 - 임대인 자동계산</span></label>
+                                <input type="number" readOnly value={sf.tenantAmount ?? rec.tenantAmount ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} />
                               </div>
                               <div>
-                                <label className="mb-1 block text-xs text-gray-600">사용량 (kWh)</label>
-                                <input type="number" value={sf.tenantKwh ?? rec.tenantKwh ?? ""} onChange={(e) => { const v = Number(e.target.value); setCashSectionForm(p => ({ ...p, [i]: { ...sf, tenantKwh: v, totalKwh: (sf.landlordKwh ?? rec.landlordKwh ?? 0) + v } })); }} placeholder="0" className={INPUT} />
-                              </div>
-                            </div>
-                            <div className="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] p-3 space-y-2 opacity-80">
-                              <p className="text-xs font-semibold text-gray-400">총 <span className="text-[10px] font-normal text-gray-600">(자동계산)</span></p>
-                              <div>
-                                <label className="mb-1 block text-xs text-gray-600">금액 (원)</label>
-                                <input type="number" readOnly value={sf.totalAmount ?? rec.totalAmount ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} />
-                              </div>
-                              <div>
-                                <label className="mb-1 block text-xs text-gray-600">사용량 (kWh)</label>
-                                <input type="number" readOnly value={sf.totalKwh ?? rec.totalKwh ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} />
+                                <label className="mb-1 block text-xs text-gray-600">사용량 (kWh) <span className="text-gray-600 font-normal">총 - 임대인 자동계산</span></label>
+                                <input type="number" readOnly value={sf.tenantKwh ?? rec.tenantKwh ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} />
                               </div>
                             </div>
                           </div>
@@ -1441,6 +1559,95 @@ export default function ResidentDetailPage() {
                         </div>
                       )}
 
+                      {/* 전체 수정 폼 */}
+                      {cashFullEdit[i] && (() => {
+                        const ff = cashFullForm[i] ?? {};
+                        const set = (patch: Partial<CashSuccessionRecord>) => setCashFullForm(p => ({ ...p, [i]: { ...ff, ...patch } }));
+                        return (
+                          <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-5 space-y-5">
+                            <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wide">전체 수정</p>
+
+                            {/* 청구 기간 */}
+                            <div>
+                              <p className="mb-2 text-xs text-gray-500 font-medium">청구기간 (한전 고지서 기준)</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div><label className="mb-1 block text-xs text-gray-600">시작 (한전 고지서 기준)</label><input type="date" value={ff.billingStart ?? ""} onChange={(e) => set({ billingStart: e.target.value })} className={INPUT} /></div>
+                                <div><label className="mb-1 block text-xs text-gray-600">종료 (한전 고지서 기준)</label><input type="date" value={ff.billingEnd ?? ""} onChange={(e) => set({ billingEnd: e.target.value })} className={INPUT} /></div>
+                              </div>
+                            </div>
+
+                            {/* 임대인 / 임차인 기간 */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="mb-2 text-xs text-gray-500 font-medium">임대인 현금승계 기간</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div><label className="mb-1 block text-xs text-gray-600">시작</label><input type="date" value={ff.landlordStart ?? ""} onChange={(e) => set({ landlordStart: e.target.value })} className={INPUT} /></div>
+                                  <div><label className="mb-1 block text-xs text-gray-600">종료</label><input type="date" value={ff.landlordEnd ?? ""} onChange={(e) => set({ landlordEnd: e.target.value })} className={INPUT} /></div>
+                                </div>
+                              </div>
+                              <div>
+                                <p className="mb-2 text-xs text-gray-500 font-medium">임차인 실 사용 기간</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div><label className="mb-1 block text-xs text-gray-600">시작</label><input type="date" value={ff.tenantStart ?? ""} onChange={(e) => set({ tenantStart: e.target.value })} className={INPUT} /></div>
+                                  <div><label className="mb-1 block text-xs text-gray-600">종료</label><input type="date" value={ff.tenantEnd ?? ""} onChange={(e) => set({ tenantEnd: e.target.value })} className={INPUT} /></div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 금액 및 사용량 */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-gray-500 font-medium">금액 및 사용량</p>
+                                <a href="https://search.naver.com/search.naver?query=전기요금+계산기" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-md border border-green-500/30 bg-green-500/10 px-2 py-1 text-xs text-green-400 hover:bg-green-500/20 transition-colors"><span className="text-[10px]">⚡</span>네이버 전기요금 계산기</a>
+                              </div>
+                              <div className="grid grid-cols-3 gap-3">
+                                <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
+                                  <p className="text-xs font-semibold text-sky-400">임대인</p>
+                                  <div><label className="mb-1 block text-xs text-gray-600">금액 (원)</label><input type="number" value={ff.landlordAmount ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); set({ landlordAmount: v, tenantAmount: v != null ? (ff.totalAmount ?? 0) - v : undefined }); }} placeholder="0" className={INPUT} /></div>
+                                  <div><label className="mb-1 block text-xs text-gray-600">사용량 (kWh) <span className="text-gray-600 font-normal">검침 자동계산</span></label><input type="number" value={ff.landlordKwh ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); set({ landlordKwh: v, tenantKwh: v != null ? (ff.totalKwh ?? 0) - v : undefined }); }} placeholder="0" className={INPUT} /></div>
+                                  <div className="border-t border-[#2A2A2A] pt-2 space-y-2">
+                                    <p className="text-[11px] text-gray-600">검침값 (kWh)</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div><label className="mb-1 block text-xs text-gray-600">시작</label><input type="number" value={ff.landlordStartMeter ?? ""} onChange={(e) => { const s = e.target.value === "" ? undefined : Number(e.target.value); const kwh = s != null && ff.landlordEndMeter != null ? Math.max(0, ff.landlordEndMeter - s) : ff.landlordKwh; set({ landlordStartMeter: s, landlordKwh: kwh, tenantKwh: kwh != null ? (ff.totalKwh ?? 0) - kwh : undefined }); }} placeholder="0.00" className={INPUT} /></div>
+                                      <div><label className="mb-1 block text-xs text-gray-600">종료</label><input type="number" value={ff.landlordEndMeter ?? ""} onChange={(e) => { const en = e.target.value === "" ? undefined : Number(e.target.value); const kwh = en != null && ff.landlordStartMeter != null ? Math.max(0, en - ff.landlordStartMeter) : ff.landlordKwh; set({ landlordEndMeter: en, landlordKwh: kwh, tenantKwh: kwh != null ? (ff.totalKwh ?? 0) - kwh : undefined }); }} placeholder="0.00" className={INPUT} /></div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
+                                  <p className="text-xs font-semibold text-gray-300">총 (지로 청구)</p>
+                                  <div><label className="mb-1 block text-xs text-gray-600">금액 (원) <span className="text-gray-600 font-normal">지로 입력</span></label><input type="number" value={ff.totalAmount ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); set({ totalAmount: v, tenantAmount: v != null ? v - (ff.landlordAmount ?? 0) : undefined }); }} placeholder="0" className={INPUT} /></div>
+                                  <div><label className="mb-1 block text-xs text-gray-600">사용량 (kWh) <span className="text-gray-600 font-normal">지로 입력</span></label><input type="number" value={ff.totalKwh ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); set({ totalKwh: v, tenantKwh: v != null ? v - (ff.landlordKwh ?? 0) : undefined }); }} placeholder="0" className={INPUT} /></div>
+                                </div>
+                                <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
+                                  <p className="text-xs font-semibold text-emerald-400">임차인</p>
+                                  <div><label className="mb-1 block text-xs text-gray-600">금액 (원) <span className="text-gray-600 font-normal">총 - 임대인 자동계산</span></label><input type="number" readOnly value={ff.tenantAmount ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} /></div>
+                                  <div><label className="mb-1 block text-xs text-gray-600">사용량 (kWh) <span className="text-gray-600 font-normal">총 - 임대인 자동계산</span></label><input type="number" readOnly value={ff.tenantKwh ?? ""} placeholder="자동입력" className={`${INPUT} text-white font-semibold`} /></div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 계좌 정보 */}
+                            <div>
+                              <p className="mb-2 text-xs text-gray-500 font-medium">계좌번호</p>
+                              <div className="grid grid-cols-3 gap-3">
+                                <div><label className="mb-1 block text-xs text-gray-600">은행</label><input value={ff.bankName ?? ""} onChange={(e) => set({ bankName: e.target.value })} placeholder="신한" className={INPUT} /></div>
+                                <div><label className="mb-1 block text-xs text-gray-600">예금주</label><input value={ff.accountHolder ?? ""} onChange={(e) => set({ accountHolder: e.target.value })} placeholder="홍길동" className={INPUT} /></div>
+                                <div><label className="mb-1 block text-xs text-gray-600">계좌번호</label><input value={ff.accountNumber ?? ""} onChange={(e) => set({ accountNumber: e.target.value })} placeholder="110-000-000000" className={INPUT} /></div>
+                              </div>
+                              <div className="mt-3 grid grid-cols-2 gap-3">
+                                <div><label className="mb-1 block text-xs text-gray-600">납부 일자</label><input type="date" value={ff.paymentDate ?? ""} onChange={(e) => set({ paymentDate: e.target.value })} className={INPUT} /></div>
+                                <div><label className="mb-1 block text-xs text-gray-600">비고</label><input value={ff.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} placeholder="반환완료 등" className={INPUT} /></div>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => cancelCashFullEdit(i)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 hover:text-white transition-colors">취소</button>
+                              <button onClick={() => saveCashFullEdit(i)} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-400 transition-colors">저장</button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                     </div>
                   );
                 })}
@@ -1448,78 +1655,6 @@ export default function ResidentDetailPage() {
             )}
           </div>
 
-          {/* ── PDF 출력 영역 (print only) ── */}
-          <style>{`
-            @media print {
-              body > * { display: none !important; }
-              #cash-succession-print { display: block !important; position: fixed; top: 0; left: 0; width: 100%; padding: 24px; background: white; }
-            }
-          `}</style>
-          <div id="cash-succession-print" style={{ display: "none" }}>
-            <div style={{ fontFamily: "sans-serif", fontSize: "12px", color: "#000" }}>
-              <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "4px" }}>
-                {id}호 · {room.resident} — 전기 현금 승계
-              </h2>
-              <p style={{ color: "#555", marginBottom: "16px", fontSize: "11px" }}>
-                이번달 청구요금은 현금 승계만 가능하여 호림에서 직접 납부하고 있습니다.<br />
-                다음달 부터는 임차인에게서 직접 납부하시면 됩니다.(종이 청구서 배부 예정)<br />
-                실 사용 금액(형광펜 부분)만 저희 계좌로 입금 부탁드립니다. 감사합니다.
-              </p>
-              {dbCashSuccessions.map((dbRec, i) => { const rec = fromDbCash(dbRec); return (
-                <div key={i} style={{ marginBottom: "24px" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
-                    <thead>
-                      <tr style={{ background: "#f5f5f5" }}>
-                        <th style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>호실</th>
-                        <th style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>청구기간</th>
-                        <th style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>임대인<br/>현금승계 기간</th>
-                        <th style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>임차인<br/>실 사용 기간</th>
-                        <th style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>계좌번호</th>
-                        <th style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>비고</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }} rowSpan={2}>
-                          {id}호
-                        </td>
-                        <td style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>
-                          {rec.billingStart} ~ {rec.billingEnd}
-                        </td>
-                        <td style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>
-                          {rec.landlordStart} ~ {rec.landlordEnd}
-                        </td>
-                        <td style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center", background: "#fffde7" }}>
-                          {rec.tenantStart} ~ {rec.tenantEnd}
-                        </td>
-                        <td style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }} rowSpan={2}>
-                          {rec.bankName} {rec.accountHolder}<br />{rec.accountNumber}
-                        </td>
-                        <td style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }} rowSpan={2}>
-                          {rec.paymentDate && <div style={{ fontWeight: "bold", marginBottom: "2px" }}>{rec.paymentDate}</div>}
-                          {rec.notes ?? ""}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>
-                          ₩{(rec.totalAmount ?? 0).toLocaleString("ko-KR")}<br />
-                          <span style={{ color: "#666" }}>사용량 {rec.totalKwh ?? 0}kWh</span>
-                        </td>
-                        <td style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center" }}>
-                          ₩{(rec.landlordAmount ?? 0).toLocaleString("ko-KR")}<br />
-                          <span style={{ color: "#666" }}>사용량 {rec.landlordKwh ?? 0}kWh</span>
-                        </td>
-                        <td style={{ border: "1px solid #ccc", padding: "6px 8px", textAlign: "center", background: "#fffde7", fontWeight: "bold" }}>
-                          ₩{(rec.tenantAmount ?? 0).toLocaleString("ko-KR")}<br />
-                          <span style={{ color: "#666", fontWeight: "normal" }}>사용량 {rec.tenantKwh}kWh</span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              ); })}
-            </div>
-          </div>
 
         </>
       )}
