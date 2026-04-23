@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { fetchTodos, insertTodo, updateTodo, deleteTodoById, type DbTodo } from '@/app/lib/supabase-data';
 
 // ──────────── 타입 ────────────
 
@@ -27,8 +28,8 @@ function getDaysInMonth(year: number, month: number) {
 function getFirstDayOfWeek(year: number, month: number) {
   return new Date(year, month - 1, 1).getDay();
 }
-function uid() {
-  return Math.random().toString(36).slice(2);
+function fromDb(db: DbTodo): Todo {
+  return { id: db.id, date: db.date, text: db.text, done: db.done };
 }
 
 // ──────────── Todo 모달 ────────────
@@ -38,27 +39,33 @@ function TodoModal({
 }: {
   date: string;
   todos: Todo[];
-  onAdd: (text: string) => void;
-  onEdit: (id: string, text: string) => void;
-  onDelete: (id: string) => void;
-  onToggle: (id: string) => void;
+  onAdd: (text: string) => Promise<void>;
+  onEdit: (id: string, text: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onToggle: (id: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [input, setInput] = useState('');
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [adding, setAdding] = useState(false);
 
   const [y, m, d] = date.split('-');
   const label = `${y}년 ${parseInt(m)}월 ${parseInt(d)}일`;
 
-  function submitAdd() {
-    if (!input.trim()) return;
-    onAdd(input.trim());
-    setInput('');
+  async function submitAdd() {
+    if (!input.trim() || adding) return;
+    setAdding(true);
+    try {
+      await onAdd(input.trim());
+      setInput('');
+    } finally {
+      setAdding(false);
+    }
   }
-  function submitEdit() {
+  async function submitEdit() {
     if (!editText.trim() || !editId) return;
-    onEdit(editId, editText.trim());
+    await onEdit(editId, editText.trim());
     setEditId(null);
   }
 
@@ -129,13 +136,15 @@ function TodoModal({
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submitAdd(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } }}
             placeholder="할일 입력 후 Enter"
             className="flex-1 rounded-xl border border-[#2A2A2A] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-gray-600 outline-none focus:border-indigo-500 transition-colors"
           />
           <button
+            type="button"
             onClick={submitAdd}
-            className="flex items-center gap-1.5 rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600 transition-colors"
+            disabled={adding}
+            className="flex items-center gap-1.5 rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600 transition-colors disabled:opacity-50"
           >
             <Plus size={15} />
             추가
@@ -152,27 +161,15 @@ export default function TodoListPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [todos, setTodos] = useState<Todo[]>([
-    { id: uid(), date: '2026-04-01', text: '101호 에어컨 필터 청소',       done: true  },
-    { id: uid(), date: '2026-04-01', text: '월세 미납자 연락 (205호)',      done: false },
-    { id: uid(), date: '2026-04-01', text: '공과금 정산 자료 정리',         done: false },
-    { id: uid(), date: '2026-04-03', text: '302호 도배 업체 견적 요청',     done: false },
-    { id: uid(), date: '2026-04-03', text: '신규 입실자 열쇠 준비 (401호)', done: false },
-    { id: uid(), date: '2026-04-05', text: '관리비 납부 마감 확인',         done: false },
-    { id: uid(), date: '2026-04-07', text: '507호 배수구 수리 업체 예약',   done: false },
-    { id: uid(), date: '2026-04-07', text: '4월 도시가스 검침',             done: false },
-    { id: uid(), date: '2026-04-10', text: '월세 납부 마감일',              done: false },
-    { id: uid(), date: '2026-04-10', text: '203호 계약 갱신 상담',          done: false },
-    { id: uid(), date: '2026-04-14', text: '소화기 점검',                   done: false },
-    { id: uid(), date: '2026-04-15', text: '한전 검침 및 승계 처리',        done: false },
-    { id: uid(), date: '2026-04-15', text: '106호 퇴실 청소 업체 예약',     done: false },
-    { id: uid(), date: '2026-04-18', text: '공용 세탁기 필터 청소',         done: false },
-    { id: uid(), date: '2026-04-21', text: '건물 외벽 점검',                done: false },
-    { id: uid(), date: '2026-04-25', text: '다음 달 입실 예정자 확인',      done: false },
-    { id: uid(), date: '2026-04-28', text: '302호 도배 완료 확인',          done: false },
-    { id: uid(), date: '2026-04-30', text: '4월 수입/지출 정산',            done: false },
-  ]);
+  const [todos, setTodos] = useState<Todo[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const loadTodos = useCallback(async () => {
+    const data = await fetchTodos();
+    setTodos(data.map(fromDb));
+  }, []);
+
+  useEffect(() => { loadTodos(); }, [loadTodos]);
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfWeek(year, month);
@@ -189,18 +186,24 @@ export default function TodoListPage() {
 
   function todosFor(date: string) { return todos.filter(t => t.date === date); }
 
-  function addTodo(text: string) {
+  async function addTodo(text: string) {
     if (!selectedDate) return;
-    setTodos(prev => [...prev, { id: uid(), date: selectedDate, text, done: false }]);
+    const created = await insertTodo({ date: selectedDate, text });
+    setTodos(prev => [...prev, fromDb(created)]);
   }
-  function editTodo(id: string, text: string) {
-    setTodos(prev => prev.map(t => t.id === id ? { ...t, text } : t));
+  async function editTodo(id: string, text: string) {
+    const updated = await updateTodo(id, { text });
+    setTodos(prev => prev.map(t => t.id === id ? fromDb(updated) : t));
   }
-  function deleteTodo(id: string) {
+  async function deleteTodo(id: string) {
+    await deleteTodoById(id);
     setTodos(prev => prev.filter(t => t.id !== id));
   }
-  function toggleTodo(id: string) {
-    setTodos(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  async function toggleTodo(id: string) {
+    const todo = todos.find(t => t.id === id);
+    if (!todo) return;
+    const updated = await updateTodo(id, { done: !todo.done });
+    setTodos(prev => prev.map(t => t.id === id ? fromDb(updated) : t));
   }
 
   const cells: (number | null)[] = [

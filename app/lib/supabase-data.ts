@@ -276,3 +276,44 @@ export async function deleteCashSuccession(id: string): Promise<void> {
   const { error } = await supabase.from('cash_successions').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ──────────── 할일 목록 ────────────
+
+export type DbTodo = {
+  id: string;
+  date: string;
+  text: string;
+  done: boolean;
+  created_at: string;
+};
+
+export async function fetchTodos(): Promise<DbTodo[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('todos')
+    .select('*')
+    .order('date', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data as DbTodo[];
+}
+
+export async function insertTodo(input: { date: string; text: string }): Promise<DbTodo> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('todos').insert(input).select().single();
+  if (error) throw error;
+  return data as DbTodo;
+}
+
+export async function updateTodo(id: string, input: Partial<{ text: string; done: boolean }>): Promise<DbTodo> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('todos').update(input).eq('id', id).select().single();
+  if (error) throw error;
+  return data as DbTodo;
+}
+
+export async function deleteTodoById(id: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from('todos').delete().eq('id', id);
+  if (error) throw error;
+}
