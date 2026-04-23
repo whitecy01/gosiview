@@ -317,3 +317,47 @@ export async function deleteTodoById(id: string): Promise<void> {
   const { error } = await supabase.from('todos').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ──────────── 유지보수 이력 ────────────
+
+export type DbMaintenanceRecord = {
+  id: string;
+  room_id: string;
+  date: string;
+  amount: number;
+  details: string[];
+  memo: string | null;
+  created_at: string;
+};
+
+export async function fetchAllMaintenanceRecords(): Promise<DbMaintenanceRecord[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('maintenance_records')
+    .select('*')
+    .order('date', { ascending: false });
+  if (error) throw error;
+  return data as DbMaintenanceRecord[];
+}
+
+export async function insertMaintenanceRecord(input: {
+  room_id: string;
+  date: string;
+  amount: number;
+  details: string[];
+}): Promise<DbMaintenanceRecord> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('maintenance_records')
+    .insert(input)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as DbMaintenanceRecord;
+}
+
+export async function deleteMaintenanceRecord(id: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from('maintenance_records').delete().eq('id', id);
+  if (error) throw error;
+}

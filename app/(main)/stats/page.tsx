@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { MAINTENANCE_BY_ROOM } from '@/app/lib/mock-data';
+import { type MaintenanceRecord } from '@/app/lib/mock-data';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
+import { fetchAllMaintenanceRecords } from '@/app/lib/supabase-data';
 
 // ──────────── 헬퍼 ────────────
 
@@ -254,18 +255,27 @@ const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','
 function MaintenanceGrid() {
   const { effectiveRooms } = useEffectiveRooms();
   const [year, setYear] = useState(new Date().getFullYear());
+  const [allRecords, setAllRecords] = useState<Record<string, MaintenanceRecord[]>>({});
 
-  // 해당 연도에 기록이 하나라도 있는 방만
+  useEffect(() => {
+    fetchAllMaintenanceRecords().then((rows) => {
+      const grouped: Record<string, MaintenanceRecord[]> = {};
+      for (const r of rows) {
+        grouped[r.room_id] = [...(grouped[r.room_id] ?? []), { id: r.id, date: r.date, amount: r.amount, details: r.details }];
+      }
+      setAllRecords(grouped);
+    }).catch(console.error);
+  }, []);
+
   const roomsWithData = effectiveRooms.filter(room => {
-    const records = MAINTENANCE_BY_ROOM[room.id] ?? [];
+    const records = allRecords[room.id] ?? [];
     return records.some(r => r.date.startsWith(String(year)));
   });
 
-  // 해당 연도에 기록이 아예 없으면 전체 표시
   const rows = roomsWithData.length > 0 ? roomsWithData : [];
 
   function recordsFor(roomId: string, month: number) {
-    return (MAINTENANCE_BY_ROOM[roomId] ?? []).filter(r => {
+    return (allRecords[roomId] ?? []).filter(r => {
       const [y, m] = r.date.split('-').map(Number);
       return y === year && m === month;
     });

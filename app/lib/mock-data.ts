@@ -26,6 +26,7 @@ export type ScheduledResident = {
 };
 
 export type MaintenanceRecord = {
+  id?: string;
   date: string;
   amount: number;
   details: string[];

@@ -1,18 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   X, ExternalLink, Home, Banknote, Calendar, MapPin, Target,
   Plus, Trash2, History,
 } from "lucide-react";
 import {
-  RESIDENT_DETAIL_BY_ROOM,
+  ROOM_TYPE_INFO,
   type Room,
   type ResidentDetail,
+  type RentPayment,
   type DepositDeductionReason,
   type RentPaymentMethod,
+  type ResidencePurpose,
+  type RealEstateAgency,
 } from "../lib/mock-data";
+import { useRooms } from "@/app/context/RoomsContext";
 
 // ────────────── 상수 ──────────────
 
@@ -76,21 +80,71 @@ interface Props {
 
 export default function RoomDetailDrawer({ room, onClose }: Props) {
   const router = useRouter();
+  const { contracts } = useRooms();
   const [activeTab, setActiveTab] = useState<Tab>("기본 정보");
-  const [detail, setDetail] = useState<ResidentDetail | null>(() =>
-    room ? (RESIDENT_DETAIL_BY_ROOM[room.id] ?? null) : null
-  );
+  const [detail, setDetail] = useState<ResidentDetail | null>(null);
+
+  const activeContract = useMemo(() => {
+    if (!room) return null;
+    return contracts.find((c) => c.room_id === room.id && c.status === "scheduled") ?? null;
+  }, [room?.id, contracts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // room이 바뀔 때마다 detail과 폼 상태 초기화
   useEffect(() => {
-    setDetail(room ? (RESIDENT_DETAIL_BY_ROOM[room.id] ?? null) : null);
     setActiveTab("기본 정보");
     setShowDepForm(false);
     setDepAmount("");
     setPayingMonthIdx(null);
     setPayDate("");
     setPayAmount("");
-  }, [room?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    if (!room || !activeContract) {
+      setDetail(null);
+      return;
+    }
+
+    const moveIn = activeContract.actual_move_in_date ?? activeContract.contract_start_date ?? "";
+    const moveOut = activeContract.actual_move_out_date ?? activeContract.contract_end_date ?? "";
+    const rent = activeContract.monthly_rent ?? 0;
+    const dueDay = moveIn ? new Date(moveIn).getDate() : 1;
+
+    const rentPayments: RentPayment[] = [];
+    if (moveIn && moveOut) {
+      let cur = new Date(moveIn.slice(0, 7) + "-01");
+      const end = new Date(moveOut.slice(0, 7) + "-01");
+      while (cur <= end) {
+        const monthStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+        rentPayments.push({ month: monthStr, paidAt: null, amount: rent, paymentMethod: null, status: "upcoming" });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+    }
+
+    setDetail({
+      roomId: room.id,
+      purpose: (activeContract.purpose as ResidencePurpose) ?? undefined,
+      utilityIncludedRent: Math.round((ROOM_TYPE_INFO[room.roomType]?.price ?? 0) / 10000),
+      actualMonthlyRent: Math.round(rent / 10000),
+      paymentDueDay: dueDay,
+      contractMoveInDate: activeContract.contract_start_date,
+      contractExpiry: activeContract.contract_end_date ?? "",
+      actualMoveInDate: activeContract.actual_move_in_date ?? undefined,
+      actualMoveOutDate: activeContract.actual_move_out_date ?? undefined,
+      contractDeposit: {
+        date: activeContract.contract_start_date ?? "",
+        amount: activeContract.contract_deposit ?? 0,
+      },
+      realEstateAgency: (activeContract.real_estate_agency as RealEstateAgency) ?? undefined,
+      depositTotal: activeContract.deposit_total ?? 0,
+      depositDeductions: [],
+      depositReturn: {
+        returned: activeContract.deposit_returned ?? false,
+        returnedAt: activeContract.deposit_returned_at ?? null,
+      },
+      rentPayments,
+      gasBills: [],
+      cashSuccessions: [],
+    });
+  }, [room?.id, activeContract?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 보증금 폼
   const [showDepForm, setShowDepForm] = useState(false);
@@ -475,6 +529,19 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                 </div>
               )}
 
+
+              {/* 공과금 탭 */}
+              {room.status === "occupied" && activeTab === "공과금" && (
+                <div className="p-5">
+                  <p className="py-8 text-center text-sm text-gray-500">공과금 상세 내역은 입실자 상세 페이지에서 확인하세요.</p>
+                  <button
+                    onClick={() => router.push(`/residents/${room.id}`)}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 py-2.5 text-xs font-medium text-indigo-400 transition-colors hover:bg-indigo-500/20"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />상세 페이지로 이동
+                  </button>
+                </div>
+              )}
 
             </div>
           </>

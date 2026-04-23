@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History } from "lucide-react";
 import {
-  MAINTENANCE_BY_ROOM,
   ROOM_TYPE_INFO,
   type Room,
   type ScheduledResident,
@@ -16,6 +15,11 @@ import { useEffectiveRooms } from "../context/useEffectiveRooms";
 import { useRooms } from "../context/RoomsContext";
 import { useToday } from "../context/MockDateContext";
 import { calcEndDate } from "../lib/utils";
+import {
+  fetchAllMaintenanceRecords,
+  insertMaintenanceRecord,
+  deleteMaintenanceRecord,
+} from "../lib/supabase-data";
 
 const DETAIL_OPTIONS = ["도배", "매트리스교체", "에어컨청소", "전구교체", "장판교체", "화장실청소"];
 
@@ -748,7 +752,7 @@ function RoomManagementModal({
   room: Room;
   records: MaintenanceRecord[];
   onAdd: (record: MaintenanceRecord) => void;
-  onDelete: (index: number) => void;
+  onDelete: (id: string) => void;
   onClose: () => void;
 }) {
   const now = new Date();
@@ -892,7 +896,7 @@ function RoomManagementModal({
                                 <div className="flex items-center gap-1">
                                   <span className="text-[10px] font-semibold text-emerald-400">₩{record.amount.toLocaleString("ko-KR")}</span>
                                   <button
-                                    onClick={() => onDelete(index)}
+                                    onClick={() => record.id && onDelete(record.id)}
                                     className="flex h-4 w-4 items-center justify-center rounded text-gray-700 hover:text-rose-400 transition-colors"
                                   >
                                     <Trash2 className="h-2.5 w-2.5" />
@@ -929,9 +933,17 @@ export default function TenantListTable() {
   const [managementRoom, setManagementRoom] = useState<Room | null>(null);
   const { effectiveRooms, today, todayStr } = useEffectiveRooms();
   const { contracts, addContract, editContract, removeContract } = useRooms();
-  const [maintenanceData, setMaintenanceData] = useState<Record<string, MaintenanceRecord[]>>(
-    () => ({ ...MAINTENANCE_BY_ROOM })
-  );
+  const [maintenanceData, setMaintenanceData] = useState<Record<string, MaintenanceRecord[]>>({});
+
+  useEffect(() => {
+    fetchAllMaintenanceRecords().then((rows) => {
+      const grouped: Record<string, MaintenanceRecord[]> = {};
+      for (const r of rows) {
+        grouped[r.room_id] = [...(grouped[r.room_id] ?? []), { id: r.id, date: r.date, amount: r.amount, details: r.details }];
+      }
+      setMaintenanceData(grouped);
+    }).catch(console.error);
+  }, []);
 
   // contracts에서 scheduled 항목을 ScheduledResident 형태로 변환
   const scheduledData = useMemo<Record<string, ScheduledResident[]>>(() => {
@@ -1018,17 +1030,19 @@ export default function TenantListTable() {
     });
   }
 
-  function handleAddRecord(roomId: string, record: MaintenanceRecord) {
+  async function handleAddRecord(roomId: string, record: MaintenanceRecord) {
+    const saved = await insertMaintenanceRecord({ room_id: roomId, date: record.date, amount: record.amount, details: record.details });
     setMaintenanceData((prev) => ({
       ...prev,
-      [roomId]: [record, ...(prev[roomId] ?? [])],
+      [roomId]: [{ id: saved.id, date: saved.date, amount: saved.amount, details: saved.details }, ...(prev[roomId] ?? [])],
     }));
   }
 
-  function handleDeleteRecord(roomId: string, index: number) {
+  async function handleDeleteRecord(roomId: string, id: string) {
+    await deleteMaintenanceRecord(id);
     setMaintenanceData((prev) => ({
       ...prev,
-      [roomId]: (prev[roomId] ?? []).filter((_, i) => i !== index),
+      [roomId]: (prev[roomId] ?? []).filter((r) => r.id !== id),
     }));
   }
 
@@ -1235,7 +1249,7 @@ export default function TenantListTable() {
           room={managementRoom}
           records={maintenanceData[managementRoom.id] ?? []}
           onAdd={(record) => handleAddRecord(managementRoom.id, record)}
-          onDelete={(index) => handleDeleteRecord(managementRoom.id, index)}
+          onDelete={(id) => handleDeleteRecord(managementRoom.id, id)}
           onClose={() => setManagementRoom(null)}
         />
       )}
