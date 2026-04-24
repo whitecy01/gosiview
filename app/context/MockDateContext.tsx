@@ -1,48 +1,38 @@
 'use client';
 
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext } from 'react';
 
-interface MockDateContextValue {
+interface TodayContextValue {
   today: Date;
-  todayStr: string; // "YYYY-MM-DD"
-  mockDate: string | null; // null = 실제 오늘
-  setMockDate: (date: string | null) => void;
+  todayStr: string; // "YYYY-MM-DD" (Asia/Seoul 기준)
 }
 
-const MockDateContext = createContext<MockDateContextValue>({
-  today: new Date(),
-  todayStr: new Date().toISOString().slice(0, 10),
-  mockDate: null,
-  setMockDate: () => {},
-});
+function getSeoulDateStr(): string {
+  // 서울 시간(KST, UTC+9) 기준 YYYY-MM-DD
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+}
 
-function toLocalMidnight(dateStr: string): Date {
-  // "YYYY-MM-DD" → 로컬 자정 (UTC 오프셋 문제 없이)
-  const [y, m, d] = dateStr.split('-').map(Number);
+function getSeoulMidnight(): Date {
+  const [y, m, d] = getSeoulDateStr().split('-').map(Number);
   return new Date(y, m - 1, d, 0, 0, 0, 0);
 }
 
-function todayLocalStr(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+const TodayContext = createContext<TodayContextValue>({
+  today: getSeoulMidnight(),
+  todayStr: getSeoulDateStr(),
+});
 
 export function MockDateProvider({ children }: { children: React.ReactNode }) {
-  const [mockDate, setMockDate] = useState<string | null>(null);
-
-  const todayStr = mockDate ?? todayLocalStr();
-  const today = toLocalMidnight(todayStr);
+  const todayStr = getSeoulDateStr();
+  const today = getSeoulMidnight();
 
   return (
-    <MockDateContext.Provider value={{ today, todayStr, mockDate, setMockDate }}>
+    <TodayContext.Provider value={{ today, todayStr }}>
       {children}
-    </MockDateContext.Provider>
+    </TodayContext.Provider>
   );
 }
 
 export function useToday() {
-  return useContext(MockDateContext);
+  return useContext(TodayContext);
 }
