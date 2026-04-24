@@ -1,33 +1,16 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { ROOM_TENANT_HISTORY, type FloorNumber, type Room, type TenantBar } from '@/app/lib/mock-data';
+import { type FloorNumber, type Room, type TenantBar } from '@/app/lib/mock-data';
+import { fetchAllContractsForCalendar, type DbContract } from '@/app/lib/supabase-data';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 import RoomListModal, { type RoomModalType } from '@/app/components/RoomListModal';
 import RoomDetailDrawer from '@/app/components/RoomDetailDrawer';
+import ContractDetailPanel from '@/app/components/ContractDetailPanel';
 
 // ──────────── 상수 ────────────
 
 const FLOORS: FloorNumber[] = [1, 2, 3, 4, 5, 6];
-
-// 실제 데이터 기반으로 연도 범위 자동 계산
-function calcYearRange(rooms: Room[]) {
-  let minYear = 9999;
-  let maxYear = 0;
-  for (const room of rooms) {
-    if (room.moveInDate) {
-      const y = parseInt(room.moveInDate.slice(0, 4), 10);
-      if (y < minYear) minYear = y;
-    }
-    if (room.moveOutDate) {
-      const y = parseInt(room.moveOutDate.slice(0, 4), 10);
-      if (y > maxYear) maxYear = y;
-    }
-  }
-  if (minYear === 9999) minYear = new Date().getFullYear();
-  if (maxYear === 0) maxYear = minYear;
-  return { startYear: minYear, endYear: maxYear };
-}
 
 const ROOM_COL_WIDTH = 100;
 const ROW_HEIGHT = 34;
@@ -36,8 +19,9 @@ const DAY_H = 26;
 const FLOOR_ROW_H = 28;
 const DAY_WIDTH = 16;
 
-// 모든 바에 동일한 색상 사용
-const BAR_COLOR = { from: '#6366f1', to: '#4f46e5', dot: '#a5b4fc' };
+const CURRENT_BAR  = { from: '#6366f1', to: '#4f46e5', dot: '#a5b4fc' };
+const PAST_BAR     = { from: '#6366f1', to: '#4f46e5', dot: '#a5b4fc' };
+const FUTURE_BAR   = { from: '#f59e0b', to: '#d97706', dot: '#fbbf24' };
 
 const FLOOR_ACCENTS = ['#818cf8', '#c084fc', '#60a5fa', '#22d3ee', '#2dd4bf', '#4ade80'];
 
@@ -113,11 +97,30 @@ function fmtRent(rent: string | number | null | undefined): string | null {
   return `${Math.round(num / 10000)}만`;
 }
 
+function contractToTenantBar(c: DbContract): TenantBar {
+  return {
+    contractId: c.id,
+    name: c.name,
+    moveInDate: c.actual_move_in_date ?? c.contract_start_date,
+    moveOutDate: c.actual_move_out_date ?? c.contract_end_date ?? c.contract_start_date,
+    gender: c.gender ?? undefined,
+    age: c.age ?? undefined,
+    monthlyRent: c.monthly_rent ?? undefined,
+    phone: c.phone,
+    purpose: c.purpose ?? undefined,
+    realEstateAgency: c.real_estate_agency ?? undefined,
+    depositTotal: c.deposit_total ?? undefined,
+    depositReturned: c.deposit_returned,
+    depositReturnedAt: c.deposit_returned_at,
+  };
+}
+
 // ──────────── CalendarGrid ────────────
 
 type CalendarGridProps = {
   visibleFloors: FloorNumber[];
   onSelectRoom: (room: Room) => void;
+  onSelectPastTenant: (contractId: string) => void;
   effectiveRooms: Room[];
   allMonths: MonthInfo[];
   yearGroups: YearGroup[];
@@ -125,15 +128,20 @@ type CalendarGridProps = {
   timelineEnd: Date;
   totalDays: number;
   today: Date;
+  pastTenantsMap: Record<string, TenantBar[]>;
+  futureTenantsMap: Record<string, TenantBar[]>;
 };
 
-function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, yearGroups, timelineStart, timelineEnd, totalDays, today }: CalendarGridProps) {
+function CalendarGrid({
+  visibleFloors, onSelectRoom, onSelectPastTenant, effectiveRooms,
+  allMonths, yearGroups, timelineStart, timelineEnd,
+  totalDays, today, pastTenantsMap, futureTenantsMap,
+}: CalendarGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayOffset = useMemo(() => getTodayOffset(today, timelineStart, timelineEnd), [today, timelineStart, timelineEnd]);
   const totalWidth = totalDays * DAY_WIDTH;
   const HEADER_H = MONTH_H + DAY_H;
 
-  // 오늘 날짜로 초기 스크롤 위치
   useEffect(() => {
     if (scrollRef.current && todayOffset !== null) {
       const el = scrollRef.current;
@@ -147,7 +155,7 @@ function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, 
       <div ref={scrollRef} className="overflow-x-auto overflow-y-visible">
         <div style={{ width: ROOM_COL_WIDTH + totalWidth, minWidth: 'max-content' }}>
 
-          {/* ── Month header (연도 + 월 같이 표시) ── */}
+          {/* ── Month header ── */}
           <div
             className="flex sticky top-0 z-20 border-b border-[#222222]"
             style={{ height: MONTH_H, background: 'linear-gradient(180deg,#161616 0%,#111111 100%)' }}
@@ -231,7 +239,6 @@ function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, 
                     </span>
                   </div>
                   <div className="relative" style={{ width: totalWidth }}>
-                    {/* 연도 구분선 */}
                     {yearGroups.slice(0, -1).map((yg) => (
                       <div
                         key={yg.year}
@@ -251,10 +258,10 @@ function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, 
                 {/* Room rows */}
                 {effectiveRooms.filter((r) => r.floor === floor).map((room, ri) => {
                   const bar = getBarGeometry(room.moveInDate, room.moveOutDate, timelineStart, timelineEnd);
-                  const color = BAR_COLOR;
                   const isEven = ri % 2 === 0;
                   const rentLabel = fmtRent(room.monthlyRent);
-                  const pastTenants: TenantBar[] = ROOM_TENANT_HISTORY[room.id] ?? [];
+                  const pastTenants: TenantBar[] = pastTenantsMap[room.id] ?? [];
+                  const futureTenants: TenantBar[] = futureTenantsMap[room.id] ?? [];
 
                   return (
                     <div
@@ -271,7 +278,7 @@ function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, 
                           width: ROOM_COL_WIDTH,
                           minWidth: ROOM_COL_WIDTH,
                           backgroundColor: 'inherit',
-                          borderLeft: `2px solid ${color.from}44`,
+                          borderLeft: `2px solid ${CURRENT_BAR.from}44`,
                         }}
                       >
                         <span className="text-[14px] font-semibold text-gray-200 whitespace-nowrap">{room.id}호</span>
@@ -317,34 +324,77 @@ function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, 
                           const ptBar = getBarGeometry(pt.moveInDate, pt.moveOutDate, timelineStart, timelineEnd);
                           if (!ptBar) return null;
                           const ptRent = fmtRent(pt.monthlyRent ?? null);
+                          const c = PAST_BAR;
+                          const hasDetail = !!pt.contractId;
                           return (
                             <div
-                              key={pti}
-                              className="absolute flex items-center overflow-hidden z-10 cursor-default select-none"
+                              key={`past-${pti}`}
+                              onClick={hasDetail ? (e) => { e.stopPropagation(); onSelectPastTenant(pt.contractId!); } : undefined}
+                              className={`absolute flex items-center overflow-hidden z-10 select-none ${hasDetail ? 'cursor-pointer' : 'cursor-default'}`}
                               style={{
                                 top: 6, bottom: 6,
                                 left: ptBar.left + 2,
                                 width: ptBar.width - 4,
                                 borderRadius: 6,
-                                background: `linear-gradient(90deg, ${color.from}55 0%, ${color.to}55 100%)`,
-                                border: `1px solid ${color.from}66`,
+                                background: `linear-gradient(90deg, ${c.from}44 0%, ${c.to}44 100%)`,
+                                border: `1px solid ${c.from}55`,
                               }}
-                              title={`${pt.name}${pt.age ? ` (${pt.age}세)` : ''} · ${pt.moveInDate} ~ ${pt.moveOutDate}`}
+                              title={`[과거] ${pt.name}${pt.age ? ` (${pt.age}세)` : ''} · ${pt.moveInDate} ~ ${pt.moveOutDate}${hasDetail ? ' · 클릭하여 상세 보기' : ''}`}
                             >
-                              <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md" style={{ backgroundColor: color.dot, opacity: 0.4 }} />
+                              <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md" style={{ backgroundColor: c.dot, opacity: 0.3 }} />
                               <div className="flex items-center gap-1.5 pl-3 pr-2 overflow-hidden">
                                 <div
                                   className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
-                                  style={{ backgroundColor: `${color.dot}30`, color: color.dot, border: `1px solid ${color.dot}60` }}
+                                  style={{ backgroundColor: `${c.dot}20`, color: c.dot, border: `1px solid ${c.dot}40` }}
                                 >
                                   {pt.name[0]}
                                 </div>
-                                <span className="whitespace-nowrap text-[12px] font-semibold text-white opacity-70">{pt.name}</span>
+                                <span className="whitespace-nowrap text-[12px] font-semibold text-white opacity-60">{pt.name}</span>
                                 {ptRent && ptBar.width > 80 && (
-                                  <span className="whitespace-nowrap text-[11px] text-white opacity-50">{ptRent}</span>
+                                  <span className="whitespace-nowrap text-[11px] text-white opacity-40">{ptRent}</span>
                                 )}
                                 {ptBar.width > 220 && (
-                                  <span className="whitespace-nowrap text-[11px] text-white opacity-40">· {pt.moveInDate} ~ {pt.moveOutDate}</span>
+                                  <span className="whitespace-nowrap text-[11px] text-white opacity-30">· {pt.moveInDate} ~ {pt.moveOutDate}</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* 예정 입실자 바 */}
+                        {futureTenants.map((ft, fti) => {
+                          const ftBar = getBarGeometry(ft.moveInDate, ft.moveOutDate, timelineStart, timelineEnd);
+                          if (!ftBar) return null;
+                          const ftRent = fmtRent(ft.monthlyRent ?? null);
+                          const fc = FUTURE_BAR;
+                          return (
+                            <div
+                              key={`future-${fti}`}
+                              className="absolute flex items-center overflow-hidden z-10 cursor-default select-none"
+                              style={{
+                                top: 6, bottom: 6,
+                                left: ftBar.left + 2,
+                                width: ftBar.width - 4,
+                                borderRadius: 6,
+                                background: `linear-gradient(90deg, ${fc.from}55 0%, ${fc.to}55 100%)`,
+                                border: `1px dashed ${fc.from}88`,
+                              }}
+                              title={`[예정] ${ft.name}${ft.age ? ` (${ft.age}세)` : ''} · ${ft.moveInDate} ~ ${ft.moveOutDate}`}
+                            >
+                              <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md" style={{ backgroundColor: fc.dot, opacity: 0.5 }} />
+                              <div className="flex items-center gap-1.5 pl-3 pr-2 overflow-hidden">
+                                <div
+                                  className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
+                                  style={{ backgroundColor: `${fc.dot}30`, color: fc.dot, border: `1px solid ${fc.dot}60` }}
+                                >
+                                  {ft.name[0]}
+                                </div>
+                                <span className="whitespace-nowrap text-[12px] font-semibold" style={{ color: fc.dot }}>{ft.name}</span>
+                                {ftRent && ftBar.width > 80 && (
+                                  <span className="whitespace-nowrap text-[11px]" style={{ color: fc.dot, opacity: 0.7 }}>{ftRent}</span>
+                                )}
+                                {ftBar.width > 220 && (
+                                  <span className="whitespace-nowrap text-[11px]" style={{ color: fc.dot, opacity: 0.5 }}>· {ft.moveInDate} ~ {ft.moveOutDate}</span>
                                 )}
                               </div>
                             </div>
@@ -352,29 +402,29 @@ function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, 
                         })}
 
                         {/* 현재 입실 바 */}
-                        {bar && (
+                        {bar && room.status === 'occupied' && (
                           <div
                             onClick={() => onSelectRoom(room)}
-                            className="absolute flex items-center overflow-hidden z-10 cursor-pointer select-none"
+                            className="absolute flex items-center overflow-hidden z-20 cursor-pointer select-none"
                             style={{
                               top: 6,
                               bottom: 6,
                               left: bar.left + 2,
                               width: bar.width - 4,
                               borderRadius: 6,
-                              background: `linear-gradient(90deg, ${color.from}99 0%, ${color.to}99 100%)`,
-                              boxShadow: `0 1px 8px ${color.from}33`,
+                              background: `linear-gradient(90deg, ${CURRENT_BAR.from}bb 0%, ${CURRENT_BAR.to}bb 100%)`,
+                              boxShadow: `0 1px 8px ${CURRENT_BAR.from}44`,
                             }}
                             title={`${room.resident} (${room.age}세) · ${room.monthlyRent} · ${room.moveInDate} ~ ${room.moveOutDate}`}
                           >
                             <div
                               className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md"
-                              style={{ backgroundColor: color.dot, opacity: 0.6 }}
+                              style={{ backgroundColor: CURRENT_BAR.dot, opacity: 0.8 }}
                             />
                             <div className="flex items-center gap-1.5 pl-3 pr-2 overflow-hidden">
                               <div
                                 className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold"
-                                style={{ backgroundColor: `${color.dot}40`, color: color.dot, border: `1px solid ${color.dot}80` }}
+                                style={{ backgroundColor: `${CURRENT_BAR.dot}40`, color: CURRENT_BAR.dot, border: `1px solid ${CURRENT_BAR.dot}80` }}
                               >
                                 {room.resident?.[0]}
                               </div>
@@ -385,9 +435,9 @@ function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, 
                                 <span
                                   className="whitespace-nowrap text-[12px] font-bold px-1.5 py-0.5 rounded"
                                   style={{
-                                    backgroundColor: `${color.dot}30`,
-                                    color: color.dot,
-                                    border: `1px solid ${color.dot}50`,
+                                    backgroundColor: `${CURRENT_BAR.dot}30`,
+                                    color: CURRENT_BAR.dot,
+                                    border: `1px solid ${CURRENT_BAR.dot}50`,
                                   }}
                                 >
                                   {rentLabel}
@@ -417,19 +467,96 @@ function CalendarGrid({ visibleFloors, onSelectRoom, effectiveRooms, allMonths, 
 // ──────────── Page ────────────
 
 export default function CalendarPage() {
-  const { effectiveRooms, stats, today } = useEffectiveRooms();
-  const { startYear: TIMELINE_START_YEAR, endYear: TIMELINE_END_YEAR } = useMemo(
-    () => calcYearRange(effectiveRooms),
-    [effectiveRooms]
-  );
+  const { effectiveRooms, stats, today, todayStr } = useEffectiveRooms();
+
+  const [allContracts, setAllContracts] = useState<DbContract[]>([]);
+  const [pastTenantsMap, setPastTenantsMap] = useState<Record<string, TenantBar[]>>({});
+  const [futureTenantsMap, setFutureTenantsMap] = useState<Record<string, TenantBar[]>>({});
+
+  // 타임라인 연도 범위: effectiveRooms + 모든 계약 날짜 포함
+  const { startYear: TIMELINE_START_YEAR, endYear: TIMELINE_END_YEAR } = useMemo(() => {
+    const currentYear = parseInt(todayStr.slice(0, 4), 10);
+    let minYear = currentYear;
+    let maxYear = currentYear;
+
+    for (const room of effectiveRooms) {
+      if (room.moveInDate) {
+        const y = parseInt(room.moveInDate.slice(0, 4), 10);
+        if (y < minYear) minYear = y;
+      }
+      if (room.moveOutDate) {
+        const y = parseInt(room.moveOutDate.slice(0, 4), 10);
+        if (y > maxYear) maxYear = y;
+      }
+    }
+    for (const c of allContracts) {
+      const start = c.actual_move_in_date ?? c.contract_start_date;
+      const end = c.actual_move_out_date ?? c.contract_end_date;
+      if (start) {
+        const y = parseInt(start.slice(0, 4), 10);
+        if (y < minYear) minYear = y;
+      }
+      if (end) {
+        const y = parseInt(end.slice(0, 4), 10);
+        if (y > maxYear) maxYear = y;
+      }
+    }
+    return { startYear: minYear, endYear: maxYear };
+  }, [effectiveRooms, allContracts, todayStr]);
+
   const allMonths = useMemo(() => buildAllMonths(TIMELINE_START_YEAR, TIMELINE_END_YEAR), [TIMELINE_START_YEAR, TIMELINE_END_YEAR]);
   const timelineStart = useMemo(() => new Date(TIMELINE_START_YEAR, 0, 1), [TIMELINE_START_YEAR]);
   const timelineEnd = useMemo(() => new Date(TIMELINE_END_YEAR, 11, 31), [TIMELINE_END_YEAR]);
   const totalDays = useMemo(() => allMonths.reduce((s, m) => s + m.days, 0), [allMonths]);
   const yearGroups = useMemo(() => buildYearGroups(TIMELINE_START_YEAR, TIMELINE_END_YEAR, allMonths), [TIMELINE_START_YEAR, TIMELINE_END_YEAR, allMonths]);
+
   const [selectedFloors, setSelectedFloors] = useState<Set<FloorNumber>>(new Set(FLOORS));
   const [activeModal, setActiveModal] = useState<RoomModalType>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [detailContract, setDetailContract] = useState<DbContract | null>(null);
+
+  // contractId로 DbContract 빠른 조회
+  const contractsById = useMemo(() => {
+    const map = new Map<string, DbContract>();
+    for (const c of allContracts) map.set(c.id, c);
+    return map;
+  }, [allContracts]);
+
+  function handleSelectPastTenant(contractId: string) {
+    const contract = contractsById.get(contractId);
+    if (contract) setDetailContract(contract);
+  }
+
+  // 모든 계약 조회 후 과거/예정으로 분류
+  useEffect(() => {
+    fetchAllContractsForCalendar().then((contracts) => {
+      setAllContracts(contracts);
+
+      const pastMap: Record<string, TenantBar[]> = {};
+      const futureMap: Record<string, TenantBar[]> = {};
+
+      for (const c of contracts) {
+        const moveIn = c.actual_move_in_date ?? c.contract_start_date;
+        const moveOut = c.actual_move_out_date ?? c.contract_end_date;
+
+        if (!moveIn) continue;
+
+        const tenant = contractToTenantBar(c);
+
+        if (moveOut && moveOut < todayStr) {
+          // 과거: 퇴실일이 오늘 이전
+          pastMap[c.room_id] = [...(pastMap[c.room_id] ?? []), tenant];
+        } else if (moveIn > todayStr) {
+          // 예정: 입실일이 오늘 이후
+          futureMap[c.room_id] = [...(futureMap[c.room_id] ?? []), tenant];
+        }
+        // 현재 (moveIn <= today <= moveOut): effectiveRooms 바가 담당
+      }
+
+      setPastTenantsMap(pastMap);
+      setFutureTenantsMap(futureMap);
+    }).catch(console.error);
+  }, [todayStr]);
 
   const modalRooms = activeModal ? effectiveRooms.filter((r) => r.status === activeModal) : [];
   const visibleFloors = FLOORS.filter((f) => selectedFloors.has(f));
@@ -485,7 +612,7 @@ export default function CalendarPage() {
         ))}
       </div>
 
-      {/* Floor filter */}
+      {/* Floor filter + 범례 */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={toggleAll}
@@ -521,9 +648,25 @@ export default function CalendarPage() {
         })}
 
         <div className="w-px h-5 bg-[#2A2A2A]" />
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block w-0.5 h-4 rounded-full bg-rose-500" />
-          <span className="text-sm text-gray-400 font-medium">오늘</span>
+
+        {/* 범례 */}
+        <div className="flex items-center gap-4 ml-1">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm" style={{ background: `linear-gradient(90deg, ${PAST_BAR.from}44, ${PAST_BAR.to}44)`, border: `1px solid ${PAST_BAR.from}55` }} />
+            <span className="text-xs text-gray-500">과거</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm" style={{ background: `linear-gradient(90deg, ${CURRENT_BAR.from}bb, ${CURRENT_BAR.to}bb)` }} />
+            <span className="text-xs text-gray-500">현재</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm" style={{ background: `linear-gradient(90deg, ${FUTURE_BAR.from}55, ${FUTURE_BAR.to}55)`, border: `1px dashed ${FUTURE_BAR.from}88` }} />
+            <span className="text-xs text-gray-500">예정</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-0.5 h-4 rounded-full bg-rose-500" />
+            <span className="text-xs text-gray-500">오늘</span>
+          </div>
         </div>
       </div>
 
@@ -531,6 +674,7 @@ export default function CalendarPage() {
       <CalendarGrid
         visibleFloors={visibleFloors}
         onSelectRoom={setSelectedRoom}
+        onSelectPastTenant={handleSelectPastTenant}
         effectiveRooms={effectiveRooms}
         allMonths={allMonths}
         yearGroups={yearGroups}
@@ -538,6 +682,8 @@ export default function CalendarPage() {
         timelineEnd={timelineEnd}
         totalDays={totalDays}
         today={today}
+        pastTenantsMap={pastTenantsMap}
+        futureTenantsMap={futureTenantsMap}
       />
 
       <RoomListModal
@@ -550,6 +696,13 @@ export default function CalendarPage() {
         room={selectedRoom}
         onClose={() => setSelectedRoom(null)}
       />
+
+      {detailContract && (
+        <ContractDetailPanel
+          contract={detailContract}
+          onClose={() => setDetailContract(null)}
+        />
+      )}
     </main>
   );
 }

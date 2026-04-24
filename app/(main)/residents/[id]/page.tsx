@@ -36,8 +36,11 @@ import {
   insertCashSuccession,
   updateCashSuccession,
   deleteCashSuccession,
+  fetchRentPayments,
+  upsertRentPayment,
   type DbDepositDeduction,
   type DbCashSuccession,
+  type DbRentPayment,
 } from "@/app/lib/supabase-data";
 
 // ────────────── 상수 ──────────────
@@ -222,7 +225,6 @@ export default function ResidentDetailPage() {
         returnedAt: activeContract?.deposit_returned_at ?? null,
       },
       rentPayments,
-      gasBills: [],
       cashSuccessions: [],
     });
   }
@@ -282,11 +284,38 @@ export default function ResidentDetailPage() {
   // 새 항목 폼
   const [newCashForm, setNewCashForm] = useState<CashSuccessionRecord>({});
 
-  // 월세 납부
+  // 월세 납부 (DB)
+  const [dbRentPayments, setDbRentPayments] = useState<DbRentPayment[]>([]);
+
+  // 계약 변경 시 월세 납부 이력 로드 후 detail에 병합
+  useEffect(() => {
+    if (!activeContract) { setDbRentPayments([]); return; }
+    fetchRentPayments(activeContract.id).then((rows) => {
+      setDbRentPayments(rows);
+      setDetail((prev) => {
+        if (!prev) return prev;
+        const merged = prev.rentPayments.map((p) => {
+          const db = rows.find((r) => r.month === p.month);
+          if (!db) return p;
+          return {
+            ...p,
+            paidAt: db.paid_at,
+            amount: db.amount,
+            paymentMethod: db.payment_method as RentPaymentMethod | null,
+            status: db.status,
+          };
+        });
+        return { ...prev, rentPayments: merged };
+      });
+    }).catch(console.error);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeContract?.id]);
+
   const [payingMonthIdx, setPayingMonthIdx] = useState<number | null>(null);
   const [payDate, setPayDate] = useState("");
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<RentPaymentMethod>("이체");
+  const [payStatus, setPayStatus] = useState<'paid' | 'upcoming' | 'overdue'>("paid");
 
   if (!room) {
     return (
@@ -495,15 +524,26 @@ export default function ResidentDetailPage() {
 
   // ── 월세 납부 입력 ──
 
-  function addPayment(monthIdx: number) {
-    if (!detail || !payDate || !payAmount) return;
+  async function addPayment(monthIdx: number) {
+    if (!detail || !payAmount || !activeContract) return;
+    const payment = detail.rentPayments[monthIdx];
+    if (!payment) return;
+    const effectivePaidAt = payStatus === 'paid' ? (payDate || null) : null;
+    await upsertRentPayment({
+      contract_id: activeContract.id,
+      month: payment.month,
+      amount: Number(payAmount),
+      paid_at: effectivePaidAt,
+      payment_method: payStatus === 'paid' ? payMethod : null,
+      status: payStatus,
+    });
     setDetail((prev) =>
       prev
         ? {
             ...prev,
             rentPayments: prev.rentPayments.map((p, i) =>
               i === monthIdx
-                ? { ...p, paidAt: payDate, amount: Number(payAmount), paymentMethod: payMethod, status: "paid" as const }
+                ? { ...p, paidAt: effectivePaidAt, amount: Number(payAmount), paymentMethod: payStatus === 'paid' ? payMethod : null, status: payStatus }
                 : p
             ),
           }
@@ -1050,43 +1090,58 @@ export default function ResidentDetailPage() {
                         </span>
                       )}
                       <span className="text-sm font-semibold text-white">₩{p.amount.toLocaleString("ko-KR")}</span>
-                      {p.status !== "paid" && (
-                        <button
-                          onClick={() => {
-                            if (payingMonthIdx === i) { setPayingMonthIdx(null); return; }
-                            setPayingMonthIdx(i);
-                            setPayDate(new Date().toISOString().slice(0, 10));
-                            setPayAmount(String(p.amount));
-                            setPayMethod("이체");
-                          }}
-                          className="flex items-center gap-1 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-400 transition-colors hover:bg-indigo-500/20"
-                        >
-                          <Plus className="h-3 w-3" />입력
-                        </button>
-                      )}
+                      <button
+                        onClick={() => {
+                          if (payingMonthIdx === i) { setPayingMonthIdx(null); return; }
+                          setPayingMonthIdx(i);
+                          setPayDate(p.paidAt ?? new Date().toISOString().slice(0, 10));
+                          setPayAmount(String(p.amount));
+                          setPayMethod((p.paymentMethod as RentPaymentMethod) ?? "이체");
+                          setPayStatus(p.status);
+                        }}
+                        className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          p.status === 'paid'
+                            ? 'border-gray-500/40 bg-gray-500/10 text-gray-400 hover:bg-gray-500/20'
+                            : 'border-indigo-500/40 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
+                        }`}
+                      >
+                        {p.status === 'paid' ? <><Pencil className="h-3 w-3" />수정</> : <><Plus className="h-3 w-3" />입력</>}
+                      </button>
                     </div>
                   </div>
                   {payingMonthIdx === i && (
                     <div className="border-t border-[#2A2A2A] bg-[#0E0E0E] px-6 pb-4 pt-3 space-y-3">
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className={`grid gap-3 ${payStatus === 'paid' ? 'grid-cols-4' : 'grid-cols-2'}`}>
                         <div>
-                          <label className="mb-1.5 block text-xs text-gray-400">납부 날짜</label>
-                          <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className={INPUT} />
+                          <label className="mb-1.5 block text-xs text-gray-400">납부 상태</label>
+                          <select value={payStatus} onChange={(e) => setPayStatus(e.target.value as 'paid' | 'upcoming' | 'overdue')} className={INPUT}>
+                            <option value="paid">납부완료</option>
+                            <option value="upcoming">납부예정</option>
+                            <option value="overdue">미납</option>
+                          </select>
                         </div>
                         <div>
                           <label className="mb-1.5 block text-xs text-gray-400">금액 (원)</label>
                           <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} className={INPUT} />
                         </div>
-                        <div>
-                          <label className="mb-1.5 block text-xs text-gray-400">결제 방식</label>
-                          <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as RentPaymentMethod)} className={INPUT}>
-                            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-                          </select>
-                        </div>
+                        {payStatus === 'paid' && (
+                          <>
+                            <div>
+                              <label className="mb-1.5 block text-xs text-gray-400">납부 날짜</label>
+                              <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className={INPUT} />
+                            </div>
+                            <div>
+                              <label className="mb-1.5 block text-xs text-gray-400">결제 방식</label>
+                              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as RentPaymentMethod)} className={INPUT}>
+                                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                              </select>
+                            </div>
+                          </>
+                        )}
                       </div>
                       <div className="flex justify-end gap-2">
                         <button onClick={() => setPayingMonthIdx(null)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
-                        <button onClick={() => addPayment(i)} disabled={!payDate || !payAmount} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">저장</button>
+                        <button onClick={() => addPayment(i)} disabled={!payAmount} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">저장</button>
                       </div>
                     </div>
                   )}

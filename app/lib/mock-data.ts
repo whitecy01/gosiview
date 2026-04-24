@@ -33,6 +33,7 @@ export type MaintenanceRecord = {
 };
 
 export type TenantBar = {
+  contractId?: string;
   name: string;
   moveInDate: string;
   moveOutDate: string;
@@ -218,11 +219,6 @@ export type RentPayment = {
   status: "paid" | "overdue" | "upcoming";
 };
 
-export type GasBill = {
-  month: string;
-  amount: number;
-};
-
 export type CashSuccessionRecord = {
   billingStart?: string;
   billingEnd?: string;
@@ -261,7 +257,6 @@ export type ResidentDetail = {
   depositDeductions: DepositDeduction[];
   depositReturn: { returned: boolean; returnedAt: string | null };
   rentPayments: RentPayment[];
-  gasBills: GasBill[];
   cashSuccessions: CashSuccessionRecord[];
 };
 

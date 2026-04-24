@@ -526,7 +526,7 @@ function ScheduledInfoModal({
                 </div>
 
                 {/* 현재 입실자 */}
-                {room.moveInDate && (
+                {room.status === 'occupied' && room.moveInDate && (
                   <div className="flex items-center mb-2">
                     <div className="w-28 shrink-0 pr-3 text-right">
                       <span className="text-[10px] font-semibold text-emerald-400 block">현재 입실자</span>
@@ -1119,7 +1119,7 @@ export default function TenantListTable() {
                       <span className="text-base font-bold text-indigo-400">{room.id}호</span>
                     </td>
                     <td className="px-6 py-4 bg-violet-500/5">
-                      {room.resident ? (
+                      {room.status === 'occupied' && room.resident ? (
                         <div className="flex items-center gap-2">
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/10 border border-violet-500/20 text-xs font-bold text-violet-300">
                             {room.resident[0]}
@@ -1131,7 +1131,7 @@ export default function TenantListTable() {
                       )}
                     </td>
                     <td className="px-6 py-4 bg-teal-500/5">
-                      <span className="font-medium text-teal-400">{room.phone ?? "-"}</span>
+                      <span className="font-medium text-teal-400">{room.status === 'occupied' ? (room.phone ?? "-") : "-"}</span>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${statusStyle[room.status]}`}>

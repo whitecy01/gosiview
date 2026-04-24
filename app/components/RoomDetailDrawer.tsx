@@ -17,6 +17,13 @@ import {
   type RealEstateAgency,
 } from "../lib/mock-data";
 import { useRooms } from "@/app/context/RoomsContext";
+import {
+  fetchCashSuccessions,
+  fetchRentPayments,
+  upsertRentPayment,
+  type DbCashSuccession,
+  type DbRentPayment,
+} from "@/app/lib/supabase-data";
 
 // ────────────── 상수 ──────────────
 
@@ -83,6 +90,8 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
   const { contracts } = useRooms();
   const [activeTab, setActiveTab] = useState<Tab>("기본 정보");
   const [detail, setDetail] = useState<ResidentDetail | null>(null);
+  const [cashSuccessions, setCashSuccessions] = useState<DbCashSuccession[]>([]);
+  const [dbRentPayments, setDbRentPayments] = useState<DbRentPayment[]>([]);
 
   const activeContract = useMemo(() => {
     if (!room) return null;
@@ -100,8 +109,30 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
 
     if (!room || !activeContract) {
       setDetail(null);
+      setCashSuccessions([]);
       return;
     }
+
+    fetchCashSuccessions(activeContract.id).then(setCashSuccessions).catch(console.error);
+
+    fetchRentPayments(activeContract.id).then((rows) => {
+      setDbRentPayments(rows);
+      setDetail((prev) => {
+        if (!prev) return prev;
+        const merged = prev.rentPayments.map((p) => {
+          const db = rows.find((r) => r.month === p.month);
+          if (!db) return p;
+          return {
+            ...p,
+            paidAt: db.paid_at,
+            amount: db.amount,
+            paymentMethod: db.payment_method as RentPaymentMethod | null,
+            status: db.status,
+          };
+        });
+        return { ...prev, rentPayments: merged };
+      });
+    }).catch(console.error);
 
     const moveIn = activeContract.actual_move_in_date ?? activeContract.contract_start_date ?? "";
     const moveOut = activeContract.actual_move_out_date ?? activeContract.contract_end_date ?? "";
@@ -141,7 +172,6 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
         returnedAt: activeContract.deposit_returned_at ?? null,
       },
       rentPayments,
-      gasBills: [],
       cashSuccessions: [],
     });
   }, [room?.id, activeContract?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -172,8 +202,18 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
   function deleteDeduction(i: number) {
     setDetail((p) => p ? { ...p, depositDeductions: p.depositDeductions.filter((_, idx) => idx !== i) } : p);
   }
-  function addPayment(monthIdx: number) {
-    if (!detail || !payDate || !payAmount) return;
+  async function addPayment(monthIdx: number) {
+    if (!detail || !payDate || !payAmount || !activeContract) return;
+    const payment = detail.rentPayments[monthIdx];
+    if (!payment) return;
+    await upsertRentPayment({
+      contract_id: activeContract.id,
+      month: payment.month,
+      amount: Number(payAmount),
+      paid_at: payDate,
+      payment_method: payMethod,
+      status: "paid",
+    });
     setDetail((p) => p ? { ...p, rentPayments: p.rentPayments.map((r, i) => i === monthIdx ? { ...r, paidAt: payDate, amount: Number(payAmount), paymentMethod: payMethod, status: "paid" as const } : r) } : p);
     setPayingMonthIdx(null);
   }
@@ -529,16 +569,43 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                 </div>
               )}
 
-
-              {/* 공과금 탭 */}
+              {/* 공과금 탭 — 현금 승계 */}
               {room.status === "occupied" && activeTab === "공과금" && (
-                <div className="p-5">
-                  <p className="py-8 text-center text-sm text-gray-500">공과금 상세 내역은 입실자 상세 페이지에서 확인하세요.</p>
+                <div className="p-5 space-y-3">
+                  {cashSuccessions.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-gray-500">현금 승계 내역이 없습니다.</p>
+                  ) : (
+                    cashSuccessions.map((cs) => (
+                      <div key={cs.id} className="rounded-xl border border-[#2A2A2A] bg-[#111] p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-sky-400">청구기간</span>
+                          <span className="text-xs text-gray-300">{cs.billing_start ?? "-"} ~ {cs.billing_end ?? "-"}</span>
+                        </div>
+                        <div className="grid grid-cols-3 divide-x divide-[#2A2A2A] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                          {[
+                            { label: "임대인", value: cs.landlord_amount, color: "text-white" },
+                            { label: "총(지로)", value: cs.total_amount, color: "text-white" },
+                            { label: "임차인", value: cs.tenant_amount, color: "text-sky-400" },
+                          ].map(({ label, value, color }) => (
+                            <div key={label} className="px-2 py-2 text-center">
+                              <p className="text-[10px] text-gray-500">{label}</p>
+                              <p className={`mt-0.5 text-xs font-bold ${color}`}>
+                                {value != null ? `₩${value.toLocaleString("ko-KR")}` : "-"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        {cs.payment_date && (
+                          <p className="text-[11px] text-gray-500 text-right">납부일 {cs.payment_date}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
                   <button
                     onClick={() => router.push(`/residents/${room.id}`)}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 py-2.5 text-xs font-medium text-indigo-400 transition-colors hover:bg-indigo-500/20"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 py-2 text-xs font-medium text-sky-400 transition-colors hover:bg-sky-500/20"
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />상세 페이지로 이동
+                    <ExternalLink className="h-3.5 w-3.5" />상세 페이지에서 관리
                   </button>
                 </div>
               )}

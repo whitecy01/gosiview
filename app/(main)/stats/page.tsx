@@ -4,7 +4,8 @@ import { useMemo, useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { type MaintenanceRecord } from '@/app/lib/mock-data';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
-import { fetchAllMaintenanceRecords } from '@/app/lib/supabase-data';
+import { useRooms } from '@/app/context/RoomsContext';
+import { fetchAllMaintenanceRecords, fetchAllRentPayments, type DbRentPayment } from '@/app/lib/supabase-data';
 
 // ──────────── 헬퍼 ────────────
 
@@ -377,37 +378,75 @@ function StatCard({ title, value, subtitle, color }: { title: string; value: str
 
 export default function StatsPage() {
   const { effectiveRooms, stats } = useEffectiveRooms();
+  const { contracts } = useRooms();
   const [detailIdx, setDetailIdx] = useState<number | null>(null);
-  const [paymentMonthIdx, setPaymentMonthIdx] = useState(5); // 마지막 달 (현재)
+  const [paymentMonthIdx, setPaymentMonthIdx] = useState(5);
+  const [allRentPayments, setAllRentPayments] = useState<DbRentPayment[]>([]);
 
-  const occupiedRooms = useMemo(() => effectiveRooms.filter(r => r.status === 'occupied'), [effectiveRooms]);
+  useEffect(() => {
+    fetchAllRentPayments().then(setAllRentPayments).catch(console.error);
+  }, []);
 
-  // 월별 수입 (최근 6개월) - 방별 납부 내역 포함
+  // contract_id → room_id 맵
+  const contractRoomMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of contracts) m.set(c.id, c.room_id);
+    return m;
+  }, [contracts]);
+
+  // `${roomId}|${YYYY-MM}` → DbRentPayment 맵
+  const rentPaymentLookup = useMemo(() => {
+    const m = new Map<string, DbRentPayment>();
+    for (const rp of allRentPayments) {
+      const roomId = contractRoomMap.get(rp.contract_id);
+      if (roomId) m.set(`${roomId}|${rp.month}`, rp);
+    }
+    return m;
+  }, [allRentPayments, contractRoomMap]);
+
+  // 월별 수입 (최근 6개월) — 실제 rent_payments 연동
   const monthlyRevenue: MonthData[] = useMemo(() => {
     const now = new Date();
     const nowYear = now.getFullYear();
     const nowMonth = now.getMonth() + 1;
-
-    // 각 방의 base rent
-    const baseRows = occupiedRooms.map(r => ({ id: r.id, resident: r.resident ?? '', roomType: r.roomType, rent: parsePrice(r.monthlyRent) }));
 
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
       const y = d.getFullYear();
       const mo = d.getMonth() + 1;
       const isCurrent = y === nowYear && mo === nowMonth;
+      const monthStr = `${y}-${String(mo).padStart(2, '0')}`;
+      const firstDay = `${monthStr}-01`;
+      const lastDay = new Date(y, mo, 0).toISOString().slice(0, 10);
 
-      // 이번 달: 실제 납부 상태 반영 / 과거: 전부 납부 완료
-      const rows = baseRows.map(r => {
+      // 해당 월에 활성 계약 찾기
+      const activeContracts = contracts.filter(c => {
+        if (c.status !== 'scheduled' && c.status !== 'completed') return false;
+        const moveIn = c.actual_move_in_date ?? c.contract_start_date;
+        const moveOut = c.actual_move_out_date ?? c.contract_end_date;
+        if (!moveIn || moveIn > lastDay) return false;
+        if (moveOut && moveOut < firstDay) return false;
+        return true;
+      });
+
+      const rows = activeContracts.map(c => {
+        const rp = rentPaymentLookup.get(`${c.room_id}|${monthStr}`);
         let status: '납부 완료' | '납부 예정' | '미납';
-        if (isCurrent) {
-          const room = effectiveRooms.find(room => room.id === r.id);
-          const ps = room?.paymentStatus;
-          status = ps === 'paid' ? '납부 완료' : ps === 'overdue' ? '미납' : '납부 예정';
+        let rent = c.monthly_rent ?? 0;
+        if (rp) {
+          status = rp.status === 'paid' ? '납부 완료' : rp.status === 'overdue' ? '미납' : '납부 예정';
+          rent = rp.amount;
         } else {
-          status = '납부 완료';
+          const isPast = y < nowYear || (y === nowYear && mo < nowMonth);
+          status = isPast ? '납부 예정' : '납부 예정';
         }
-        return { ...r, status };
+        return {
+          id: c.room_id,
+          resident: c.name,
+          roomType: effectiveRooms.find(r => r.id === c.room_id)?.roomType ?? '',
+          rent,
+          status,
+        };
       });
 
       const total = rows.reduce((s, r) => s + r.rent, 0);
@@ -421,10 +460,13 @@ export default function StatsPage() {
         rows,
       };
     });
-  }, [occupiedRooms, effectiveRooms]);
+  }, [contracts, rentPaymentLookup, effectiveRooms]);
 
   const thisMonthRevenue = monthlyRevenue[monthlyRevenue.length - 1]?.value ?? 0;
-  const overdueCount = effectiveRooms.filter(r => r.paymentStatus === 'overdue').length;
+  const overdueCount = allRentPayments.filter(rp => {
+    const monthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    return rp.month === monthStr && rp.status === 'overdue';
+  }).length;
 
   return (
     <main className="w-full space-y-6">

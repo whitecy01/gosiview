@@ -70,7 +70,39 @@ export function useEffectiveRooms() {
         };
       }
 
-      // scheduled 중 현재 입실자 없음 → 공실
+      // 미래 scheduled 계약이 있으면 → 계약
+      const nextContract = scheduledContracts
+        .filter((c) => {
+          const moveInStr = (c.actual_move_in_date ?? c.contract_start_date).slice(0, 10);
+          return moveInStr > todayStr;
+        })
+        .sort((a, b) => {
+          const aDate = a.actual_move_in_date ?? a.contract_start_date;
+          const bDate = b.actual_move_in_date ?? b.contract_start_date;
+          return aDate.localeCompare(bDate);
+        })[0];
+
+      if (nextContract) {
+        const moveIn = nextContract.actual_move_in_date ?? nextContract.contract_start_date;
+        return {
+          ...room,
+          status: 'contract' as const,
+          resident: nextContract.name,
+          phone: nextContract.phone,
+          gender: nextContract.gender,
+          age: nextContract.age,
+          moveInDate: moveIn,
+          moveOutDate: nextContract.actual_move_out_date ?? nextContract.contract_end_date ?? null,
+          monthlyRent: nextContract.monthly_rent
+            ? `₩${nextContract.monthly_rent.toLocaleString('ko-KR')}`
+            : room.roomPrice,
+          contractId: nextContract.id,
+          paymentStatus: null,
+          rentStatus: 'contract',
+        };
+      }
+
+      // 현재·미래 scheduled 계약 없음 → 공실
       return {
         ...room,
         status: 'vacant' as const,

@@ -164,6 +164,47 @@ export async function fetchCompletedContracts(roomId: string): Promise<DbContrac
   return data as DbContract[];
 }
 
+/**
+ * 방 이력 조회: completed 계약 + 퇴실일이 오늘 이전인 scheduled 계약을 모두 반환합니다.
+ * 퇴실 처리를 하지 않았더라도 계약 종료일이 지나면 이력에 표시됩니다.
+ */
+export async function fetchRoomHistory(roomId: string, today: string): Promise<DbContract[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('*')
+    .eq('room_id', roomId)
+    .order('contract_start_date', { ascending: false });
+  if (error) throw error;
+
+  return (data as DbContract[]).filter((c) => {
+    if (c.status === 'completed') return true;
+    const moveOut = c.actual_move_out_date ?? c.contract_end_date;
+    return !!moveOut && moveOut < today;
+  });
+}
+
+export async function fetchAllCompletedContracts(): Promise<DbContract[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('*')
+    .eq('status', 'completed')
+    .order('actual_move_in_date', { ascending: false });
+  if (error) throw error;
+  return data as DbContract[];
+}
+
+export async function fetchAllContractsForCalendar(): Promise<DbContract[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('*')
+    .order('contract_start_date', { ascending: true });
+  if (error) throw error;
+  return data as DbContract[];
+}
+
 // ──────────── 보증금 차감 이력 ────────────
 
 export type DbDepositDeduction = {
@@ -360,4 +401,56 @@ export async function deleteMaintenanceRecord(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from('maintenance_records').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ──────────── 월세 납부 ────────────
+
+export type DbRentPayment = {
+  id: string;
+  contract_id: string;
+  month: string;
+  amount: number;
+  paid_at: string | null;
+  payment_method: string | null;
+  status: 'paid' | 'upcoming' | 'overdue';
+  created_at: string;
+};
+
+export async function fetchRentPayments(contractId: string): Promise<DbRentPayment[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('rent_payments')
+    .select('*')
+    .eq('contract_id', contractId)
+    .order('month', { ascending: true });
+  if (error) throw error;
+  return data as DbRentPayment[];
+}
+
+export async function fetchAllRentPayments(): Promise<DbRentPayment[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('rent_payments')
+    .select('*')
+    .order('month', { ascending: true });
+  if (error) throw error;
+  return data as DbRentPayment[];
+}
+
+export async function upsertRentPayment(input: {
+  contract_id: string;
+  month: string;
+  amount: number;
+  paid_at: string | null;
+  payment_method: string | null;
+  status: 'paid' | 'upcoming' | 'overdue';
+}): Promise<DbRentPayment> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('rent_payments')
+    .upsert(input, { onConflict: 'contract_id,month' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as DbRentPayment;
 }

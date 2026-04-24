@@ -70,6 +70,8 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   const [agencyCustom, setAgencyCustom] = useState(false);
 
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const selectedRoom = effectiveRooms.find((r) => r.id === roomId);
   const typeInfo = selectedRoom ? ROOM_TYPE_INFO[selectedRoom.roomType] : null;
@@ -103,30 +105,37 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   const moveInError = !!(actualMoveInDate && contractMoveInDate && actualMoveInDate < contractMoveInDate);
   const canSubmit = !!(roomId && name && phone && gender && age && contractMoveInDate && contractMonths) && !moveInError;
 
-  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || saving) return;
 
-    addContract({
-      room_id: roomId,
-      name,
-      phone,
-      gender: gender as '남' | '여',
-      age: Number(age),
-      purpose: purpose || null,
-      real_estate_agency: realEstateAgency || null,
-      contract_start_date: contractMoveInDate,
-      contract_end_date: contractEndDate || null,
-      contract_months: contractMonths ? Number(contractMonths) : null,
-      actual_move_in_date: actualMoveInDate || null,
-      actual_move_out_date: moveOutDate || null,
-      monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
-      contract_deposit: contractDeposit ? Number(contractDeposit) : null,
-      deposit_total: contractDeposit ? Number(contractDeposit) : null,
-      status: 'scheduled',
-    });
-
-    setSubmitted(true);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await addContract({
+        room_id: roomId,
+        name,
+        phone,
+        gender: gender as '남' | '여',
+        age: Number(age),
+        purpose: purpose || null,
+        real_estate_agency: realEstateAgency || null,
+        contract_start_date: contractMoveInDate,
+        contract_end_date: contractEndDate || null,
+        contract_months: contractMonths ? Number(contractMonths) : null,
+        actual_move_in_date: actualMoveInDate || null,
+        actual_move_out_date: moveOutDate || null,
+        monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
+        contract_deposit: contractDeposit ? Number(contractDeposit) : null,
+        deposit_total: contractDeposit ? Number(contractDeposit) : null,
+        status: 'scheduled',
+      });
+      setSubmitted(true);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : '저장 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   // 성공 화면
@@ -461,21 +470,29 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
           </div>
 
           {/* 푸터 */}
-          <div className="px-6 py-4 border-t border-[#2A2A2A] flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2.5 text-sm font-medium text-gray-300 hover:bg-[#2A2A2A] transition-colors"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="flex-1 rounded-lg bg-indigo-500 py-2.5 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              등록하기
-            </button>
+          <div className="px-6 py-4 border-t border-[#2A2A2A] space-y-3">
+            {saveError && (
+              <p className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
+                {saveError}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-2.5 text-sm font-medium text-gray-300 hover:bg-[#2A2A2A] disabled:opacity-40 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={!canSubmit || saving}
+                className="flex-1 rounded-lg bg-indigo-500 py-2.5 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {saving ? '저장 중…' : '등록하기'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
