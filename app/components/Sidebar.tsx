@@ -1,5 +1,9 @@
-import { Building2, CalendarRange, LayoutDashboard, Settings, Users, LogOut, ListTodo, BarChart2 } from 'lucide-react';
+'use client';
+
+import { Building2, CalendarRange, LayoutDashboard, Users, LogOut, ListTodo, BarChart2 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/app/lib/supabase/client';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -11,10 +15,18 @@ const NAV_ITEMS = [
   { href: '/residents', icon: Users, label: '입실자 관리' },
   { href: '/calendar', icon: CalendarRange, label: '연간 캘린더' },
   { href: '/stats', icon: BarChart2, label: '통계' },
-  { href: '/settings', icon: Settings, label: '설정' },
 ];
 
 export default function Sidebar({ collapsed }: SidebarProps) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  }
+
   return (
     <aside
       className={`fixed left-0 top-0 z-40 h-screen border-r border-[#2A2A2A] bg-[#0A0A0A] transition-all duration-300 ${
@@ -57,6 +69,7 @@ export default function Sidebar({ collapsed }: SidebarProps) {
         <ul className="space-y-1 border-t border-[#2A2A2A] px-2 pt-4 font-medium">
           <li>
             <button
+              onClick={handleLogout}
               className={`group flex w-full items-center rounded-lg p-2 text-white hover:bg-[#1A1A1A] transition-colors ${
                 collapsed ? 'justify-center' : ''
               }`}
