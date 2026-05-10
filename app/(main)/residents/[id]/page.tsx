@@ -27,7 +27,7 @@ import {
 } from "@/app/lib/mock-data";
 import { useRooms } from "@/app/context/RoomsContext";
 import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
-import { calcEndDate as calcMoveOutDate, formatPhone } from "@/app/lib/utils";
+import { formatPhone } from "@/app/lib/utils";
 import {
   fetchDeductions,
   insertDeduction,
@@ -143,7 +143,7 @@ function toDbCashInput(contractId: string, rec: CashSuccessionRecord) {
 
 const CARD = "rounded-xl border border-[#2A2A2A] bg-[#111] overflow-hidden";
 const SECTION_HEADER = "flex items-center justify-between px-6 py-4 border-b border-[#2A2A2A]";
-const INPUT = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-indigo-500";
+const INPUT = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-indigo-500 [color-scheme:dark]";
 
 // ────────────── 메인 컴포넌트 ──────────────
 
@@ -186,8 +186,8 @@ export default function ResidentDetailPage() {
 
   // 계약 데이터로 detail 초기화
   function initDetail() {
-    const moveIn = activeContract?.actual_move_in_date ?? activeContract?.contract_start_date ?? "";
-    const moveOut = activeContract?.actual_move_out_date ?? activeContract?.contract_end_date ?? "";
+    const moveIn = activeContract?.actual_move_in_date ?? "";
+    const moveOut = activeContract?.actual_move_out_date ?? "";
     const rent = activeContract?.monthly_rent ?? 0;
     const dueDay = moveIn ? new Date(moveIn).getDate() : 1;
 
@@ -210,7 +210,6 @@ export default function ResidentDetailPage() {
       actualMonthlyRent: Math.round(rent / 10000),
       paymentDueDay: dueDay,
       contractMoveInDate: activeContract?.contract_start_date,
-      contractExpiry: activeContract?.contract_end_date ?? "",
       actualMoveInDate: activeContract?.actual_move_in_date ?? undefined,
       actualMoveOutDate: activeContract?.actual_move_out_date ?? undefined,
       contractDeposit: {
@@ -232,10 +231,9 @@ export default function ResidentDetailPage() {
   // 기본 정보 수정 모드
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState<Partial<ResidentDetail>>({});
-  const [contractMonths, setContractMonths] = useState<string>("");
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
-  const [editAge, setEditAge] = useState("");
+  const [editBirthDate, setEditBirthDate] = useState("");
 
   // 퇴실 처리
   const [confirmCheckout, setConfirmCheckout] = useState(false);
@@ -330,10 +328,9 @@ export default function ResidentDetailPage() {
   function startEditInfo() {
     if (!detail) return;
     setInfoForm({ ...detail });
-    setContractMonths("");
     setEditName(activeContract?.name ?? "");
     setEditPhone(activeContract?.phone ?? "");
-    setEditAge(String(activeContract?.age ?? ""));
+    setEditBirthDate(activeContract?.birth_date ?? "");
     setEditingInfo(true);
   }
 
@@ -348,10 +345,9 @@ export default function ResidentDetailPage() {
     await editContract(activeContract.id, {
       name: editName || activeContract.name,
       phone: editPhone || activeContract.phone,
-      age: editAge ? Number(editAge) : activeContract.age ?? undefined,
+      birth_date: editBirthDate || activeContract.birth_date || undefined,
       monthly_rent: infoForm.actualMonthlyRent ? infoForm.actualMonthlyRent * 10000 : undefined,
       contract_start_date: infoForm.contractMoveInDate ?? activeContract.contract_start_date,
-      contract_end_date: infoForm.contractExpiry || null,
       actual_move_in_date: infoForm.actualMoveInDate || null,
       actual_move_out_date: infoForm.actualMoveOutDate || null,
       contract_deposit: infoForm.contractDeposit?.amount ?? null,
@@ -498,7 +494,7 @@ export default function ResidentDetailPage() {
   }
 
   const PRINT_HEADER = `
-    <h2>${id}호 · ${room?.resident ?? ""} — 전기 현금 승계</h2>
+    <h2>${id}호 — 전기 현금 승계</h2>
     <p>이번달 청구요금은 현금 승계만 가능하여 호림에서 직접 납부하고 있습니다.<br/>
     다음달 부터는 임차인에게서 직접 납부하시면 됩니다.(종이 청구서 배부 예정)<br/>
     실 사용 금액(형광펜 부분)만 저희 계좌로 입금 부탁드립니다. 감사합니다.</p>
@@ -665,11 +661,11 @@ export default function ResidentDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">나이</label>
+                    <label className="mb-1.5 block text-xs text-gray-400">출생년도</label>
                     <input
-                      type="number"
-                      value={editAge}
-                      onChange={(e) => setEditAge(e.target.value)}
+                      type="date"
+                      value={editBirthDate}
+                      onChange={(e) => setEditBirthDate(e.target.value)}
                       className={INPUT}
                     />
                   </div>
@@ -714,20 +710,11 @@ export default function ResidentDetailPage() {
                   <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">계약 기간</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="mb-1.5 block text-xs text-gray-400">계약일(시작)</label>
+                      <label className="mb-1.5 block text-xs text-gray-400">계약일(문서 작성 날짜)</label>
                       <input
                         type="date"
                         value={infoForm.contractMoveInDate ?? ""}
                         onChange={(e) => setInfoForm((f) => ({ ...f, contractMoveInDate: e.target.value }))}
-                        className={INPUT}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs text-gray-400">계약일(끝)</label>
-                      <input
-                        type="date"
-                        value={infoForm.contractExpiry ?? ""}
-                        onChange={(e) => setInfoForm((f) => ({ ...f, contractExpiry: e.target.value }))}
                         className={INPUT}
                       />
                     </div>
@@ -743,47 +730,12 @@ export default function ResidentDetailPage() {
                       <input
                         type="date"
                         value={infoForm.actualMoveInDate ?? ""}
-                        onChange={(e) => {
-                          const moveIn = e.target.value;
-                          const months = Number(contractMonths);
-                          setInfoForm((f) => ({
-                            ...f,
-                            actualMoveInDate: moveIn,
-                            actualMoveOutDate: moveIn && months > 0 ? calcMoveOutDate(moveIn, months) : f.actualMoveOutDate,
-                          }));
-                        }}
+                        onChange={(e) => setInfoForm((f) => ({ ...f, actualMoveInDate: e.target.value }))}
                         className={INPUT}
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-xs text-gray-400">계약 개월 수</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          max={60}
-                          value={contractMonths}
-                          onChange={(e) => {
-                            const months = e.target.value;
-                            setContractMonths(months);
-                            const moveIn = infoForm.actualMoveInDate;
-                            if (moveIn && Number(months) > 0) {
-                              setInfoForm((f) => ({
-                                ...f,
-                                actualMoveOutDate: calcMoveOutDate(moveIn, Number(months)),
-                              }));
-                            }
-                          }}
-                          placeholder="3"
-                          className={INPUT}
-                        />
-                        <span className="shrink-0 text-xs text-gray-500">개월</span>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs text-gray-400">
-                        퇴실일 <span className="text-gray-600 font-normal">(자동 계산)</span>
-                      </label>
+                      <label className="mb-1.5 block text-xs text-gray-400">퇴실일</label>
                       <input
                         type="date"
                         value={infoForm.actualMoveOutDate ?? ""}
@@ -792,13 +744,6 @@ export default function ResidentDetailPage() {
                       />
                     </div>
                   </div>
-                  {infoForm.actualMoveInDate && infoForm.actualMoveOutDate && (
-                    <p className="mt-2 text-xs text-gray-500">
-                      입실일 <span className="text-white">{infoForm.actualMoveInDate}</span> +{" "}
-                      {contractMonths || "?"} 개월 − 1일 →{" "}
-                      퇴실일 <span className="text-emerald-400 font-semibold">{infoForm.actualMoveOutDate}</span>
-                    </p>
-                  )}
                 </div>
 
                 {/* 계약금 */}
@@ -866,7 +811,8 @@ export default function ResidentDetailPage() {
                 {(() => {
                   const name    = room.resident   ?? activeContract?.name   ?? "-";
                   const gender  = room.gender     ?? activeContract?.gender ?? null;
-                  const age     = room.age        ?? activeContract?.age    ?? null;
+                  const birthDate = room.birth_date ?? activeContract?.birth_date ?? null;
+                  const age     = birthDate ? new Date().getFullYear() - parseInt(birthDate.slice(0, 4), 10) : null;
                   const phone   = room.phone      ?? activeContract?.phone  ?? "-";
                   return (
                     <div className="mb-6 flex items-center gap-4">
@@ -894,14 +840,16 @@ export default function ResidentDetailPage() {
                   <InfoField icon={<Home className="h-3.5 w-3.5" />} label="방 유형" value={room.roomType} />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="기존 금액" value={`${detail.utilityIncludedRent}만원`} />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(시작)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(끝)" value={fmtDate(detail.contractExpiry)} />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(문서 작성 날짜)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={detail.actualMoveInDate ? fmtDate(detail.actualMoveInDate) : (room.moveInDate ? fmtDate(room.moveInDate) : "-")} />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : (room.moveOutDate ? fmtDate(room.moveOutDate) : "-")} />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${new Date(detail.actualMoveInDate ?? room.moveInDate ?? detail.contractMoveInDate ?? detail.contractDeposit.date).getDate()}일`} highlight="indigo" />
                   <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="계약금" value={`${fmtDate(detail.contractDeposit.date)} · ₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
                   <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
+                  {activeContract?.birth_date && (
+                    <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="출생년도" value={activeContract.birth_date} />
+                  )}
                 </div>
               </div>
             )}

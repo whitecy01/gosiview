@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react';
 import { X, UserPlus, CheckCircle2, ChevronDown } from 'lucide-react';
 import { ROOM_TYPE_INFO, type ResidencePurpose, type RealEstateAgency } from '@/app/lib/mock-data';
-import { calcEndDate } from '@/app/lib/utils';
 import { useRooms } from '@/app/context/RoomsContext';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 
@@ -50,12 +49,10 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<'남' | '여' | ''>('');
-  const [age, setAge] = useState('');
+  const [birthDate, setBirthDate] = useState('');
 
   // 계약 정보
   const [contractMoveInDate, setContractMoveInDate] = useState('');
-  const [contractMonths, setContractMonths] = useState('');
-  const [contractEndDate, setContractEndDate] = useState('');
 
   // 입실 정보
   const [actualMoveInDate, setActualMoveInDate] = useState('');
@@ -81,29 +78,17 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
 
   function handleContractStartChange(val: string) {
     setContractMoveInDate(val);
-    const months = Number(contractMonths);
-    if (val && months > 0) setContractEndDate(calcEndDate(val, months));
-  }
-
-  function handleContractMonthsChange(val: string) {
-    setContractMonths(val);
-    const months = Number(val);
-    if (contractMoveInDate && months > 0) setContractEndDate(calcEndDate(contractMoveInDate, months));
-    const base = actualMoveInDate || contractMoveInDate;
-    if (base && months > 0) setMoveOutDate(calcEndDate(base, months));
   }
 
   function handleActualMoveInChange(val: string) {
     setActualMoveInDate(val);
-    const months = Number(contractMonths);
-    if (val && months > 0) setMoveOutDate(calcEndDate(val, months));
   }
 
   const effectiveMoveIn = actualMoveInDate || contractMoveInDate;
-  const effectiveMoveOut = moveOutDate || contractEndDate;
+  const effectiveMoveOut = moveOutDate;
 
   const moveInError = !!(actualMoveInDate && contractMoveInDate && actualMoveInDate < contractMoveInDate);
-  const canSubmit = !!(roomId && name && phone && gender && age && contractMoveInDate && contractMonths) && !moveInError;
+  const canSubmit = !!(roomId && name && phone && gender && birthDate && contractMoveInDate && actualMoveInDate) && !moveInError;
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -117,12 +102,10 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
         name,
         phone,
         gender: gender as '남' | '여',
-        age: Number(age),
+        birth_date: birthDate || null,
         purpose: purpose || null,
         real_estate_agency: realEstateAgency || null,
         contract_start_date: contractMoveInDate,
-        contract_end_date: contractEndDate || null,
-        contract_months: contractMonths ? Number(contractMonths) : null,
         actual_move_in_date: actualMoveInDate || null,
         actual_move_out_date: moveOutDate || null,
         monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
@@ -277,15 +260,12 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">나이 <span className="text-rose-400">*</span></label>
+                  <label className="block text-xs text-gray-400 mb-1.5">출생년도 <span className="text-rose-400">*</span></label>
                   <input
                     required
-                    type="number"
-                    min={10}
-                    max={99}
-                    placeholder="25"
-                    value={age}
-                    onChange={(e) => setAge(e.target.value)}
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
                     className={inputCls}
                   />
                 </div>
@@ -295,40 +275,14 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
             {/* 계약 정보 */}
             <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 space-y-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400">계약 정보</p>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">계약일(시작) <span className="text-rose-400">*</span></label>
-                  <input
-                    type="date"
-                    value={contractMoveInDate}
-                    onChange={(e) => handleContractStartChange(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">개월 수 <span className="text-rose-400">*</span></label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      min={1}
-                      max={60}
-                      placeholder="3"
-                      value={contractMonths}
-                      onChange={(e) => handleContractMonthsChange(e.target.value)}
-                      className={inputCls}
-                    />
-                    <span className="text-xs text-gray-500 shrink-0">개월</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">계약일(끝) <span className="text-gray-600 font-normal">(자동)</span></label>
-                  <input
-                    type="date"
-                    value={contractEndDate}
-                    onChange={(e) => setContractEndDate(e.target.value)}
-                    className={`${inputCls} ${contractEndDate ? 'text-indigo-300' : ''}`}
-                  />
-                </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">계약일(문서 작성 날짜) <span className="text-rose-400">*</span></label>
+                <input
+                  type="date"
+                  value={contractMoveInDate}
+                  onChange={(e) => handleContractStartChange(e.target.value)}
+                  className={inputCls}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -419,22 +373,14 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                   )}
                 </div>
               </div>
-              {contractMoveInDate && contractEndDate && (
-                <p className="text-[10px] text-indigo-400/70">
-                  {contractMoveInDate} ~ {contractEndDate} ({contractMonths}개월)
-                </p>
-              )}
             </div>
 
             {/* 입실 정보 */}
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">입실 정보</p>
-                <span className="text-[10px] text-gray-600">입실일 변경이 없으면 계약일(시작)이 자동 적용됩니다</span>
-              </div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">입실 정보</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-gray-600 font-normal">(변경 시만 입력)</span></label>
+                  <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-rose-400">*</span></label>
                   <input
                     type="date"
                     value={actualMoveInDate}
@@ -442,11 +388,11 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     className={`${inputCls} focus:border-amber-500 ${moveInError ? 'border-rose-500 text-rose-400' : actualMoveInDate ? 'text-amber-300' : ''}`}
                   />
                   {moveInError && (
-                    <p className="mt-1 text-[10px] text-rose-400">입실일은 계약일(시작) 이후여야 합니다</p>
+                    <p className="mt-1 text-[10px] text-rose-400">입실일은 계약일(문서 작성 날짜) 이후여야 합니다</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">퇴실일 <span className="text-gray-600 font-normal">(자동 계산)</span></label>
+                  <label className="block text-xs text-gray-400 mb-1.5">퇴실일</label>
                   <input
                     type="date"
                     value={moveOutDate}
@@ -458,10 +404,6 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
               {effectiveMoveIn && effectiveMoveOut && (
                 <p className="text-[10px] text-amber-400/70">
                   입실 기준: <span className="font-semibold">{effectiveMoveIn}</span>
-                  {actualMoveInDate && actualMoveInDate !== contractMoveInDate && (
-                    <span className="text-gray-600 ml-1">(계약일 {contractMoveInDate}에서 변경)</span>
-                  )}
-                  {!actualMoveInDate && <span className="text-gray-600 ml-1">(계약일(시작) 자동 적용)</span>}
                   {' '}→ 월세 납부일 <span className="font-semibold">매월 {new Date(effectiveMoveIn).getDate()}일</span>
                 </p>
               )}

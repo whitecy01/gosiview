@@ -154,7 +154,7 @@ export default function LedgerList() {
                         <span className="inline-flex items-center rounded-full border border-pink-500/20 bg-pink-500/10 px-2.5 py-1 text-xs font-medium text-pink-400">여</span>
                       )}
                     </td>
-                    <td className="px-6 py-5 text-white font-medium">{entry.age ?? "-"}세</td>
+                    <td className="px-6 py-5 text-white font-medium">{entry.birth_date ? `${new Date().getFullYear() - parseInt(entry.birth_date.slice(0, 4), 10)}세` : "-"}</td>
                     <td className="px-6 py-5">
                       <DateCell value={entry.moveInDate ?? "-"} />
                     </td>

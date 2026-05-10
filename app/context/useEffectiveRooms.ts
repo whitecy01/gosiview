@@ -37,30 +37,29 @@ export function useEffectiveRooms() {
 
       const current = scheduledContracts
         .filter((c) => {
-          const moveInStr = (c.actual_move_in_date ?? c.contract_start_date).slice(0, 10);
-          if (moveInStr > todayStr) return false; // 아직 입실 전
-          const moveOutDate = c.actual_move_out_date ?? c.contract_end_date;
-          if (moveOutDate && moveOutDate.slice(0, 10) < todayStr) return false; // 퇴실일 다음날부터 제외
+          const moveInStr = (c.actual_move_in_date ?? "").slice(0, 10);
+          if (!moveInStr || moveInStr > todayStr) return false;
+          const moveOutDate = c.actual_move_out_date;
+          if (moveOutDate && moveOutDate.slice(0, 10) < todayStr) return false;
           return true;
         })
         .sort((a, b) => {
-          // 가장 최근에 입실한 사람 우선
-          const aDate = a.actual_move_in_date ?? a.contract_start_date;
-          const bDate = b.actual_move_in_date ?? b.contract_start_date;
+          const aDate = a.actual_move_in_date ?? "";
+          const bDate = b.actual_move_in_date ?? "";
           return bDate.localeCompare(aDate);
         })[0];
 
       if (current) {
-        const moveIn = current.actual_move_in_date ?? current.contract_start_date;
+        const moveIn = current.actual_move_in_date ?? "";
         return {
           ...room,
           status: 'occupied' as const,
           resident: current.name,
           phone: current.phone,
           gender: current.gender,
-          age: current.age,
+          birth_date: current.birth_date,
           moveInDate: moveIn,
-          moveOutDate: current.actual_move_out_date ?? current.contract_end_date ?? null,
+          moveOutDate: current.actual_move_out_date ?? null,
           monthlyRent: current.monthly_rent
             ? `₩${current.monthly_rent.toLocaleString('ko-KR')}`
             : room.roomPrice,
@@ -73,26 +72,26 @@ export function useEffectiveRooms() {
       // 미래 scheduled 계약이 있으면 → 계약
       const nextContract = scheduledContracts
         .filter((c) => {
-          const moveInStr = (c.actual_move_in_date ?? c.contract_start_date).slice(0, 10);
-          return moveInStr > todayStr;
+          const moveInStr = (c.actual_move_in_date ?? "").slice(0, 10);
+          return !!moveInStr && moveInStr > todayStr;
         })
         .sort((a, b) => {
-          const aDate = a.actual_move_in_date ?? a.contract_start_date;
-          const bDate = b.actual_move_in_date ?? b.contract_start_date;
+          const aDate = a.actual_move_in_date ?? "";
+          const bDate = b.actual_move_in_date ?? "";
           return aDate.localeCompare(bDate);
         })[0];
 
       if (nextContract) {
-        const moveIn = nextContract.actual_move_in_date ?? nextContract.contract_start_date;
+        const moveIn = nextContract.actual_move_in_date ?? "";
         return {
           ...room,
           status: 'contract' as const,
           resident: nextContract.name,
           phone: nextContract.phone,
           gender: nextContract.gender,
-          age: nextContract.age,
+          birth_date: nextContract.birth_date,
           moveInDate: moveIn,
-          moveOutDate: nextContract.actual_move_out_date ?? nextContract.contract_end_date ?? null,
+          moveOutDate: nextContract.actual_move_out_date ?? null,
           monthlyRent: nextContract.monthly_rent
             ? `₩${nextContract.monthly_rent.toLocaleString('ko-KR')}`
             : room.roomPrice,
@@ -109,7 +108,7 @@ export function useEffectiveRooms() {
         resident: null,
         phone: null,
         gender: null,
-        age: null,
+        birth_date: null,
         moveInDate: null,
         moveOutDate: null,
         monthlyRent: null,

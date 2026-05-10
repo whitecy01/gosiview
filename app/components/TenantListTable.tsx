@@ -107,13 +107,10 @@ function ResidentForm({
   const [name, setName] = useState(initial.name ?? "");
   const [phone, setPhone] = useState(formatPhone(initial.phone ?? ""));
   const [gender, setGender] = useState<'남' | '여'>(initial.gender ?? '남');
-  const [age, setAge] = useState(String(initial.age ?? ""));
+  const [birthDate, setBirthDate] = useState(initial.birth_date ?? "");
 
   // 계약 정보
   const [contractMoveInDate, setContractMoveInDate] = useState(initial.contractMoveInDate ?? "");
-  const [contractMonths, setContractMonths] = useState(String(initial.contractMonths ?? ""));
-  const [contractEndDate, setContractEndDate] = useState(initial.contractEndDate ?? "");
-
   // 입실 정보
   const [actualMoveInDate, setActualMoveInDate] = useState(initial.actualMoveInDate ?? "");
   const [moveOutDate, setMoveOutDate] = useState(initial.moveOutDate ?? "");
@@ -134,32 +131,19 @@ function ResidentForm({
 
   function handleContractStartChange(val: string) {
     setContractMoveInDate(val);
-    const months = Number(contractMonths);
-    if (val && months > 0) setContractEndDate(calcEndDate(val, months));
-  }
-  function handleContractMonthsChange(val: string) {
-    setContractMonths(val);
-    const months = Number(val);
-    if (contractMoveInDate && months > 0) setContractEndDate(calcEndDate(contractMoveInDate, months));
-    const base = actualMoveInDate || contractMoveInDate;
-    if (base && months > 0) setMoveOutDate(calcEndDate(base, months));
   }
   function handleActualMoveInChange(val: string) {
     setActualMoveInDate(val);
-    const months = Number(contractMonths);
-    if (val && months > 0) setMoveOutDate(calcEndDate(val, months));
   }
 
   const moveInError = !!(actualMoveInDate && contractMoveInDate && actualMoveInDate < contractMoveInDate);
-  const canSave = !!(name && phone && age && contractMoveInDate && contractMonths) && !moveInError;
+  const canSave = !!(name && phone && birthDate && contractMoveInDate && actualMoveInDate) && !moveInError;
 
   function handleSave() {
     if (!canSave) return;
     onSave({
-      name, phone, gender, age: Number(age),
+      name, phone, gender, birth_date: birthDate || null,
       contractMoveInDate,
-      contractEndDate: contractEndDate || undefined,
-      contractMonths: Number(contractMonths) || undefined,
       actualMoveInDate: actualMoveInDate || undefined,
       moveOutDate: moveOutDate || undefined,
       purpose: (purpose || undefined) as ResidencePurpose | undefined,
@@ -170,7 +154,7 @@ function ResidentForm({
   }
 
   const effectiveMoveIn = actualMoveInDate || contractMoveInDate;
-  const effectiveMoveOut = moveOutDate || contractEndDate;
+  const effectiveMoveOut = moveOutDate;
 
   return (
     <div className="space-y-4">
@@ -199,8 +183,8 @@ function ResidentForm({
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">나이 <span className="text-rose-500">*</span></label>
-            <input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="25" className={inputCls} />
+            <label className="block text-xs text-gray-400 mb-1.5">출생년도 <span className="text-rose-500">*</span></label>
+            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className={inputCls} />
           </div>
         </div>
       </div>
@@ -208,21 +192,10 @@ function ResidentForm({
       {/* 계약 정보 */}
       <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 space-y-3">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-400">계약 정보</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">계약일(시작) <span className="text-rose-500">*</span></label>
+            <label className="block text-xs text-gray-400 mb-1.5">계약일(문서 작성 날짜) <span className="text-rose-500">*</span></label>
             <input type="date" value={contractMoveInDate} onChange={(e) => handleContractStartChange(e.target.value)} className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5">개월 수 <span className="text-rose-500">*</span></label>
-            <div className="flex items-center gap-1.5">
-              <input type="number" min={1} max={60} value={contractMonths} onChange={(e) => handleContractMonthsChange(e.target.value)} placeholder="3" className={inputCls} />
-              <span className="text-xs text-gray-500 shrink-0">개월</span>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5">계약일(끝) <span className="text-gray-600 font-normal">(자동)</span></label>
-            <input type="date" value={contractEndDate} onChange={(e) => setContractEndDate(e.target.value)} className={`${inputCls} ${contractEndDate ? 'text-indigo-300' : ''}`} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -299,39 +272,27 @@ function ResidentForm({
             )}
           </div>
         </div>
-        {contractMoveInDate && contractEndDate && (
-          <p className="text-[10px] text-indigo-400/70">
-            {contractMoveInDate} ~ {contractEndDate} ({contractMonths}개월)
-          </p>
-        )}
       </div>
 
       {/* 입실 정보 */}
       <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">입실 정보</p>
-          <span className="text-[10px] text-gray-600">입실일 변경이 없으면 계약일(시작)이 자동 적용됩니다</span>
-        </div>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">입실 정보</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-gray-600 font-normal">(변경 시만 입력)</span></label>
+            <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-rose-500">*</span></label>
             <input type="date" value={actualMoveInDate} onChange={(e) => handleActualMoveInChange(e.target.value)} className={`${inputCls} focus:border-amber-500 ${moveInError ? 'border-rose-500 text-rose-400' : actualMoveInDate ? 'text-amber-300' : ''}`} />
             {moveInError && (
-              <p className="mt-1 text-[10px] text-rose-400">입실일은 계약일(시작) 이후여야 합니다</p>
+              <p className="mt-1 text-[10px] text-rose-400">입실일은 계약일(문서 작성 날짜) 이후여야 합니다</p>
             )}
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">퇴실일 <span className="text-gray-600 font-normal">(자동 계산)</span></label>
+            <label className="block text-xs text-gray-400 mb-1.5">퇴실일</label>
             <input type="date" value={moveOutDate} onChange={(e) => setMoveOutDate(e.target.value)} className={`${inputCls} ${moveOutDate ? 'text-emerald-300' : ''}`} />
           </div>
         </div>
         {effectiveMoveIn && effectiveMoveOut && (
           <p className="text-[10px] text-amber-400/70">
             입실 기준: <span className="font-semibold">{effectiveMoveIn}</span>
-            {actualMoveInDate && actualMoveInDate !== contractMoveInDate && (
-              <span className="text-gray-600 ml-1">(계약일 {contractMoveInDate}에서 변경)</span>
-            )}
-            {!actualMoveInDate && <span className="text-gray-600 ml-1">(계약일(시작) 자동 적용)</span>}
             {" "}→ 월세 납부일 <span className="font-semibold">매월 {new Date(effectiveMoveIn).getDate()}일</span>
           </p>
         )}
@@ -376,8 +337,8 @@ function ScheduledInfoModal({
   const sortedReservations = [...records]
     .map((r, i) => ({ ...r, originalIdx: i }))
     .sort((a, b) => {
-      const aDate = a.actualMoveInDate ?? a.contractMoveInDate;
-      const bDate = b.actualMoveInDate ?? b.contractMoveInDate;
+      const aDate = a.actualMoveInDate ?? "";
+      const bDate = b.actualMoveInDate ?? "";
       return aDate.localeCompare(bDate);
     });
 
@@ -386,8 +347,8 @@ function ScheduledInfoModal({
   if (room.moveInDate) allDates.push(new Date(room.moveInDate));
   if (room.moveOutDate) allDates.push(new Date(room.moveOutDate));
   sortedReservations.forEach((r) => {
-    allDates.push(new Date(r.actualMoveInDate ?? r.contractMoveInDate));
-    const endDate = r.moveOutDate ?? r.contractEndDate;
+    if (r.actualMoveInDate) allDates.push(new Date(r.actualMoveInDate));
+    const endDate = r.moveOutDate;
     if (endDate) allDates.push(new Date(endDate));
   });
 
@@ -590,7 +551,7 @@ function ScheduledInfoModal({
                             ? 'bg-indigo-500/30 border border-indigo-400/60'
                             : 'bg-indigo-500/15 border border-indigo-500/30 group-hover:bg-indigo-500/25'
                         }`}
-                        style={{ left: `${toPercent(res.actualMoveInDate ?? res.contractMoveInDate)}%`, width: `${barWidth(res.actualMoveInDate ?? res.contractMoveInDate, res.moveOutDate ?? res.contractEndDate)}%` }}
+                        style={{ left: `${toPercent(res.actualMoveInDate ?? res.contractMoveInDate)}%`, width: `${barWidth(res.actualMoveInDate ?? res.contractMoveInDate, res.moveOutDate)}%` }}
                       >
                         <span className="text-[10px] font-bold text-indigo-200 shrink-0">{res.name}</span>
                         <span className="text-[10px] text-indigo-300/80 shrink-0">
@@ -645,7 +606,7 @@ function ScheduledInfoModal({
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-white">{records[selectedIdx].name}</span>
                           <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${records[selectedIdx].gender === '남' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-pink-500/10 text-pink-400 border-pink-500/20'}`}>{records[selectedIdx].gender}</span>
-                          <span className="text-xs text-gray-500">{records[selectedIdx].age}세</span>
+                          {records[selectedIdx].birth_date && <span className="text-xs text-gray-500">{new Date().getFullYear() - parseInt(records[selectedIdx].birth_date!.slice(0, 4), 10)}세</span>}
                         </div>
                         <p className="mt-0.5 text-xs text-teal-400">{records[selectedIdx].phone}</p>
                       </div>
@@ -667,23 +628,15 @@ function ScheduledInfoModal({
                   </div>
                   {(() => {
                     const r = records[selectedIdx];
-                    const effectiveMoveIn = r.actualMoveInDate ?? r.contractMoveInDate;
-                    const effectiveMoveOut = r.moveOutDate ?? r.contractEndDate;
+                    const effectiveMoveIn = r.actualMoveInDate ?? "";
+                    const effectiveMoveOut = r.moveOutDate;
                     const isActualDiff = r.actualMoveInDate && r.actualMoveInDate !== r.contractMoveInDate;
                     return (
                       <div className="space-y-2">
                         <div className="grid grid-cols-2 gap-2">
                           <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
-                            <span className="text-gray-500 block mb-0.5">계약일(시작)</span>
+                            <span className="text-gray-500 block mb-0.5">계약일(문서 작성 날짜)</span>
                             <span className="text-indigo-400 font-semibold">{r.contractMoveInDate}</span>
-                            {r.contractMonths && <span className="text-gray-600 ml-1.5">({r.contractMonths}개월)</span>}
-                          </div>
-                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
-                            <span className="text-gray-500 block mb-0.5">계약일(끝)</span>
-                            {r.contractEndDate
-                              ? <span className="text-indigo-300 font-semibold">{r.contractEndDate}</span>
-                              : <span className="text-gray-600 italic">미정</span>
-                            }
                           </div>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
@@ -691,7 +644,7 @@ function ScheduledInfoModal({
                             <span className="text-gray-500 block mb-0.5">입실일</span>
                             {r.actualMoveInDate
                               ? <span className="text-amber-400 font-semibold">{r.actualMoveInDate}</span>
-                              : <span className="text-gray-500 text-[10px]">계약일(시작) 자동 적용</span>
+                              : <span className="text-gray-500 text-[10px]">계약일(문서 작성 날짜) 자동 적용</span>
                             }
                           </div>
                           <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
@@ -705,7 +658,7 @@ function ScheduledInfoModal({
                             <span className="text-gray-500 block mb-0.5">월세 납부일</span>
                             <span className="text-amber-400 font-semibold">매월 {new Date(effectiveMoveIn).getDate()}일</span>
                             <span className="text-gray-600 block text-[10px] mt-0.5">
-                              {r.actualMoveInDate ? "입실일 기준" : "계약일(시작) 기준"}
+                              {r.actualMoveInDate ? "입실일 기준" : "계약일(문서 작성 날짜) 기준"}
                             </span>
                           </div>
                         </div>
@@ -945,24 +898,33 @@ export default function TenantListTable() {
     }).catch(console.error);
   }, []);
 
+  // 방별 퇴실 완료 계약 수
+  const historyCountByRoom = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of contracts) {
+      if (c.status === 'completed' || (c.actual_move_out_date && c.actual_move_out_date < todayStr)) {
+        map[c.room_id] = (map[c.room_id] ?? 0) + 1;
+      }
+    }
+    return map;
+  }, [contracts, todayStr]);
+
   // contracts에서 scheduled 항목을 ScheduledResident 형태로 변환
   const scheduledData = useMemo<Record<string, ScheduledResident[]>>(() => {
     const result: Record<string, ScheduledResident[]> = {};
     // 이미 입실한 계약(입실일 ≤ 오늘)은 예약 목록에서 제외 (문자열 비교로 타임존 버그 방지)
     const pendingContracts = contracts.filter((c) => {
       if (c.status !== 'scheduled') return false;
-      const moveInStr = (c.actual_move_in_date ?? c.contract_start_date).slice(0, 10);
-      return moveInStr > todayStr;
+      const moveInStr = (c.actual_move_in_date ?? "").slice(0, 10);
+      return !!moveInStr && moveInStr > todayStr;
     });
     for (const c of pendingContracts) {
       const r: ScheduledResident = {
         name: c.name,
         phone: c.phone,
         gender: c.gender ?? '남',
-        age: c.age ?? 0,
+        birth_date: c.birth_date ?? null,
         contractMoveInDate: c.contract_start_date,
-        contractEndDate: c.contract_end_date ?? undefined,
-        contractMonths: c.contract_months ?? undefined,
         actualMoveInDate: c.actual_move_in_date ?? undefined,
         moveOutDate: c.actual_move_out_date ?? undefined,
         purpose: (c.purpose as ResidencePurpose) ?? undefined,
@@ -981,12 +943,10 @@ export default function TenantListTable() {
       name: record.name,
       phone: record.phone,
       gender: record.gender ?? null,
-      age: record.age ?? null,
+      birth_date: record.birth_date ?? null,
       purpose: record.purpose ?? null,
       real_estate_agency: record.realEstateAgency ?? null,
       contract_start_date: record.contractMoveInDate,
-      contract_end_date: record.contractEndDate ?? null,
-      contract_months: record.contractMonths ?? null,
       actual_move_in_date: record.actualMoveInDate ?? null,
       actual_move_out_date: record.moveOutDate ?? null,
       monthly_rent: record.monthlyRent ?? null,
@@ -1000,8 +960,8 @@ export default function TenantListTable() {
   function pendingContractsForRoom(roomId: string) {
     return contracts.filter((c) => {
       if (c.status !== 'scheduled' || c.room_id !== roomId) return false;
-      const moveInStr = (c.actual_move_in_date ?? c.contract_start_date).slice(0, 10);
-      return moveInStr > todayStr;
+      const moveInStr = (c.actual_move_in_date ?? "").slice(0, 10);
+      return !!moveInStr && moveInStr > todayStr;
     });
   }
 
@@ -1017,12 +977,10 @@ export default function TenantListTable() {
       name: record.name,
       phone: record.phone,
       gender: record.gender ?? null,
-      age: record.age ?? null,
+      birth_date: record.birth_date ?? null,
       purpose: record.purpose ?? null,
       real_estate_agency: record.realEstateAgency ?? null,
       contract_start_date: record.contractMoveInDate,
-      contract_end_date: record.contractEndDate ?? null,
-      contract_months: record.contractMonths ?? null,
       actual_move_in_date: record.actualMoveInDate ?? null,
       actual_move_out_date: record.moveOutDate ?? null,
       monthly_rent: record.monthlyRent ?? null,
@@ -1163,7 +1121,7 @@ export default function TenantListTable() {
                         if (scheduled.length > 0) {
                           const next = [...scheduled].sort((a, b) => a.contractMoveInDate.localeCompare(b.contractMoveInDate))[0];
                           const day = getScheduledDueDay(next, today);
-                          const base = next.actualMoveInDate ?? next.contractMoveInDate;
+                          const base = next.actualMoveInDate ?? "";
                           return (
                             <div className="flex flex-col gap-0.5">
                               <span className="text-xs text-gray-600">예약자 기준</span>
@@ -1217,6 +1175,11 @@ export default function TenantListTable() {
                       >
                         <History className="h-3.5 w-3.5" />
                         이력
+                        {(historyCountByRoom[room.id] ?? 0) > 0 && (
+                          <span className="ml-0.5 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-400">
+                            {historyCountByRoom[room.id]}
+                          </span>
+                        )}
                       </button>
                     </td>
                   </tr>

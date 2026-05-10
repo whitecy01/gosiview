@@ -101,10 +101,10 @@ function contractToTenantBar(c: DbContract): TenantBar {
   return {
     contractId: c.id,
     name: c.name,
-    moveInDate: c.actual_move_in_date ?? c.contract_start_date,
-    moveOutDate: c.actual_move_out_date ?? c.contract_end_date ?? c.contract_start_date,
+    moveInDate: c.actual_move_in_date ?? "",
+    moveOutDate: c.actual_move_out_date ?? c.contract_start_date,
     gender: c.gender ?? undefined,
-    age: c.age ?? undefined,
+    birth_date: c.birth_date ?? undefined,
     monthlyRent: c.monthly_rent ?? undefined,
     phone: c.phone,
     purpose: c.purpose ?? undefined,
@@ -257,7 +257,8 @@ function CalendarGrid({
 
                 {/* Room rows */}
                 {effectiveRooms.filter((r) => r.floor === floor).map((room, ri) => {
-                  const bar = getBarGeometry(room.moveInDate, room.moveOutDate, timelineStart, timelineEnd);
+                  const effectiveMoveOut = room.moveOutDate ?? timelineEnd.toISOString().slice(0, 10);
+                  const bar = getBarGeometry(room.moveInDate, effectiveMoveOut, timelineStart, timelineEnd);
                   const isEven = ri % 2 === 0;
                   const rentLabel = fmtRent(room.monthlyRent);
                   const pastTenants: TenantBar[] = pastTenantsMap[room.id] ?? [];
@@ -339,7 +340,7 @@ function CalendarGrid({
                                 background: `linear-gradient(90deg, ${c.from}44 0%, ${c.to}44 100%)`,
                                 border: `1px solid ${c.from}55`,
                               }}
-                              title={`[과거] ${pt.name}${pt.age ? ` (${pt.age}세)` : ''} · ${pt.moveInDate} ~ ${pt.moveOutDate}${hasDetail ? ' · 클릭하여 상세 보기' : ''}`}
+                              title={`[과거] ${pt.name}${pt.birth_date ? ` (${new Date().getFullYear() - parseInt(pt.birth_date.slice(0, 4), 10)}세)` : ''} · ${pt.moveInDate} ~ ${pt.moveOutDate}${hasDetail ? ' · 클릭하여 상세 보기' : ''}`}
                             >
                               <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md" style={{ backgroundColor: c.dot, opacity: 0.3 }} />
                               <div className="flex items-center gap-1.5 pl-3 pr-2 overflow-hidden">
@@ -379,7 +380,7 @@ function CalendarGrid({
                                 background: `linear-gradient(90deg, ${fc.from}55 0%, ${fc.to}55 100%)`,
                                 border: `1px dashed ${fc.from}88`,
                               }}
-                              title={`[예정] ${ft.name}${ft.age ? ` (${ft.age}세)` : ''} · ${ft.moveInDate} ~ ${ft.moveOutDate}`}
+                              title={`[예정] ${ft.name}${ft.birth_date ? ` (${new Date().getFullYear() - parseInt(ft.birth_date.slice(0, 4), 10)}세)` : ''} · ${ft.moveInDate} ~ ${ft.moveOutDate}`}
                             >
                               <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md" style={{ backgroundColor: fc.dot, opacity: 0.5 }} />
                               <div className="flex items-center gap-1.5 pl-3 pr-2 overflow-hidden">
@@ -415,7 +416,7 @@ function CalendarGrid({
                               background: `linear-gradient(90deg, ${CURRENT_BAR.from}bb 0%, ${CURRENT_BAR.to}bb 100%)`,
                               boxShadow: `0 1px 8px ${CURRENT_BAR.from}44`,
                             }}
-                            title={`${room.resident} (${room.age}세) · ${room.monthlyRent} · ${room.moveInDate} ~ ${room.moveOutDate}`}
+                            title={`${room.resident}${room.birth_date ? ` (${new Date().getFullYear() - parseInt(room.birth_date.slice(0, 4), 10)}세)` : ''} · ${room.monthlyRent} · ${room.moveInDate} ~ ${room.moveOutDate}`}
                           >
                             <div
                               className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md"
@@ -490,8 +491,8 @@ export default function CalendarPage() {
       }
     }
     for (const c of allContracts) {
-      const start = c.actual_move_in_date ?? c.contract_start_date;
-      const end = c.actual_move_out_date ?? c.contract_end_date;
+      const start = c.actual_move_in_date;
+      const end = c.actual_move_out_date;
       if (start) {
         const y = parseInt(start.slice(0, 4), 10);
         if (y < minYear) minYear = y;
@@ -536,8 +537,8 @@ export default function CalendarPage() {
       const futureMap: Record<string, TenantBar[]> = {};
 
       for (const c of contracts) {
-        const moveIn = c.actual_move_in_date ?? c.contract_start_date;
-        const moveOut = c.actual_move_out_date ?? c.contract_end_date;
+        const moveIn = c.actual_move_in_date;
+        const moveOut = c.actual_move_out_date;
 
         if (!moveIn) continue;
 

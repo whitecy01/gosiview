@@ -18,12 +18,10 @@ export type DbContract = {
   name: string;
   phone: string;
   gender: '남' | '여' | null;
-  age: number | null;
+  birth_date: string | null;
   purpose: string | null;
   real_estate_agency: string | null;
   contract_start_date: string;
-  contract_end_date: string | null;
-  contract_months: number | null;
   actual_move_in_date: string | null;
   actual_move_out_date: string | null;
   monthly_rent: number | null;
@@ -75,7 +73,7 @@ export function buildRooms(dbRooms: DbRoom[], dbContracts: DbContract[]): Room[]
       resident: null,
       phone: null,
       gender: null,
-      age: null,
+      birth_date: null,
       moveInDate: null,
       moveOutDate: null,
       monthlyRent: null,
@@ -95,7 +93,7 @@ export async function fetchRoomsAndContracts() {
   const supabase = createClient();
   const [{ data: rooms, error: re }, { data: contracts, error: ce }] = await Promise.all([
     supabase.from('rooms').select('*').order('id'),
-    supabase.from('contracts').select('*').in('status', ['scheduled']).order('contract_start_date'),
+    supabase.from('contracts').select('*').in('status', ['scheduled', 'completed']).order('contract_start_date'),
   ]);
   if (re) throw re;
   if (ce) throw ce;
@@ -107,12 +105,10 @@ export type NewContractInput = {
   name: string;
   phone: string;
   gender: '남' | '여' | null;
-  age: number | null;
+  birth_date: string | null;
   purpose: string | null;
   real_estate_agency: string | null;
   contract_start_date: string;
-  contract_end_date: string | null;
-  contract_months: number | null;
   actual_move_in_date: string | null;
   actual_move_out_date: string | null;
   monthly_rent: number | null;
@@ -179,8 +175,7 @@ export async function fetchRoomHistory(roomId: string, today: string): Promise<D
 
   return (data as DbContract[]).filter((c) => {
     if (c.status === 'completed') return true;
-    const moveOut = c.actual_move_out_date ?? c.contract_end_date;
-    return !!moveOut && moveOut < today;
+    return !!c.actual_move_out_date && c.actual_move_out_date < today;
   });
 }
 
@@ -325,6 +320,7 @@ export type DbTodo = {
   date: string;
   text: string;
   done: boolean;
+  color: string;
   created_at: string;
 };
 
@@ -339,14 +335,14 @@ export async function fetchTodos(): Promise<DbTodo[]> {
   return data as DbTodo[];
 }
 
-export async function insertTodo(input: { date: string; text: string }): Promise<DbTodo> {
+export async function insertTodo(input: { date: string; text: string; color: string }): Promise<DbTodo> {
   const supabase = createClient();
   const { data, error } = await supabase.from('todos').insert(input).select().single();
   if (error) throw error;
   return data as DbTodo;
 }
 
-export async function updateTodo(id: string, input: Partial<{ text: string; done: boolean }>): Promise<DbTodo> {
+export async function updateTodo(id: string, input: Partial<{ text: string; done: boolean; color: string }>): Promise<DbTodo> {
   const supabase = createClient();
   const { data, error } = await supabase.from('todos').update(input).eq('id', id).select().single();
   if (error) throw error;

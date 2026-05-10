@@ -422,8 +422,8 @@ export default function StatsPage() {
       // 해당 월에 활성 계약 찾기
       const activeContracts = contracts.filter(c => {
         if (c.status !== 'scheduled' && c.status !== 'completed') return false;
-        const moveIn = c.actual_move_in_date ?? c.contract_start_date;
-        const moveOut = c.actual_move_out_date ?? c.contract_end_date;
+        const moveIn = c.actual_move_in_date;
+        const moveOut = c.actual_move_out_date;
         if (!moveIn || moveIn > lastDay) return false;
         if (moveOut && moveOut < firstDay) return false;
         return true;
