@@ -11,7 +11,33 @@ type Todo = {
   date: string;
   text: string;
   done: boolean;
+  color: string;
 };
+
+// ──────────── 색상 설정 ────────────
+
+const COLOR_OPTIONS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'purple', 'pink'] as const;
+type ColorKey = typeof COLOR_OPTIONS[number];
+
+const COLOR_MAP: Record<ColorKey, { chip: string; dot: string }> = {
+  gray:   { chip: 'bg-gray-700/60 text-gray-300',     dot: 'bg-gray-400' },
+  red:    { chip: 'bg-red-500/20 text-red-300',       dot: 'bg-red-400' },
+  orange: { chip: 'bg-orange-500/20 text-orange-300', dot: 'bg-orange-400' },
+  yellow: { chip: 'bg-yellow-500/20 text-yellow-300', dot: 'bg-yellow-400' },
+  green:  { chip: 'bg-green-500/20 text-green-300',   dot: 'bg-green-400' },
+  blue:   { chip: 'bg-blue-500/20 text-blue-300',     dot: 'bg-blue-400' },
+  indigo: { chip: 'bg-indigo-500/20 text-indigo-300', dot: 'bg-indigo-400' },
+  purple: { chip: 'bg-purple-500/20 text-purple-300', dot: 'bg-purple-400' },
+  pink:   { chip: 'bg-pink-500/20 text-pink-300',     dot: 'bg-pink-400' },
+};
+
+function colorStyle(color: string, done: boolean) {
+  if (done) return 'bg-gray-700/40 text-gray-500 line-through';
+  return COLOR_MAP[(color as ColorKey)] ? COLOR_MAP[color as ColorKey].chip : COLOR_MAP.gray.chip;
+}
+function dotClass(color: string) {
+  return COLOR_MAP[(color as ColorKey)]?.dot ?? COLOR_MAP.gray.dot;
+}
 
 // ──────────── 상수 ────────────
 
@@ -29,25 +55,45 @@ function getFirstDayOfWeek(year: number, month: number) {
   return new Date(year, month - 1, 1).getDay();
 }
 function fromDb(db: DbTodo): Todo {
-  return { id: db.id, date: db.date, text: db.text, done: db.done };
+  return { id: db.id, date: db.date, text: db.text, done: db.done, color: db.color ?? 'gray' };
+}
+
+// ──────────── 색상 선택기 ────────────
+
+function ColorPicker({ selected, onChange }: { selected: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {COLOR_OPTIONS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onChange(c)}
+          className={`w-4 h-4 rounded-full transition-transform ${dotClass(c)} ${selected === c ? 'ring-2 ring-white/60 scale-125' : 'hover:scale-110'}`}
+        />
+      ))}
+    </div>
+  );
 }
 
 // ──────────── Todo 모달 ────────────
 
 function TodoModal({
-  date, todos, onAdd, onEdit, onDelete, onToggle, onClose,
+  date, todos, onAdd, onEdit, onDelete, onToggle, onColorChange, onClose,
 }: {
   date: string;
   todos: Todo[];
-  onAdd: (text: string) => Promise<void>;
-  onEdit: (id: string, text: string) => Promise<void>;
+  onAdd: (text: string, color: string) => Promise<void>;
+  onEdit: (id: string, text: string, color: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onToggle: (id: string) => Promise<void>;
+  onColorChange: (id: string, color: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [input, setInput] = useState('');
+  const [newColor, setNewColor] = useState<string>('indigo');
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [editColor, setEditColor] = useState<string>('gray');
   const [adding, setAdding] = useState(false);
 
   const [y, m, d] = date.split('-');
@@ -57,7 +103,7 @@ function TodoModal({
     if (!input.trim() || adding) return;
     setAdding(true);
     try {
-      await onAdd(input.trim());
+      await onAdd(input.trim(), newColor);
       setInput('');
     } finally {
       setAdding(false);
@@ -65,7 +111,7 @@ function TodoModal({
   }
   async function submitEdit() {
     if (!editText.trim() || !editId) return;
-    await onEdit(editId, editText.trim());
+    await onEdit(editId, editText.trim(), editColor);
     setEditId(null);
   }
 
@@ -89,66 +135,91 @@ function TodoModal({
             <p className="py-4 text-center text-sm text-gray-500">등록된 할일이 없습니다.</p>
           )}
           {todos.map((todo) => (
-            <div key={todo.id} className="flex items-center gap-2 rounded-xl border border-[#2A2A2A] bg-[#161616] px-3 py-2.5">
-              <button
-                onClick={() => onToggle(todo.id)}
-                className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                  todo.done ? 'bg-indigo-500 border-indigo-500' : 'border-gray-600 hover:border-indigo-400'
-                }`}
-              >
-                {todo.done && <Check size={11} className="text-white" />}
-              </button>
-
-              {editId === todo.id ? (
-                <input
-                  autoFocus
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') submitEdit(); if (e.key === 'Escape') setEditId(null); }}
-                  className="flex-1 rounded-lg border border-indigo-500 bg-[#1A1A1A] px-2 py-1 text-sm text-white outline-none"
-                />
-              ) : (
-                <span className={`flex-1 text-sm ${todo.done ? 'line-through text-gray-500' : 'text-gray-100'}`}>
-                  {todo.text}
-                </span>
-              )}
-
-              <div className="flex items-center gap-1 shrink-0">
-                {editId === todo.id ? (
-                  <button onClick={submitEdit} className="rounded p-1 text-indigo-400 hover:bg-[#222] transition-colors">
-                    <Check size={14} />
-                  </button>
-                ) : (
-                  <button onClick={() => { setEditId(todo.id); setEditText(todo.text); }} className="rounded p-1 text-gray-500 hover:text-gray-300 hover:bg-[#222] transition-colors">
-                    <Pencil size={13} />
-                  </button>
-                )}
-                <button onClick={() => onDelete(todo.id)} className="rounded p-1 text-gray-500 hover:text-rose-400 hover:bg-[#222] transition-colors">
-                  <Trash2 size={13} />
+            <div key={todo.id} className="rounded-xl border border-[#2A2A2A] bg-[#161616] overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2.5">
+                {/* 완료 체크 */}
+                <button
+                  onClick={() => onToggle(todo.id)}
+                  className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                    todo.done ? 'bg-indigo-500 border-indigo-500' : 'border-gray-600 hover:border-indigo-400'
+                  }`}
+                >
+                  {todo.done && <Check size={11} className="text-white" />}
                 </button>
+
+                {/* 색상 dot (현재 색상 표시) */}
+                <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${dotClass(todo.color)}`} />
+
+                {/* 텍스트 */}
+                {editId === todo.id ? (
+                  <input
+                    autoFocus
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') submitEdit(); if (e.key === 'Escape') setEditId(null); }}
+                    className="flex-1 rounded-lg border border-indigo-500 bg-[#1A1A1A] px-2 py-1 text-sm text-white outline-none"
+                  />
+                ) : (
+                  <span className={`flex-1 text-sm ${todo.done ? 'line-through text-gray-500' : 'text-gray-100'}`}>
+                    {todo.text}
+                  </span>
+                )}
+
+                {/* 편집/삭제 버튼 */}
+                <div className="flex items-center gap-1 shrink-0">
+                  {editId === todo.id ? (
+                    <button onClick={submitEdit} className="rounded p-1 text-indigo-400 hover:bg-[#222] transition-colors">
+                      <Check size={14} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => { setEditId(todo.id); setEditText(todo.text); setEditColor(todo.color); }}
+                      className="rounded p-1 text-gray-500 hover:text-gray-300 hover:bg-[#222] transition-colors"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                  <button onClick={() => onDelete(todo.id)} className="rounded p-1 text-gray-500 hover:text-rose-400 hover:bg-[#222] transition-colors">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
+
+              {/* 편집 모드일 때 색상 피커 노출 */}
+              {editId === todo.id && (
+                <div className="flex items-center gap-2 border-t border-[#2A2A2A] bg-[#111] px-3 py-2">
+                  <span className="text-xs text-gray-500 shrink-0">색상</span>
+                  <ColorPicker selected={editColor} onChange={setEditColor} />
+                </div>
+              )}
             </div>
           ))}
         </div>
 
         {/* Add input */}
-        <div className="flex gap-2 border-t border-[#2A2A2A] px-6 py-4">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } }}
-            placeholder="할일 입력 후 Enter"
-            className="flex-1 rounded-xl border border-[#2A2A2A] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-gray-600 outline-none focus:border-indigo-500 transition-colors"
-          />
-          <button
-            type="button"
-            onClick={submitAdd}
-            disabled={adding}
-            className="flex items-center gap-1.5 rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600 transition-colors disabled:opacity-50"
-          >
-            <Plus size={15} />
-            추가
-          </button>
+        <div className="border-t border-[#2A2A2A] px-6 py-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">색상</span>
+            <ColorPicker selected={newColor} onChange={setNewColor} />
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } }}
+              placeholder="할일 입력 후 Enter"
+              className="flex-1 rounded-xl border border-[#2A2A2A] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-gray-600 outline-none focus:border-indigo-500 transition-colors"
+            />
+            <button
+              type="button"
+              onClick={submitAdd}
+              disabled={adding}
+              className="flex items-center gap-1.5 rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600 transition-colors disabled:opacity-50"
+            >
+              <Plus size={15} />
+              추가
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -186,13 +257,13 @@ export default function TodoListPage() {
 
   function todosFor(date: string) { return todos.filter(t => t.date === date); }
 
-  async function addTodo(text: string) {
+  async function addTodo(text: string, color: string) {
     if (!selectedDate) return;
-    const created = await insertTodo({ date: selectedDate, text });
+    const created = await insertTodo({ date: selectedDate, text, color });
     setTodos(prev => [...prev, fromDb(created)]);
   }
-  async function editTodo(id: string, text: string) {
-    const updated = await updateTodo(id, { text });
+  async function editTodo(id: string, text: string, color: string) {
+    const updated = await updateTodo(id, { text, color });
     setTodos(prev => prev.map(t => t.id === id ? fromDb(updated) : t));
   }
   async function deleteTodo(id: string) {
@@ -203,6 +274,10 @@ export default function TodoListPage() {
     const todo = todos.find(t => t.id === id);
     if (!todo) return;
     const updated = await updateTodo(id, { done: !todo.done });
+    setTodos(prev => prev.map(t => t.id === id ? fromDb(updated) : t));
+  }
+  async function changeTodoColor(id: string, color: string) {
+    const updated = await updateTodo(id, { color });
     setTodos(prev => prev.map(t => t.id === id ? fromDb(updated) : t));
   }
 
@@ -266,9 +341,7 @@ export default function TodoListPage() {
                 </span>
                 <div className="flex flex-col gap-1">
                   {dayTodos.map((todo) => (
-                    <div key={todo.id} className={`truncate rounded px-1.5 py-1 text-xs leading-tight ${
-                      todo.done ? 'bg-gray-700/50 text-gray-500 line-through' : 'bg-indigo-500/20 text-indigo-300'
-                    }`}>
+                    <div key={todo.id} className={`truncate rounded px-1.5 py-1 text-xs leading-tight ${colorStyle(todo.color, todo.done)}`}>
                       {todo.text}
                     </div>
                   ))}
@@ -287,6 +360,7 @@ export default function TodoListPage() {
           onEdit={editTodo}
           onDelete={deleteTodo}
           onToggle={toggleTodo}
+          onColorChange={changeTodoColor}
           onClose={() => setSelectedDate(null)}
         />
       )}

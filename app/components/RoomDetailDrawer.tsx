@@ -134,8 +134,8 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
       });
     }).catch(console.error);
 
-    const moveIn = activeContract.actual_move_in_date ?? activeContract.contract_start_date ?? "";
-    const moveOut = activeContract.actual_move_out_date ?? activeContract.contract_end_date ?? "";
+    const moveIn = activeContract.actual_move_in_date ?? "";
+    const moveOut = activeContract.actual_move_out_date ?? "";
     const rent = activeContract.monthly_rent ?? 0;
     const dueDay = moveIn ? new Date(moveIn).getDate() : 1;
 
@@ -157,7 +157,6 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
       actualMonthlyRent: Math.round(rent / 10000),
       paymentDueDay: dueDay,
       contractMoveInDate: activeContract.contract_start_date,
-      contractExpiry: activeContract.contract_end_date ?? "",
       actualMoveInDate: activeContract.actual_move_in_date ?? undefined,
       actualMoveOutDate: activeContract.actual_move_out_date ?? undefined,
       contractDeposit: {
@@ -330,7 +329,7 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                             {room.gender}
                           </span>
                         )}
-                        {room.age && <span className="text-xs text-gray-500">{room.age}세</span>}
+                        {room.birth_date && <span className="text-xs text-gray-500">{new Date().getFullYear() - parseInt(room.birth_date.slice(0, 4), 10)}세</span>}
                         <span className="text-xs text-teal-400">{room.phone ?? "-"}</span>
                       </div>
                     </div>
@@ -344,7 +343,6 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                       <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="실제 납부 월세" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
                       <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={room.moveInDate ? fmtDate(room.moveInDate) : "-"} />
                       <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={room.moveOutDate ? fmtDate(room.moveOutDate) : "-"} />
-                      <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약 만료일" value={fmtDate(detail.contractExpiry)} />
                       <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="납부 대상 월일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
                       <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
                       <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />

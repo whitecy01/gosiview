@@ -99,8 +99,8 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
       .finally(() => setLoading(false));
   }, [contract.id]);
 
-  const moveIn = contract.actual_move_in_date ?? contract.contract_start_date;
-  const moveOut = contract.actual_move_out_date ?? contract.contract_end_date;
+  const moveIn = contract.actual_move_in_date;
+  const moveOut = contract.actual_move_out_date;
   const totalDeducted = deductions.reduce((s, d) => s + d.amount, 0);
   const netDeposit = contract.deposit_total != null ? contract.deposit_total - totalDeducted : null;
 
@@ -145,7 +145,7 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
                 <Field label="이름" value={contract.name} />
                 <Field label="연락처" value={contract.phone || '—'} />
                 {contract.gender && <Field label="성별" value={contract.gender} />}
-                {contract.age != null && <Field label="나이" value={`${contract.age}세`} />}
+                {contract.birth_date && <Field label="나이" value={`${new Date().getFullYear() - parseInt(contract.birth_date.slice(0, 4), 10)}세`} />}
                 {contract.purpose && <Field label="거주 목적" value={contract.purpose} />}
                 {contract.real_estate_agency && <Field label="부동산" value={contract.real_estate_agency} />}
               </Grid2>
@@ -155,12 +155,8 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
             <Section icon={<Calendar className="h-3.5 w-3.5 text-sky-400" />} title="계약 정보">
               <Grid2>
                 <Field label="계약 시작일" value={fmtDate(contract.contract_start_date)} />
-                <Field label="계약 종료일" value={contract.contract_end_date ? fmtDate(contract.contract_end_date) : '—'} />
                 <Field label="실제 입실일" value={contract.actual_move_in_date ? fmtDate(contract.actual_move_in_date) : '—'} />
                 <Field label="실제 퇴실일" value={contract.actual_move_out_date ? fmtDate(contract.actual_move_out_date) : '—'} />
-                {contract.contract_months != null && (
-                  <Field label="계약 기간" value={`${contract.contract_months}개월`} />
-                )}
                 {moveIn && moveOut && (
                   <Field label="실거주 기간" value={fmtStay(moveIn, moveOut)} highlight />
                 )}

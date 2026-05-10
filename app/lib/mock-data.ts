@@ -13,10 +13,8 @@ export type ScheduledResident = {
   name: string;
   phone: string;
   gender: '남' | '여';
-  age: number;
+  birth_date: string | null;
   contractMoveInDate: string;
-  contractEndDate?: string;
-  contractMonths?: number;
   actualMoveInDate?: string;
   moveOutDate?: string;
   purpose?: ResidencePurpose;
@@ -38,7 +36,7 @@ export type TenantBar = {
   moveInDate: string;
   moveOutDate: string;
   gender?: '남' | '여';
-  age?: number;
+  birth_date?: string;
   monthlyRent?: number;
   phone?: string;
   purpose?: string;
@@ -155,7 +153,7 @@ export type Room = {
   resident: string | null;
   phone: string | null;
   gender: '남' | '여' | null;
-  age: number | null;
+  birth_date: string | null;
   moveInDate: string | null;
   moveOutDate: string | null;
   monthlyRent: string | null;
@@ -248,7 +246,6 @@ export type ResidentDetail = {
   actualMonthlyRent: number;
   paymentDueDay: number;
   contractMoveInDate?: string;
-  contractExpiry: string;
   actualMoveInDate?: string;
   actualMoveOutDate?: string;
   contractDeposit: { date: string; amount: number };

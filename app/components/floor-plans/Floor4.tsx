@@ -7,15 +7,22 @@ interface FloorProps {
   onSelectRoom: (room: Room) => void;
 }
 
+// 이미지에 인쇄된 방 번호를 덮어쓰는 레이블 교정 (이미지 수정 없이 코드로 처리)
+const LABEL_CORRECTIONS: { top: string; left: string; width: string; height: string; label: string }[] = [
+  { top: "62%",   left: "16%",   width: "10%", height: "8%", label: "404" },
+  { top: "62%",   left: "30%",   width: "9%", height: "8%", label: "405" },
+  { top: "62%",   left: "50%", width: "6%", height: "8%", label: "406" },
+  { top: "63%", left: "80%",   width: "6%", height: "8%", label: "407" },
+];
+
 // 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
 const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
-  // 위 줄: 405, 406, 407, 408
-  { id: "405", top: "55.5%", left: "14%",  width: "14%", height: "17%" },
-  { id: "406", top: "55.5%", left: "28.5%", width: "13.5%", height: "17%" },
-  { id: "407", top: "55.5%", left: "43%", width: "14%", height: "17%" },
-  { id: "408", top: "55%", left: "76.5%", width: "13%", height: "26%" },
-  // 아래 줄: 404, 403, 402, 401
-  { id: "404", top: "81.5%", left: "14%",  width: "10%", height: "17%" },
+  // 위 줄: 404, 405, 406, 407
+  { id: "404", top: "55.5%", left: "14%",  width: "14%", height: "17%" },
+  { id: "405", top: "55.5%", left: "28.5%", width: "13.5%", height: "17%" },
+  { id: "406", top: "55.5%", left: "43%", width: "14%", height: "17%" },
+  { id: "407", top: "55%", left: "76.5%", width: "13%", height: "26%" },
+  // 아래 줄: 403, 402, 401
   { id: "403", top: "81.5%", left: "24%", width: "15%", height: "17%" },
   { id: "402", top: "81.5%", left: "40%", width: "16%", height: "17%" },
   { id: "401", top: "81.5%", left: "56.5%", width: "15%",  height: "17%" },
@@ -39,6 +46,16 @@ export default function Floor4({ rooms, selectedRoom, onSelectRoom }: FloorProps
         className="w-full h-auto block"
         priority
       />
+
+      {LABEL_CORRECTIONS.map(({ top, left, width, height, label }) => (
+        <div
+          key={label}
+          style={{ top, left, width, height }}
+          className="absolute flex items-center justify-center bg-white/90 text-[#222] text-[26px] font-bold leading-none rounded pointer-events-none"
+        >
+          {label}
+        </div>
+      ))}
 
       {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
         const room = rooms.find((r) => r.id === id);

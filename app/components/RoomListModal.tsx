@@ -76,7 +76,7 @@ export default function RoomListModal({ type, rooms, onClose }: Props) {
                             {room.gender}
                           </span>
                         )}
-                        {room.age && <span className="text-xs text-gray-500">{room.age}세</span>}
+                        {room.birth_date && <span className="text-xs text-gray-500">{new Date().getFullYear() - parseInt(room.birth_date.slice(0, 4), 10)}세</span>}
                       </div>
                     </div>
                   ) : (

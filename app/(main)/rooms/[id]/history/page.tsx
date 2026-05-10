@@ -188,7 +188,7 @@ export default function RoomHistoryPage() {
   async function handleMarkCompleted(contract: DbContract) {
     setRestoringId(contract.id);
     try {
-      const moveOut = contract.actual_move_out_date ?? contract.contract_end_date;
+      const moveOut = contract.actual_move_out_date;
       await updateContract(contract.id, {
         status: 'completed',
         actual_move_out_date: contract.actual_move_out_date ?? moveOut ?? undefined,
@@ -201,14 +201,14 @@ export default function RoomHistoryPage() {
 
   const totalVacancy = (() => {
     const sorted = [...history].sort((a, b) => {
-      const aDate = a.actual_move_in_date ?? a.contract_start_date;
-      const bDate = b.actual_move_in_date ?? b.contract_start_date;
+      const aDate = a.actual_move_in_date ?? "";
+      const bDate = b.actual_move_in_date ?? "";
       return aDate.localeCompare(bDate);
     });
     let days = 0;
     for (let i = 0; i < sorted.length - 1; i++) {
-      const aOut = sorted[i].actual_move_out_date ?? sorted[i].contract_end_date;
-      const bIn = sorted[i + 1].actual_move_in_date ?? sorted[i + 1].contract_start_date;
+      const aOut = sorted[i].actual_move_out_date;
+      const bIn = sorted[i + 1].actual_move_in_date;
       if (aOut && bIn) {
         const gap = daysBetween(aOut, bIn);
         if (gap > 0) days += gap;
@@ -220,9 +220,9 @@ export default function RoomHistoryPage() {
   const avgStay = history.length > 0
     ? Math.round(
         history.reduce((s, c) => {
-          const moveIn = c.actual_move_in_date ?? c.contract_start_date;
-          const moveOut = c.actual_move_out_date ?? c.contract_end_date;
-          return s + (moveOut ? daysBetween(moveIn, moveOut) : 0);
+          const moveIn = c.actual_move_in_date;
+          const moveOut = c.actual_move_out_date;
+          return s + (moveIn && moveOut ? daysBetween(moveIn, moveOut) : 0);
         }, 0) / history.length
       )
     : 0;
@@ -294,8 +294,8 @@ export default function RoomHistoryPage() {
               <tbody>
                 {history.map((contract, i) => {
                   const isExpanded = expandedIdx === i;
-                  const moveIn = contract.actual_move_in_date ?? contract.contract_start_date;
-                  const moveOut = contract.actual_move_out_date ?? contract.contract_end_date;
+                  const moveIn = contract.actual_move_in_date ?? "";
+                  const moveOut = contract.actual_move_out_date;
 
                   return (
                     <>
@@ -319,7 +319,7 @@ export default function RoomHistoryPage() {
                         <td className="px-4 py-3.5">
                           {contract.gender && (
                             <span className={`rounded-full border px-2 py-0.5 text-xs ${GENDER_STYLE[contract.gender]}`}>
-                              {contract.gender}{contract.age ? ` · ${contract.age}세` : ""}
+                              {contract.gender}{contract.birth_date ? ` · ${new Date().getFullYear() - parseInt(contract.birth_date.slice(0, 4), 10)}세` : ""}
                             </span>
                           )}
                         </td>
