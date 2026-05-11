@@ -13,6 +13,8 @@ import {
   MapPin,
   Target,
   Printer,
+  X,
+  Settings,
 } from "lucide-react";
 import {
   RESIDENT_DETAIL_BY_ROOM,
@@ -28,6 +30,7 @@ import {
 import { useRooms } from "@/app/context/RoomsContext";
 import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
 import { formatPhone } from "@/app/lib/utils";
+import { SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, PURPOSES_LS_KEY, AGENCIES_LS_KEY } from "@/app/components/OptionsManagerModal";
 import {
   fetchDeductions,
   insertDeduction,
@@ -45,14 +48,6 @@ import {
 
 // ────────────── 상수 ──────────────
 
-const PURPOSES: ResidencePurpose[] = [
-  "공시생(임용)", "공시생(일행)", "공시생(소방)", "공시생(경찰)",
-  "세무·회계·계리", "취준생", "수능", "직장",
-];
-
-const REAL_ESTATES: RealEstateAgency[] = [
-  "부동산 A", "부동산 B", "부동산 C", "직거래",
-];
 
 const DEDUCTION_REASONS: DepositDeductionReason[] = [
   "차임", "미납", "공과금정산", "도배", "타일", "시설손상",
@@ -213,7 +208,6 @@ export default function ResidentDetailPage() {
       actualMoveInDate: activeContract?.actual_move_in_date ?? undefined,
       actualMoveOutDate: activeContract?.actual_move_out_date ?? undefined,
       contractDeposit: {
-        date: activeContract?.contract_start_date ?? "",
         amount: activeContract?.contract_deposit ?? 0,
       },
       realEstateAgency: (activeContract?.real_estate_agency as RealEstateAgency) ?? undefined,
@@ -229,11 +223,26 @@ export default function ResidentDetailPage() {
   }
 
   // 기본 정보 수정 모드
+  const [allPurposes, setAllPurposes] = useState<string[]>(DEFAULT_PURPOSES);
+  const [allAgencies, setAllAgencies] = useState<string[]>(DEFAULT_AGENCIES);
+
+  useEffect(() => {
+    try {
+      const p = localStorage.getItem(PURPOSES_LS_KEY);
+      const a = localStorage.getItem(AGENCIES_LS_KEY);
+      if (p) setAllPurposes(JSON.parse(p));
+      if (a) setAllAgencies(JSON.parse(a));
+    } catch { /* ignore */ }
+  }, []);
+
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState<Partial<ResidentDetail>>({});
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editBirthDate, setEditBirthDate] = useState("");
+  const [purposeCustom, setPurposeCustom] = useState(false);
+  const [agencyCustom, setAgencyCustom] = useState(false);
+  const [optionsTarget, setOptionsTarget] = useState<'purpose' | 'agency' | null>(null);
 
   // 퇴실 처리
   const [confirmCheckout, setConfirmCheckout] = useState(false);
@@ -331,11 +340,29 @@ export default function ResidentDetailPage() {
     setEditName(activeContract?.name ?? "");
     setEditPhone(activeContract?.phone ?? "");
     setEditBirthDate(activeContract?.birth_date ?? "");
+    setPurposeCustom(false);
+    setAgencyCustom(false);
     setEditingInfo(true);
+  }
+
+  function updatePurposes(v: string[]) {
+    setAllPurposes(v);
+    try { localStorage.setItem(PURPOSES_LS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+  }
+  function updateAgencies(v: string[]) {
+    setAllAgencies(v);
+    try { localStorage.setItem(AGENCIES_LS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
   }
 
   async function saveInfo() {
     if (!detail || !activeContract) return;
+
+    // 커스텀 입력값이 새 항목이면 localStorage에 영구 저장
+    const newPurpose = infoForm.purpose;
+    if (newPurpose && !allPurposes.includes(newPurpose)) updatePurposes([...allPurposes, newPurpose]);
+    const newAgency = infoForm.realEstateAgency;
+    if (newAgency && !allAgencies.includes(newAgency)) updateAgencies([...allAgencies, newAgency]);
+
     setDetail((prev) => prev ? {
       ...prev,
       ...infoForm,
@@ -621,20 +648,14 @@ export default function ResidentDetailPage() {
                 <h2 className="text-base font-semibold text-white">기본 정보</h2>
                 <p className="mt-0.5 text-xs text-gray-500">입실자의 계약 및 거주 기본 정보</p>
               </div>
-              <button
-                onClick={editingInfo ? saveInfo : startEditInfo}
-                className={
-                  editingInfo
-                    ? "flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-400 transition-colors hover:bg-indigo-500/20"
-                    : "flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:text-white"
-                }
-              >
-                {editingInfo ? (
-                  <>✓ 저장</>
-                ) : (
-                  <><Pencil className="h-3.5 w-3.5" /> 수정</>
-                )}
-              </button>
+              {!editingInfo && (
+                <button
+                  onClick={startEditInfo}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:text-white"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> 수정
+                </button>
+              )}
             </div>
 
             {editingInfo ? (
@@ -747,56 +768,94 @@ export default function ResidentDetailPage() {
                 </div>
 
                 {/* 보증금 */}
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">보증금 날짜</label>
-                    <input
-                      type="date"
-                      value={infoForm.contractDeposit?.date ?? ""}
-                      onChange={(e) =>
-                        setInfoForm((f) => ({
-                          ...f,
-                          contractDeposit: { date: e.target.value, amount: f.contractDeposit?.amount ?? 0 },
-                        }))
-                      }
-                      className={INPUT}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">보증금 금액 <span className="text-gray-600">원</span></label>
-                    <input
-                      type="number"
-                      value={infoForm.contractDeposit?.amount || ""}
-                      onChange={(e) =>
-                        setInfoForm((f) => ({
-                          ...f,
-                          contractDeposit: { date: f.contractDeposit?.date ?? "", amount: Number(e.target.value) },
-                        }))
-                      }
-                      className={INPUT}
-                    />
-                  </div>
+                <div>
+                  <label className="mb-1.5 block text-xs text-gray-400">보증금 금액 <span className="text-gray-600">원</span></label>
+                  <input
+                    type="number"
+                    value={infoForm.contractDeposit?.amount || ""}
+                    onChange={(e) =>
+                      setInfoForm((f) => ({
+                        ...f,
+                        contractDeposit: { amount: Number(e.target.value) },
+                      }))
+                    }
+                    className={INPUT}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">거주 목적</label>
-                    <select
-                      value={infoForm.purpose ?? ""}
-                      onChange={(e) => setInfoForm((f) => ({ ...f, purpose: e.target.value as ResidencePurpose }))}
-                      className={INPUT}
-                    >
-                      {PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs text-gray-400">거주 목적</label>
+                      <button type="button" onClick={() => setOptionsTarget('purpose')}
+                        className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-indigo-400 transition-colors">
+                        <Settings className="h-3 w-3" />옵션 관리
+                      </button>
+                    </div>
+                    {purposeCustom ? (
+                      <div className="flex gap-1.5">
+                        <input
+                          autoFocus
+                          value={infoForm.purpose ?? ""}
+                          onChange={(e) => setInfoForm((f) => ({ ...f, purpose: e.target.value as ResidencePurpose }))}
+                          placeholder="직접 입력"
+                          className={INPUT}
+                        />
+                        <button type="button" onClick={() => { setPurposeCustom(false); setInfoForm((f) => ({ ...f, purpose: undefined })); }}
+                          className="shrink-0 flex items-center justify-center h-9 w-9 rounded-lg border border-[#2A2A2A] text-gray-500 hover:text-white transition-colors">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        value={infoForm.purpose ?? ""}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') { setPurposeCustom(true); setInfoForm((f) => ({ ...f, purpose: "" as ResidencePurpose })); }
+                          else setInfoForm((f) => ({ ...f, purpose: e.target.value as ResidencePurpose }));
+                        }}
+                        className={INPUT}
+                      >
+                        <option value="">선택 안 함</option>
+                        {allPurposes.map((p) => <option key={p} value={p}>{p}</option>)}
+                        <option value="__custom__">+ 직접 입력</option>
+                      </select>
+                    )}
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">부동산</label>
-                    <select
-                      value={infoForm.realEstateAgency ?? ""}
-                      onChange={(e) => setInfoForm((f) => ({ ...f, realEstateAgency: e.target.value as RealEstateAgency }))}
-                      className={INPUT}
-                    >
-                      {REAL_ESTATES.map((r) => <option key={r} value={r}>{r}</option>)}
-                    </select>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs text-gray-400">부동산</label>
+                      <button type="button" onClick={() => setOptionsTarget('agency')}
+                        className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-indigo-400 transition-colors">
+                        <Settings className="h-3 w-3" />옵션 관리
+                      </button>
+                    </div>
+                    {agencyCustom ? (
+                      <div className="flex gap-1.5">
+                        <input
+                          autoFocus
+                          value={infoForm.realEstateAgency ?? ""}
+                          onChange={(e) => setInfoForm((f) => ({ ...f, realEstateAgency: e.target.value as RealEstateAgency }))}
+                          placeholder="직접 입력"
+                          className={INPUT}
+                        />
+                        <button type="button" onClick={() => { setAgencyCustom(false); setInfoForm((f) => ({ ...f, realEstateAgency: undefined })); }}
+                          className="shrink-0 flex items-center justify-center h-9 w-9 rounded-lg border border-[#2A2A2A] text-gray-500 hover:text-white transition-colors">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        value={infoForm.realEstateAgency ?? ""}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') { setAgencyCustom(true); setInfoForm((f) => ({ ...f, realEstateAgency: "" as RealEstateAgency })); }
+                          else setInfoForm((f) => ({ ...f, realEstateAgency: e.target.value as RealEstateAgency }));
+                        }}
+                        className={INPUT}
+                      >
+                        <option value="">선택 안 함</option>
+                        {allAgencies.map((r) => <option key={r} value={r}>{r}</option>)}
+                        <option value="__custom__">+ 직접 입력</option>
+                      </select>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
@@ -843,9 +902,9 @@ export default function ResidentDetailPage() {
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(문서 작성 날짜)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={detail.actualMoveInDate ? fmtDate(detail.actualMoveInDate) : (room.moveInDate ? fmtDate(room.moveInDate) : "-")} />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : (room.moveOutDate ? fmtDate(room.moveOutDate) : "-")} />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${new Date(detail.actualMoveInDate ?? room.moveInDate ?? detail.contractMoveInDate ?? detail.contractDeposit.date).getDate()}일`} highlight="indigo" />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${new Date(detail.actualMoveInDate ?? room.moveInDate ?? detail.contractMoveInDate ?? "").getDate()}일`} highlight="indigo" />
                   <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`${fmtDate(detail.contractDeposit.date)} · ₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
+                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
                   <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
                   {activeContract?.birth_date && (
                     <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="출생년도" value={activeContract.birth_date} />
@@ -1660,6 +1719,22 @@ export default function ResidentDetailPage() {
 
 
         </>
+      )}
+      {optionsTarget === 'purpose' && (
+        <SingleOptionManagerModal
+          title="거주 목적"
+          items={allPurposes}
+          onChange={updatePurposes}
+          onClose={() => setOptionsTarget(null)}
+        />
+      )}
+      {optionsTarget === 'agency' && (
+        <SingleOptionManagerModal
+          title="부동산"
+          items={allAgencies}
+          onChange={updateAgencies}
+          onClose={() => setOptionsTarget(null)}
+        />
       )}
     </main>
   );

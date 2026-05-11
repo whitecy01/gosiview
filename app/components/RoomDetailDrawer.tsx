@@ -160,7 +160,6 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
       actualMoveInDate: activeContract.actual_move_in_date ?? undefined,
       actualMoveOutDate: activeContract.actual_move_out_date ?? undefined,
       contractDeposit: {
-        date: activeContract.contract_start_date ?? "",
         amount: activeContract.contract_deposit ?? 0,
       },
       realEstateAgency: (activeContract.real_estate_agency as RealEstateAgency) ?? undefined,
@@ -346,7 +345,7 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                       <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="납부 대상 월일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
                       <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
                       <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
-                      <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`${fmtDate(detail.contractDeposit.date)} · ₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
+                      <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
                     </div>
                   ) : (
                     <div className="rounded-xl border border-[#2A2A2A] bg-[#111] p-5 space-y-3">

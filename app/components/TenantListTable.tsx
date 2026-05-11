@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History } from "lucide-react";
+import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History, Settings } from "lucide-react";
+import { OptionsManagerModal, SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, PURPOSES_LS_KEY, AGENCIES_LS_KEY } from "./OptionsManagerModal";
 import {
   ROOM_TYPE_INFO,
   type Room,
@@ -14,7 +15,6 @@ import {
 import { useEffectiveRooms } from "../context/useEffectiveRooms";
 import { useRooms } from "../context/RoomsContext";
 import { useToday } from "../context/MockDateContext";
-import { calcEndDate } from "../lib/utils";
 import {
   fetchAllMaintenanceRecords,
   insertMaintenanceRecord,
@@ -70,11 +70,6 @@ const DETAIL_COLOR: Record<string, string> = {
 };
 
 
-const RESIDENCE_PURPOSES: ResidencePurpose[] = [
-  "공시생(임용)", "공시생(일행)", "공시생(소방)", "공시생(경찰)",
-  "세무·회계·계리", "취준생", "수능", "직장",
-];
-const REAL_ESTATE_AGENCIES: RealEstateAgency[] = ["부동산 A", "부동산 B", "부동산 C", "직거래"];
 
 function ResidentForm({
   initial,
@@ -82,27 +77,25 @@ function ResidentForm({
   onCancel,
   saving,
   saveError,
+  allPurposes,
+  allAgencies,
+  onPurposesChange,
+  onAgenciesChange,
 }: {
   initial: Partial<ScheduledResident>;
   onSave: (r: ScheduledResident) => void;
   onCancel: () => void;
   saving?: boolean;
   saveError?: string | null;
+  allPurposes: string[];
+  allAgencies: string[];
+  onPurposesChange: (v: string[]) => void;
+  onAgenciesChange: (v: string[]) => void;
 }) {
   const inputCls = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-indigo-500 [color-scheme:dark]";
   const selectCls = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none";
 
-  const { contracts } = useRooms();
-
-  // DB에 저장된 커스텀 거주 목적·부동산 옵션 추출
-  const extraPurposes = useMemo(() => {
-    const vals = contracts.map((c) => c.purpose).filter((p): p is string => !!p && !RESIDENCE_PURPOSES.includes(p as ResidencePurpose));
-    return [...new Set(vals)];
-  }, [contracts]);
-  const extraAgencies = useMemo(() => {
-    const vals = contracts.map((c) => c.real_estate_agency).filter((a): a is string => !!a && !REAL_ESTATE_AGENCIES.includes(a as RealEstateAgency));
-    return [...new Set(vals)];
-  }, [contracts]);
+  const [optionsTarget, setOptionsTarget] = useState<'purpose' | 'agency' | null>(null);
 
   const [name, setName] = useState(initial.name ?? "");
   const [phone, setPhone] = useState(formatPhone(initial.phone ?? ""));
@@ -118,7 +111,7 @@ function ResidentForm({
   // 추가 계약 정보
   const [purpose, setPurpose] = useState<string>(initial.purpose ?? "");
   const [purposeCustom, setPurposeCustom] = useState(
-    !!initial.purpose && !RESIDENCE_PURPOSES.includes(initial.purpose as ResidencePurpose)
+    !!initial.purpose && !allPurposes.includes(initial.purpose)
   );
   const [monthlyRent, setMonthlyRent] = useState(
     initial.monthlyRent ? String(initial.monthlyRent / 10000) : ""
@@ -126,7 +119,7 @@ function ResidentForm({
   const [contractDeposit, setContractDeposit] = useState(String(initial.contractDeposit ?? ""));
   const [realEstateAgency, setRealEstateAgency] = useState<string>(initial.realEstateAgency ?? "");
   const [agencyCustom, setAgencyCustom] = useState(
-    !!initial.realEstateAgency && !REAL_ESTATE_AGENCIES.includes(initial.realEstateAgency as RealEstateAgency)
+    !!initial.realEstateAgency && !allAgencies.includes(initial.realEstateAgency)
   );
 
   function handleContractStartChange(val: string) {
@@ -216,16 +209,16 @@ function ResidentForm({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">거주 목적</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-gray-400">거주 목적</label>
+              <button type="button" onClick={() => setOptionsTarget('purpose')}
+                className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-indigo-400 transition-colors">
+                <Settings className="h-3 w-3" />옵션 관리
+              </button>
+            </div>
             {purposeCustom ? (
               <div className="flex gap-1.5">
-                <input
-                  autoFocus
-                  value={purpose}
-                  onChange={(e) => setPurpose(e.target.value)}
-                  placeholder="직접 입력"
-                  className={inputCls}
-                />
+                <input autoFocus value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="직접 입력" className={inputCls} />
                 <button type="button" onClick={() => { setPurposeCustom(false); setPurpose(""); }}
                   className="shrink-0 flex items-center justify-center h-9 w-9 rounded-lg border border-[#2A2A2A] text-gray-500 hover:text-white transition-colors">
                   <X className="h-3.5 w-3.5" />
@@ -237,23 +230,22 @@ function ResidentForm({
                 else setPurpose(e.target.value);
               }} className={selectCls}>
                 <option value="">선택 안 함</option>
-                {RESIDENCE_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
-                {extraPurposes.map((p) => <option key={p} value={p}>{p}</option>)}
+                {allPurposes.map((p) => <option key={p} value={p}>{p}</option>)}
                 <option value="__custom__">+ 직접 입력</option>
               </select>
             )}
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">부동산</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-gray-400">부동산</label>
+              <button type="button" onClick={() => setOptionsTarget('agency')}
+                className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-indigo-400 transition-colors">
+                <Settings className="h-3 w-3" />옵션 관리
+              </button>
+            </div>
             {agencyCustom ? (
               <div className="flex gap-1.5">
-                <input
-                  autoFocus
-                  value={realEstateAgency}
-                  onChange={(e) => setRealEstateAgency(e.target.value)}
-                  placeholder="직접 입력"
-                  className={inputCls}
-                />
+                <input autoFocus value={realEstateAgency} onChange={(e) => setRealEstateAgency(e.target.value)} placeholder="직접 입력" className={inputCls} />
                 <button type="button" onClick={() => { setAgencyCustom(false); setRealEstateAgency(""); }}
                   className="shrink-0 flex items-center justify-center h-9 w-9 rounded-lg border border-[#2A2A2A] text-gray-500 hover:text-white transition-colors">
                   <X className="h-3.5 w-3.5" />
@@ -265,12 +257,18 @@ function ResidentForm({
                 else setRealEstateAgency(e.target.value);
               }} className={selectCls}>
                 <option value="">선택 안 함</option>
-                {REAL_ESTATE_AGENCIES.map((a) => <option key={a} value={a}>{a}</option>)}
-                {extraAgencies.map((a) => <option key={a} value={a}>{a}</option>)}
+                {allAgencies.map((a) => <option key={a} value={a}>{a}</option>)}
                 <option value="__custom__">+ 직접 입력</option>
               </select>
             )}
           </div>
+
+          {optionsTarget === 'purpose' && (
+            <SingleOptionManagerModal title="거주 목적" items={allPurposes} onChange={onPurposesChange} onClose={() => setOptionsTarget(null)} />
+          )}
+          {optionsTarget === 'agency' && (
+            <SingleOptionManagerModal title="부동산" items={allAgencies} onChange={onAgenciesChange} onClose={() => setOptionsTarget(null)} />
+          )}
         </div>
       </div>
 
@@ -318,6 +316,10 @@ function ScheduledInfoModal({
   onUpdate,
   onDelete,
   onClose,
+  allPurposes,
+  allAgencies,
+  onPurposesChange,
+  onAgenciesChange,
 }: {
   room: Room;
   records: ScheduledResident[];
@@ -325,6 +327,10 @@ function ScheduledInfoModal({
   onUpdate: (i: number, r: ScheduledResident) => Promise<void>;
   onDelete: (i: number) => Promise<void>;
   onClose: () => void;
+  allPurposes: string[];
+  allAgencies: string[];
+  onPurposesChange: (v: string[]) => void;
+  onAgenciesChange: (v: string[]) => void;
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -593,6 +599,10 @@ function ScheduledInfoModal({
                     onCancel={() => setEditingIdx(null)}
                     saving={saving}
                     saveError={saveError}
+                    allPurposes={allPurposes}
+                    allAgencies={allAgencies}
+                    onPurposesChange={onPurposesChange}
+                    onAgenciesChange={onAgenciesChange}
                   />
                 </>
               ) : (
@@ -685,6 +695,10 @@ function ScheduledInfoModal({
                 onCancel={() => setShowAddForm(false)}
                 saving={saving}
                 saveError={saveError}
+                allPurposes={allPurposes}
+                allAgencies={allAgencies}
+                onPurposesChange={onPurposesChange}
+                onAgenciesChange={onAgenciesChange}
               />
             </div>
           )}
@@ -884,9 +898,30 @@ export default function TenantListTable() {
   const [search, setSearch] = useState("");
   const [scheduledRoom, setScheduledRoom] = useState<Room | null>(null);
   const [managementRoom, setManagementRoom] = useState<Room | null>(null);
+  const [showOptionsManager, setShowOptionsManager] = useState(false);
+  const [managedPurposes, setManagedPurposes] = useState<string[]>(DEFAULT_PURPOSES);
+  const [managedAgencies, setManagedAgencies] = useState<string[]>(DEFAULT_AGENCIES);
   const { effectiveRooms, today, todayStr } = useEffectiveRooms();
   const { contracts, addContract, editContract, removeContract } = useRooms();
   const [maintenanceData, setMaintenanceData] = useState<Record<string, MaintenanceRecord[]>>({});
+
+  useEffect(() => {
+    try {
+      const p = localStorage.getItem(PURPOSES_LS_KEY);
+      const a = localStorage.getItem(AGENCIES_LS_KEY);
+      if (p) setManagedPurposes(JSON.parse(p));
+      if (a) setManagedAgencies(JSON.parse(a));
+    } catch { /* ignore */ }
+  }, []);
+
+  function updatePurposes(v: string[]) {
+    setManagedPurposes(v);
+    try { localStorage.setItem(PURPOSES_LS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+  }
+  function updateAgencies(v: string[]) {
+    setManagedAgencies(v);
+    try { localStorage.setItem(AGENCIES_LS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     fetchAllMaintenanceRecords().then((rows) => {
@@ -1037,16 +1072,24 @@ export default function TenantListTable() {
               전체 호실의 입실 현황과 예정 일정, 방 관리 이력을 확인할 수 있습니다.
             </p>
           </div>
-          <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="호실, 이름, 연락처 검색"
-              className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-3 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-gray-500 focus:border-indigo-500 sm:w-64"
-            />
-          </label>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowOptionsManager(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-xs font-medium text-gray-400 transition-colors hover:border-indigo-500/50 hover:text-indigo-400"
+            >
+              <Settings className="h-3.5 w-3.5" />옵션 관리
+            </button>
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="호실, 이름, 연락처 검색"
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] py-3 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-gray-500 focus:border-indigo-500 sm:w-64"
+              />
+            </label>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -1197,6 +1240,15 @@ export default function TenantListTable() {
         </div>
       </div>
 
+      {showOptionsManager && (
+        <OptionsManagerModal
+          purposes={managedPurposes}
+          agencies={managedAgencies}
+          onPurposesChange={updatePurposes}
+          onAgenciesChange={updateAgencies}
+          onClose={() => setShowOptionsManager(false)}
+        />
+      )}
       {scheduledRoom && (
         <ScheduledInfoModal
           room={scheduledRoom}
@@ -1205,6 +1257,10 @@ export default function TenantListTable() {
           onUpdate={(i, r) => handleUpdateScheduled(scheduledRoom.id, i, r)}
           onDelete={(i) => handleDeleteScheduled(scheduledRoom.id, i)}
           onClose={() => setScheduledRoom(null)}
+          allPurposes={managedPurposes}
+          allAgencies={managedAgencies}
+          onPurposesChange={updatePurposes}
+          onAgenciesChange={updateAgencies}
         />
       )}
       {managementRoom && (
