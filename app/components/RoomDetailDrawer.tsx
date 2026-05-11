@@ -153,7 +153,7 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
     setDetail({
       roomId: room.id,
       purpose: (activeContract.purpose as ResidencePurpose) ?? undefined,
-      utilityIncludedRent: Math.round((ROOM_TYPE_INFO[room.roomType]?.price ?? 0) / 10000),
+      utilityIncludedRent: Math.round(room.monthlyPriceRaw / 10000),
       actualMonthlyRent: Math.round(rent / 10000),
       paymentDueDay: dueDay,
       contractMoveInDate: activeContract.contract_start_date,

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { X, UserPlus, CheckCircle2, ChevronDown, Settings } from 'lucide-react';
-import { ROOM_TYPE_INFO } from '@/app/lib/mock-data';
 import { useRooms } from '@/app/context/RoomsContext';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 import { SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, PURPOSES_LS_KEY, AGENCIES_LS_KEY } from '@/app/components/OptionsManagerModal';
@@ -81,8 +80,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const selectedRoom = effectiveRooms.find((r) => r.id === roomId);
-  const typeInfo = selectedRoom ? ROOM_TYPE_INFO[selectedRoom.roomType] : null;
-  const monthlyRent = typeInfo ? `₩${typeInfo.price.toLocaleString()}` : null;
+  const monthlyRent = selectedRoom ? `₩${selectedRoom.monthlyPriceRaw.toLocaleString()}` : null;
 
   const inputCls = "w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:border-indigo-500 [color-scheme:dark]";
 

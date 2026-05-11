@@ -69,6 +69,7 @@ export function buildRooms(dbRooms: DbRoom[], dbContracts: DbContract[]): Room[]
       status,
       roomType,
       roomPrice,
+      monthlyPriceRaw: dbRoom.monthly_price,
       amenities,
       resident: null,
       phone: null,
@@ -140,6 +141,12 @@ export async function updateContract(id: string, input: Partial<NewContractInput
     .single();
   if (error) throw error;
   return data as DbContract;
+}
+
+export async function updateRoomPrice(roomId: string, monthlyPrice: number): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from('rooms').update({ monthly_price: monthlyPrice }).eq('id', roomId);
+  if (error) throw error;
 }
 
 export async function deleteContract(id: string): Promise<void> {
