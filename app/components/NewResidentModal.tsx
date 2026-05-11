@@ -300,7 +300,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">계약금</label>
+                  <label className="block text-xs text-gray-400 mb-1.5">보증금</label>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"

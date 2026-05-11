@@ -106,7 +106,7 @@ function ExpandedRow({
               )}
               {contract.contract_deposit != null && (
                 <div className="px-3 py-2">
-                  <p className="text-xs text-gray-500">계약금</p>
+                  <p className="text-xs text-gray-500">보증금</p>
                   <p className="text-xs text-white mt-0.5">₩{contract.contract_deposit.toLocaleString("ko-KR")}</p>
                 </div>
               )}
