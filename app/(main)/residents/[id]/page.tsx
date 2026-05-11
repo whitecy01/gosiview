@@ -746,10 +746,10 @@ export default function ResidentDetailPage() {
                   </div>
                 </div>
 
-                {/* 계약금 */}
+                {/* 보증금 */}
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">계약금 날짜</label>
+                    <label className="mb-1.5 block text-xs text-gray-400">보증금 날짜</label>
                     <input
                       type="date"
                       value={infoForm.contractDeposit?.date ?? ""}
@@ -763,7 +763,7 @@ export default function ResidentDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">계약금 금액 <span className="text-gray-600">원</span></label>
+                    <label className="mb-1.5 block text-xs text-gray-400">보증금 금액 <span className="text-gray-600">원</span></label>
                     <input
                       type="number"
                       value={infoForm.contractDeposit?.amount || ""}
@@ -845,7 +845,7 @@ export default function ResidentDetailPage() {
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : (room.moveOutDate ? fmtDate(room.moveOutDate) : "-")} />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${new Date(detail.actualMoveInDate ?? room.moveInDate ?? detail.contractMoveInDate ?? detail.contractDeposit.date).getDate()}일`} highlight="indigo" />
                   <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="계약금" value={`${fmtDate(detail.contractDeposit.date)} · ₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
+                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`${fmtDate(detail.contractDeposit.date)} · ₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
                   <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
                   {activeContract?.birth_date && (
                     <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="출생년도" value={activeContract.birth_date} />
