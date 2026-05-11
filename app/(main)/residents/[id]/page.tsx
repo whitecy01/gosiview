@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import {
   RESIDENT_DETAIL_BY_ROOM,
-  ROOM_TYPE_INFO,
   type ResidentDetail,
   type RentPayment,
   type DepositDeductionReason,
@@ -41,6 +40,7 @@ import {
   deleteCashSuccession,
   fetchRentPayments,
   upsertRentPayment,
+  updateRoomPrice,
   type DbDepositDeduction,
   type DbCashSuccession,
   type DbRentPayment,
@@ -201,7 +201,7 @@ export default function ResidentDetailPage() {
     setDetail({
       roomId: id,
       purpose: (activeContract?.purpose as ResidencePurpose) ?? undefined,
-      utilityIncludedRent: Math.round((ROOM_TYPE_INFO[room?.roomType ?? "Cozy"]?.price ?? 0) / 10000),
+      utilityIncludedRent: Math.round((room?.monthlyPriceRaw ?? 0) / 10000),
       actualMonthlyRent: Math.round(rent / 10000),
       paymentDueDay: dueDay,
       contractMoveInDate: activeContract?.contract_start_date,
@@ -243,6 +243,8 @@ export default function ResidentDetailPage() {
   const [purposeCustom, setPurposeCustom] = useState(false);
   const [agencyCustom, setAgencyCustom] = useState(false);
   const [optionsTarget, setOptionsTarget] = useState<'purpose' | 'agency' | null>(null);
+  const [infoSaving, setInfoSaving] = useState(false);
+  const [infoSaveError, setInfoSaveError] = useState<string | null>(null);
 
   // 퇴실 처리
   const [confirmCheckout, setConfirmCheckout] = useState(false);
@@ -356,32 +358,45 @@ export default function ResidentDetailPage() {
 
   async function saveInfo() {
     if (!detail || !activeContract) return;
+    setInfoSaving(true);
+    setInfoSaveError(null);
+    try {
+      // 금액(관포) 변경 시 방 DB도 함께 업데이트
+      if (infoForm.utilityIncludedRent != null && infoForm.utilityIncludedRent !== detail.utilityIncludedRent) {
+        await updateRoomPrice(id, infoForm.utilityIncludedRent * 10000);
+      }
 
-    // 커스텀 입력값이 새 항목이면 localStorage에 영구 저장
-    const newPurpose = infoForm.purpose;
-    if (newPurpose && !allPurposes.includes(newPurpose)) updatePurposes([...allPurposes, newPurpose]);
-    const newAgency = infoForm.realEstateAgency;
-    if (newAgency && !allAgencies.includes(newAgency)) updateAgencies([...allAgencies, newAgency]);
+      await editContract(activeContract.id, {
+        name: editName || activeContract.name,
+        phone: editPhone || activeContract.phone,
+        birth_date: editBirthDate || activeContract.birth_date || null,
+        monthly_rent: infoForm.actualMonthlyRent ? infoForm.actualMonthlyRent * 10000 : null,
+        contract_start_date: infoForm.contractMoveInDate ?? activeContract.contract_start_date,
+        actual_move_in_date: infoForm.actualMoveInDate || null,
+        actual_move_out_date: infoForm.actualMoveOutDate || null,
+        contract_deposit: infoForm.contractDeposit?.amount ?? null,
+        deposit_total: infoForm.contractDeposit?.amount ?? null,
+        purpose: infoForm.purpose || null,
+        real_estate_agency: infoForm.realEstateAgency || null,
+      });
 
-    setDetail((prev) => prev ? {
-      ...prev,
-      ...infoForm,
-      depositTotal: infoForm.contractDeposit?.amount ?? prev.depositTotal,
-    } : prev);
-    setEditingInfo(false);
-    await editContract(activeContract.id, {
-      name: editName || activeContract.name,
-      phone: editPhone || activeContract.phone,
-      birth_date: editBirthDate || activeContract.birth_date || undefined,
-      monthly_rent: infoForm.actualMonthlyRent ? infoForm.actualMonthlyRent * 10000 : undefined,
-      contract_start_date: infoForm.contractMoveInDate ?? activeContract.contract_start_date,
-      actual_move_in_date: infoForm.actualMoveInDate || null,
-      actual_move_out_date: infoForm.actualMoveOutDate || null,
-      contract_deposit: infoForm.contractDeposit?.amount ?? null,
-      deposit_total: infoForm.contractDeposit?.amount ?? null,
-      purpose: infoForm.purpose || null,
-      real_estate_agency: infoForm.realEstateAgency || null,
-    });
+      // DB 저장 성공 후 UI 반영
+      const newPurpose = infoForm.purpose;
+      if (newPurpose && !allPurposes.includes(newPurpose)) updatePurposes([...allPurposes, newPurpose]);
+      const newAgency = infoForm.realEstateAgency;
+      if (newAgency && !allAgencies.includes(newAgency)) updateAgencies([...allAgencies, newAgency]);
+
+      setDetail((prev) => prev ? {
+        ...prev,
+        ...infoForm,
+        depositTotal: infoForm.contractDeposit?.amount ?? prev.depositTotal,
+      } : prev);
+      setEditingInfo(false);
+    } catch (e) {
+      setInfoSaveError(e instanceof Error ? e.message : 'DB 저장 실패. 다시 시도해 주세요.');
+    } finally {
+      setInfoSaving(false);
+    }
   }
 
   // ── 보증금 차감 ──
@@ -696,7 +711,7 @@ export default function ResidentDetailPage() {
                     <label className="mb-1.5 block text-xs text-gray-400">금액(관포) <span className="text-gray-600">만원</span></label>
                     <input
                       type="number"
-                      value={infoForm.utilityIncludedRent ?? ""}
+                      value={infoForm.utilityIncludedRent || ""}
                       onChange={(e) => setInfoForm((f) => ({ ...f, utilityIncludedRent: Number(e.target.value) }))}
                       className={INPUT}
                     />
@@ -705,7 +720,7 @@ export default function ResidentDetailPage() {
                     <label className="mb-1.5 block text-xs text-gray-400">실제 납부 월세 <span className="text-gray-600">만원</span></label>
                     <input
                       type="number"
-                      value={infoForm.actualMonthlyRent ?? ""}
+                      value={infoForm.actualMonthlyRent || ""}
                       onChange={(e) => setInfoForm((f) => ({ ...f, actualMonthlyRent: Number(e.target.value) }))}
                       className={INPUT}
                     />
@@ -858,9 +873,14 @@ export default function ResidentDetailPage() {
                     )}
                   </div>
                 </div>
+                {infoSaveError && (
+                  <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{infoSaveError}</p>
+                )}
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => setEditingInfo(false)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
-                  <button onClick={saveInfo} disabled={!activeContract} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed">저장</button>
+                  <button onClick={() => { setEditingInfo(false); setInfoSaveError(null); }} disabled={infoSaving} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white disabled:opacity-40">취소</button>
+                  <button onClick={saveInfo} disabled={!activeContract || infoSaving} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed">
+                    {infoSaving ? '저장 중…' : '저장'}
+                  </button>
                 </div>
               </div>
             ) : (
@@ -897,8 +917,8 @@ export default function ResidentDetailPage() {
                 <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
                   <InfoField icon={<Home className="h-3.5 w-3.5" />} label="호실" value={`${id}호`} />
                   <InfoField icon={<Home className="h-3.5 w-3.5" />} label="방 유형" value={room.roomType} />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="기존 금액" value={`${detail.utilityIncludedRent}만원`} />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
+                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.utilityIncludedRent}만원`} />
+                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="실제 납부 월세" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(문서 작성 날짜)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={detail.actualMoveInDate ? fmtDate(detail.actualMoveInDate) : (room.moveInDate ? fmtDate(room.moveInDate) : "-")} />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : (room.moveOutDate ? fmtDate(room.moveOutDate) : "-")} />

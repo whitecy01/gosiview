@@ -69,64 +69,52 @@ export type RoomType =
   | "Deluxe B";
 
 export type RoomTypeInfo = {
-  price: number;
   amenities: string[];
   illustration: string | null;
 };
 
 export const ROOM_TYPE_INFO: Record<RoomType, RoomTypeInfo> = {
   "Cozy": {
-    price: 650000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: null,
   },
   "Standard A-1": {
-    price: 700000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/standard-a.png",
   },
   "Standard A-1 +": {
-    price: 700000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/standard-a.png",
   },
   "Standard A-2": {
-    price: 720000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/standard-a.png",
   },
   "Standard A-2 +": {
-    price: 720000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/standard-a.png",
   },
   "Standard A-2 (넓은 사이즈)": {
-    price: 720000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/standard-a.png",
   },
   "Standard A-3": {
-    price: 850000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/standard-a.png",
   },
   "Standard B-1": {
-    price: 780000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/standard-b.png",
   },
   "Standard B-2": {
-    price: 850000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/standard-b.png",
   },
   "Deluxe A": {
-    price: 850000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/deluxe-a.png",
   },
   "Deluxe B": {
-    price: 850000,
     amenities: ["침대", "책상", "의자", "옷장", "수납장", "2도어냉장고", "에어컨", "인터넷", "스마트도어락"],
     illustration: "/room-types/deluxe-b.png",
   },
@@ -148,6 +136,7 @@ export type Room = {
   status: RoomStatus;
   roomType: RoomType;
   roomPrice: string;
+  monthlyPriceRaw: number;
   amenities?: string[];
   contractId?: string | null;
   resident: string | null;
