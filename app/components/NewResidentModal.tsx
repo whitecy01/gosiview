@@ -1,16 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { X, UserPlus, CheckCircle2, ChevronDown } from 'lucide-react';
-import { ROOM_TYPE_INFO, type ResidencePurpose, type RealEstateAgency } from '@/app/lib/mock-data';
+import { useState, useEffect } from 'react';
+import { X, UserPlus, CheckCircle2, ChevronDown, Settings } from 'lucide-react';
+import { ROOM_TYPE_INFO } from '@/app/lib/mock-data';
 import { useRooms } from '@/app/context/RoomsContext';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
-
-const RESIDENCE_PURPOSES: ResidencePurpose[] = [
-  "공시생(임용)", "공시생(일행)", "공시생(소방)", "공시생(경찰)",
-  "세무·회계·계리", "취준생", "수능", "직장",
-];
-const REAL_ESTATE_AGENCIES: RealEstateAgency[] = ["부동산 A", "부동산 B", "부동산 C", "직거래"];
+import { SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, PURPOSES_LS_KEY, AGENCIES_LS_KEY } from '@/app/components/OptionsManagerModal';
 
 interface NewResidentModalProps {
   onClose: () => void;
@@ -30,17 +25,32 @@ function formatPhone(raw: string): string {
 
 
 export default function NewResidentModal({ onClose, initialRoomId = '' }: NewResidentModalProps) {
-  const { addContract, contracts } = useRooms();
+  const { addContract } = useRooms();
   const { effectiveRooms } = useEffectiveRooms();
 
-  const extraPurposes = useMemo(() => {
-    const vals = contracts.map((c) => c.purpose).filter((p): p is string => !!p && !RESIDENCE_PURPOSES.includes(p as ResidencePurpose));
-    return [...new Set(vals)];
-  }, [contracts]);
-  const extraAgencies = useMemo(() => {
-    const vals = contracts.map((c) => c.real_estate_agency).filter((a): a is string => !!a && !REAL_ESTATE_AGENCIES.includes(a as RealEstateAgency));
-    return [...new Set(vals)];
-  }, [contracts]);
+  const [allPurposes, setAllPurposes] = useState<string[]>(DEFAULT_PURPOSES);
+  const [allAgencies, setAllAgencies] = useState<string[]>(DEFAULT_AGENCIES);
+
+  useEffect(() => {
+    try {
+      const p = localStorage.getItem(PURPOSES_LS_KEY);
+      const a = localStorage.getItem(AGENCIES_LS_KEY);
+      if (p) setAllPurposes(JSON.parse(p));
+      if (a) setAllAgencies(JSON.parse(a));
+    } catch { /* ignore */ }
+  }, []);
+
+  const [optionsTarget, setOptionsTarget] = useState<'purpose' | 'agency' | null>(null);
+
+  function updatePurposes(v: string[]) {
+    setAllPurposes(v);
+    try { localStorage.setItem(PURPOSES_LS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+  }
+  function updateAgencies(v: string[]) {
+    setAllAgencies(v);
+    try { localStorage.setItem(AGENCIES_LS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+  }
+
   const vacantRooms = effectiveRooms.filter((r) => r.status === 'vacant' || r.status === 'contract');
   const isRoomFixed = !!initialRoomId;
 
@@ -317,7 +327,13 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">거주 목적</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-gray-400">거주 목적</label>
+                    <button type="button" onClick={() => setOptionsTarget('purpose')}
+                      className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-indigo-400 transition-colors">
+                      <Settings className="h-3 w-3" />옵션 관리
+                    </button>
+                  </div>
                   {purposeCustom ? (
                     <div className="flex gap-1.5">
                       <input
@@ -338,14 +354,19 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                       else setPurpose(e.target.value);
                     }} className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none">
                       <option value="">선택 안 함</option>
-                      {RESIDENCE_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
-                      {extraPurposes.map((p) => <option key={p} value={p}>{p}</option>)}
+                      {allPurposes.map((p) => <option key={p} value={p}>{p}</option>)}
                       <option value="__custom__">+ 직접 입력</option>
                     </select>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">부동산</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-gray-400">부동산</label>
+                    <button type="button" onClick={() => setOptionsTarget('agency')}
+                      className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-indigo-400 transition-colors">
+                      <Settings className="h-3 w-3" />옵션 관리
+                    </button>
+                  </div>
                   {agencyCustom ? (
                     <div className="flex gap-1.5">
                       <input
@@ -366,8 +387,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                       else setRealEstateAgency(e.target.value);
                     }} className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-indigo-500 appearance-none">
                       <option value="">선택 안 함</option>
-                      {REAL_ESTATE_AGENCIES.map((a) => <option key={a} value={a}>{a}</option>)}
-                      {extraAgencies.map((a) => <option key={a} value={a}>{a}</option>)}
+                      {allAgencies.map((a) => <option key={a} value={a}>{a}</option>)}
                       <option value="__custom__">+ 직접 입력</option>
                     </select>
                   )}
@@ -438,6 +458,12 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
           </div>
         </form>
       </div>
+      {optionsTarget === 'purpose' && (
+        <SingleOptionManagerModal title="거주 목적" items={allPurposes} onChange={updatePurposes} onClose={() => setOptionsTarget(null)} />
+      )}
+      {optionsTarget === 'agency' && (
+        <SingleOptionManagerModal title="부동산" items={allAgencies} onChange={updateAgencies} onClose={() => setOptionsTarget(null)} />
+      )}
     </div>
   );
 }

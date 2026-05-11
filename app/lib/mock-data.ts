@@ -248,7 +248,7 @@ export type ResidentDetail = {
   contractMoveInDate?: string;
   actualMoveInDate?: string;
   actualMoveOutDate?: string;
-  contractDeposit: { date: string; amount: number };
+  contractDeposit: { amount: number };
   realEstateAgency: RealEstateAgency;
   depositTotal: number;
   depositDeductions: DepositDeduction[];
