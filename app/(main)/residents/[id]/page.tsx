@@ -240,6 +240,7 @@ export default function ResidentDetailPage() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editBirthDate, setEditBirthDate] = useState("");
+  const [editGender, setEditGender] = useState<'남' | '여' | null>(null);
   const [purposeCustom, setPurposeCustom] = useState(false);
   const [agencyCustom, setAgencyCustom] = useState(false);
   const [optionsTarget, setOptionsTarget] = useState<'purpose' | 'agency' | null>(null);
@@ -342,6 +343,7 @@ export default function ResidentDetailPage() {
     setEditName(activeContract?.name ?? "");
     setEditPhone(activeContract?.phone ?? "");
     setEditBirthDate(activeContract?.birth_date ?? "");
+    setEditGender(activeContract?.gender ?? null);
     setPurposeCustom(false);
     setAgencyCustom(false);
     setEditingInfo(true);
@@ -370,6 +372,7 @@ export default function ResidentDetailPage() {
         name: editName || activeContract.name,
         phone: editPhone || activeContract.phone,
         birth_date: editBirthDate || activeContract.birth_date || null,
+        gender: editGender,
         monthly_rent: infoForm.actualMonthlyRent ? infoForm.actualMonthlyRent * 10000 : null,
         contract_start_date: infoForm.contractMoveInDate ?? activeContract.contract_start_date,
         actual_move_in_date: infoForm.actualMoveInDate || null,
@@ -704,6 +707,27 @@ export default function ResidentDetailPage() {
                       onChange={(e) => setEditBirthDate(e.target.value)}
                       className={INPUT}
                     />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs text-gray-400">성별</label>
+                  <div className="flex gap-2">
+                    {(['남', '여'] as const).map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setEditGender(editGender === g ? null : g)}
+                        className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
+                          editGender === g
+                            ? g === '남'
+                              ? 'border-blue-500/50 bg-blue-500/15 text-blue-400'
+                              : 'border-pink-500/50 bg-pink-500/15 text-pink-400'
+                            : 'border-[#2A2A2A] bg-[#1A1A1A] text-gray-500 hover:text-gray-300'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
