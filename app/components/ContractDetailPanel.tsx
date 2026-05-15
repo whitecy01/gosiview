@@ -102,7 +102,6 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
   const moveIn = contract.actual_move_in_date;
   const moveOut = contract.actual_move_out_date;
   const totalDeducted = deductions.reduce((s, d) => s + d.amount, 0);
-  const netDeposit = contract.deposit_total != null ? contract.deposit_total - totalDeducted : null;
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -172,10 +171,9 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
             <Section icon={<CreditCard className="h-3.5 w-3.5 text-emerald-400" />} title="월세 / 보증금">
               <Grid2>
                 {contract.monthly_rent != null && <Field label="월세" value={fmtMoney(contract.monthly_rent)} highlight />}
-                {contract.contract_deposit != null && <Field label="보증금" value={fmtMoney(contract.contract_deposit)} />}
-                {contract.deposit_total != null && <Field label="보증금 총액" value={fmtMoney(contract.deposit_total)} />}
+                {contract.contract_deposit != null && <Field label="보증금 총액" value={fmtMoney(contract.contract_deposit)} />}
                 {totalDeducted > 0 && <Field label="차감 합계" value={fmtMoney(totalDeducted)} valueClass="text-rose-400" />}
-                {netDeposit != null && <Field label="실반환액" value={fmtMoney(netDeposit)} highlight />}
+                {contract.deposit_total != null && <Field label="실반환액" value={fmtMoney(contract.deposit_total)} highlight />}
                 <Field
                   label="보증금 반환"
                   value={contract.deposit_returned
