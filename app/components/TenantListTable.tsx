@@ -19,6 +19,8 @@ import {
   fetchAllMaintenanceRecords,
   insertMaintenanceRecord,
   deleteMaintenanceRecord,
+  fetchAllRentPayments,
+  type DbRentPayment,
 } from "../lib/supabase-data";
 
 const DETAIL_OPTIONS = ["도배", "매트리스교체", "에어컨청소", "전구교체", "장판교체", "화장실청소"];
@@ -904,6 +906,7 @@ export default function TenantListTable() {
   const { effectiveRooms, today, todayStr } = useEffectiveRooms();
   const { contracts, addContract, editContract, removeContract } = useRooms();
   const [maintenanceData, setMaintenanceData] = useState<Record<string, MaintenanceRecord[]>>({});
+  const [allRentPayments, setAllRentPayments] = useState<DbRentPayment[]>([]);
 
   useEffect(() => {
     try {
@@ -931,7 +934,53 @@ export default function TenantListTable() {
       }
       setMaintenanceData(grouped);
     }).catch(console.error);
+    fetchAllRentPayments().then(setAllRentPayments).catch(console.error);
   }, []);
+
+  // 미납 계약 ID 집합: overdue 레코드가 있거나, 지난 달까지 미입력 월이 있는 경우
+  const unpaidContractIds = useMemo(() => {
+    const set = new Set<string>();
+
+    // contract_id → paid 월 집합
+    const paidMonthsByContract = new Map<string, Set<string>>();
+    for (const p of allRentPayments) {
+      if (p.status === 'overdue') set.add(p.contract_id);
+      if (p.status === 'paid') {
+        if (!paidMonthsByContract.has(p.contract_id)) paidMonthsByContract.set(p.contract_id, new Set());
+        paidMonthsByContract.get(p.contract_id)!.add(p.month);
+      }
+    }
+
+    // 지난 달까지 중 paid 미입력 월이 있으면 미납
+    const lastMonthStart = new Date(todayStr.slice(0, 7) + '-01');
+    lastMonthStart.setMonth(lastMonthStart.getMonth() - 1);
+
+    for (const c of contracts) {
+      if (set.has(c.id) || c.status !== 'scheduled') continue;
+      const moveIn = c.actual_move_in_date;
+      if (!moveIn) continue;
+      const paidMonths = paidMonthsByContract.get(c.id) ?? new Set<string>();
+      let cur = new Date(moveIn.slice(0, 7) + '-01');
+      while (cur <= lastMonthStart) {
+        const m = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`;
+        if (!paidMonths.has(m)) { set.add(c.id); break; }
+        cur.setMonth(cur.getMonth() + 1);
+      }
+    }
+
+    return set;
+  }, [allRentPayments, contracts, todayStr]);
+
+  // 방별 활성 계약 ID
+  const activeContractByRoom = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of contracts) {
+      if (c.status === 'scheduled' && (!c.actual_move_out_date || c.actual_move_out_date >= todayStr)) {
+        map[c.room_id] = c.id;
+      }
+    }
+    return map;
+  }, [contracts, todayStr]);
 
   // 방별 퇴실 완료 계약 수
   const historyCountByRoom = useMemo(() => {
@@ -1100,6 +1149,7 @@ export default function TenantListTable() {
                 <th className="px-6 py-4 font-medium bg-violet-500/10 text-violet-400">이름</th>
                 <th className="px-6 py-4 font-medium bg-teal-500/10 text-teal-400">연락처</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">상태</th>
+                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">납부 상태</th>
                 <th className="px-6 py-4 font-medium bg-amber-500/10 text-amber-400">월세 납부일</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">예약(예정 입실)</th>
                 <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">방 관리</th>
@@ -1139,23 +1189,37 @@ export default function TenantListTable() {
                         {statusLabel[room.status]}
                       </span>
                     </td>
+                    <td className="px-6 py-4">
+                      {(() => {
+                        if (room.status !== 'occupied') return <span className="text-gray-600">-</span>;
+                        const contractId = activeContractByRoom[room.id];
+                        if (!contractId) return <span className="text-gray-600">-</span>;
+                        if (unpaidContractIds.has(contractId)) {
+                          return (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-400">
+                              미납
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
+                            정상
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td className="px-6 py-4 bg-amber-500/5">
                       {(() => {
                         if (room.status === "occupied") {
                           const info = getRentDueInfo(room.moveInDate, today);
                           if (!info) return <span className="text-gray-600">-</span>;
-                          const { day, nextDue, daysUntil } = info;
-                          const label = `${nextDue.getMonth() + 1}/${nextDue.getDate()}`;
+                          const { day, daysUntil } = info;
                           return (
                             <div className="flex flex-col gap-0.5">
                               <span className="text-xs text-gray-500">매월 <span className="text-amber-300 font-semibold">{day}일</span></span>
-                              <span className={`text-xs font-medium ${
-                                daysUntil === 0 ? "text-amber-400" :
-                                daysUntil <= 5  ? "text-yellow-400" :
-                                "text-gray-500"
-                              }`}>
-                                {daysUntil === 0 ? "🔔 오늘" : `${daysUntil}일 후 (${label})`}
-                              </span>
+                              {daysUntil === 0 && (
+                                <span className="text-xs font-medium text-amber-400">🔔 오늘</span>
+                              )}
                             </div>
                           );
                         }
@@ -1230,7 +1294,7 @@ export default function TenantListTable() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={10} className="px-6 py-12 text-center text-sm text-gray-500">
                     검색 결과가 없습니다.
                   </td>
                 </tr>
