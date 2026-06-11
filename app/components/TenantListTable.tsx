@@ -971,13 +971,14 @@ export default function TenantListTable() {
     return set;
   }, [allRentPayments, contracts, todayStr]);
 
-  // 방별 활성 계약 ID
+  // 방별 활성 계약 ID (실제 입실한 계약만 — 미래 예약건 제외)
   const activeContractByRoom = useMemo(() => {
     const map: Record<string, string> = {};
     for (const c of contracts) {
-      if (c.status === 'scheduled' && (!c.actual_move_out_date || c.actual_move_out_date >= todayStr)) {
-        map[c.room_id] = c.id;
-      }
+      if (c.status !== 'scheduled') continue;
+      if (!c.actual_move_in_date || c.actual_move_in_date > todayStr) continue;
+      if (c.actual_move_out_date && c.actual_move_out_date < todayStr) continue;
+      map[c.room_id] = c.id;
     }
     return map;
   }, [contracts, todayStr]);
