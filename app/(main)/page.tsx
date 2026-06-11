@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, Banknote } from 'lucide-react';
 import { fetchTodos, insertTodo, updateTodo, deleteTodoById, type DbTodo } from '@/app/lib/supabase-data';
+import { useRooms } from '@/app/context/RoomsContext';
 
 // ──────────── 타입 ────────────
 
@@ -78,10 +79,11 @@ function ColorPicker({ selected, onChange }: { selected: string; onChange: (c: s
 // ──────────── Todo 모달 ────────────
 
 function TodoModal({
-  date, todos, onAdd, onEdit, onDelete, onToggle, onColorChange, onClose,
+  date, todos, rentReminders, onAdd, onEdit, onDelete, onToggle, onColorChange, onClose,
 }: {
   date: string;
   todos: Todo[];
+  rentReminders: string[];
   onAdd: (text: string, color: string) => Promise<void>;
   onEdit: (id: string, text: string, color: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -128,6 +130,19 @@ function TodoModal({
             <X size={16} />
           </button>
         </div>
+
+        {/* 월세 납부 알림 */}
+        {rentReminders.length > 0 && (
+          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-500/80">월세 납부일</p>
+            {rentReminders.map((name) => (
+              <div key={name} className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                <Banknote size={13} className="shrink-0 text-amber-400" />
+                <span className="text-sm text-amber-200">{name} 월세 납부 필요</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Todo list */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2 max-h-72">
@@ -234,6 +249,8 @@ export default function TodoListPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [viewFilter, setViewFilter] = useState<'all' | 'todo' | 'rent'>('all');
+  const { contracts } = useRooms();
 
   const loadTodos = useCallback(async () => {
     const data = await fetchTodos();
@@ -245,6 +262,23 @@ export default function TodoListPage() {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfWeek(year, month);
   const todayKey = toDateKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+  // 해당 월의 날짜별 월세 납부 대상자 이름 목록
+  const rentRemindersByDate = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    const displayMonth = `${year}-${String(month).padStart(2, '0')}`;
+    for (const c of contracts) {
+      if (c.status !== 'scheduled') continue;
+      const moveIn = c.actual_move_in_date;
+      if (!moveIn) continue;
+      if (moveIn.slice(0, 7) > displayMonth) continue;
+      const dueDay = Math.min(new Date(moveIn).getDate(), daysInMonth);
+      const dateKey = toDateKey(year, month, dueDay);
+      if (!map[dateKey]) map[dateKey] = new Set();
+      map[dateKey].add(c.name);
+    }
+    return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, [...v]]));
+  }, [contracts, year, month, daysInMonth]);
 
   function prevMonth() {
     if (month === 1) { setYear(y => y - 1); setMonth(12); }
@@ -297,15 +331,41 @@ export default function TodoListPage() {
       </div>
 
       <div className="rounded-2xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
-        {/* Month navigation */}
+        {/* Month navigation + filter */}
         <div className="mb-6 flex items-center justify-between">
-          <button onClick={prevMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
-            <ChevronLeft size={18} />
-          </button>
-          <h2 className="text-lg font-bold text-white">{year}년 {month}월</h2>
-          <button onClick={nextMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
-            <ChevronRight size={18} />
-          </button>
+          {/* 필터 버튼 */}
+          <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
+            {([
+              { key: 'all',  label: '전체' },
+              { key: 'todo', label: '할일' },
+              { key: 'rent', label: '월세 납부' },
+            ] as const).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setViewFilter(key)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  viewFilter === key
+                    ? key === 'rent'
+                      ? 'bg-amber-500/20 text-amber-300'
+                      : 'bg-indigo-500/20 text-indigo-300'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* 월 이동 */}
+          <div className="flex items-center gap-3">
+            <button onClick={prevMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+              <ChevronLeft size={18} />
+            </button>
+            <h2 className="text-lg font-bold text-white">{year}년 {month}월</h2>
+            <button onClick={nextMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+              <ChevronRight size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Weekday headers */}
@@ -324,6 +384,7 @@ export default function TodoListPage() {
             if (!day) return <div key={idx} />;
             const dateKey = toDateKey(year, month, day);
             const dayTodos = todosFor(dateKey);
+            const dayRentReminders = rentRemindersByDate[dateKey] ?? [];
             const isToday = dateKey === todayKey;
             const isSun = idx % 7 === 0;
             const isSat = idx % 7 === 6;
@@ -339,12 +400,27 @@ export default function TodoListPage() {
                   style={{ color: isToday ? '#818cf8' : isSun ? '#f87171' : isSat ? '#60a5fa' : '#d1d5db' }}>
                   {day}
                 </span>
-                <div className="flex flex-col gap-1">
-                  {dayTodos.map((todo) => (
-                    <div key={todo.id} className={`truncate rounded px-1.5 py-1 text-xs leading-tight ${colorStyle(todo.color, todo.done)}`}>
-                      {todo.text}
+                <div className="flex flex-col gap-0.5 flex-1">
+                  {viewFilter !== 'rent' && dayTodos.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      {viewFilter === 'all' && <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">할일</span>}
+                      {dayTodos.map((todo) => (
+                        <div key={todo.id} className={`truncate rounded px-1.5 py-1 text-xs leading-tight ${colorStyle(todo.color, todo.done)}`}>
+                          {todo.text}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+                  {viewFilter !== 'todo' && dayRentReminders.length > 0 && (
+                    <div className={`flex flex-col gap-1 ${viewFilter === 'all' && dayTodos.length > 0 ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : ''}`}>
+                      {viewFilter === 'all' && <span className="text-[9px] font-semibold uppercase tracking-wide text-amber-600/80">월세</span>}
+                      {dayRentReminders.map((name) => (
+                        <div key={`rent-${name}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-amber-500/15 text-amber-300 border border-amber-500/20">
+                          {name} 납부
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </button>
             );
@@ -356,6 +432,7 @@ export default function TodoListPage() {
         <TodoModal
           date={selectedDate}
           todos={selectedTodos}
+          rentReminders={rentRemindersByDate[selectedDate] ?? []}
           onAdd={addTodo}
           onEdit={editTodo}
           onDelete={deleteTodo}
