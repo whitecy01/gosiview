@@ -27,6 +27,7 @@ export type DbContract = {
   monthly_rent: number | null;
   contract_deposit: number | null;
   deposit_total: number | null;
+  payment_due_day: number | null;
   deposit_returned: boolean;
   deposit_returned_at: string | null;
   status: 'scheduled' | 'completed';
@@ -115,6 +116,7 @@ export type NewContractInput = {
   monthly_rent: number | null;
   contract_deposit: number | null;
   deposit_total: number | null;
+  payment_due_day?: number | null;
   deposit_returned?: boolean;
   deposit_returned_at?: string | null;
   status: 'scheduled' | 'completed';

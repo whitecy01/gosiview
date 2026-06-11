@@ -32,10 +32,10 @@ function formatPhone(raw: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
-/** 월세 납부일 계산: 입실일 기준 매월 N일, 다음 납부일까지 며칠 남았는지 반환 */
-function getRentDueInfo(moveInDate: string | null, today: Date): { day: number; nextDue: Date; daysUntil: number } | null {
-  if (!moveInDate) return null;
-  const day = new Date(moveInDate).getDate();
+/** 월세 납부일 계산: payment_due_day 우선, 없으면 입실일 기준 */
+function getRentDueInfo(moveInDate: string | null, today: Date, paymentDueDay?: number | null): { day: number; nextDue: Date; daysUntil: number } | null {
+  if (!moveInDate && !paymentDueDay) return null;
+  const day = paymentDueDay ?? (moveInDate ? new Date(moveInDate).getDate() : 1);
   const thisMonthDue = new Date(today.getFullYear(), today.getMonth(), day);
   const nextDue = thisMonthDue >= today
     ? thisMonthDue
@@ -971,13 +971,14 @@ export default function TenantListTable() {
     return set;
   }, [allRentPayments, contracts, todayStr]);
 
-  // 방별 활성 계약 ID
+  // 방별 활성 계약 ID (실제 입실한 계약만 — 미래 예약건 제외)
   const activeContractByRoom = useMemo(() => {
     const map: Record<string, string> = {};
     for (const c of contracts) {
-      if (c.status === 'scheduled' && (!c.actual_move_out_date || c.actual_move_out_date >= todayStr)) {
-        map[c.room_id] = c.id;
-      }
+      if (c.status !== 'scheduled') continue;
+      if (!c.actual_move_in_date || c.actual_move_in_date > todayStr) continue;
+      if (c.actual_move_out_date && c.actual_move_out_date < todayStr) continue;
+      map[c.room_id] = c.id;
     }
     return map;
   }, [contracts, todayStr]);
@@ -1211,7 +1212,8 @@ export default function TenantListTable() {
                     <td className="px-6 py-4 bg-amber-500/5">
                       {(() => {
                         if (room.status === "occupied") {
-                          const info = getRentDueInfo(room.moveInDate, today);
+                          const activeC = contracts.find(c => c.id === activeContractByRoom[room.id]);
+                          const info = getRentDueInfo(room.moveInDate, today, activeC?.payment_due_day);
                           if (!info) return <span className="text-gray-600">-</span>;
                           const { day, daysUntil } = info;
                           return (

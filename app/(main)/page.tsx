@@ -272,7 +272,7 @@ export default function TodoListPage() {
       const moveIn = c.actual_move_in_date;
       if (!moveIn) continue;
       if (moveIn.slice(0, 7) > displayMonth) continue;
-      const dueDay = Math.min(new Date(moveIn).getDate(), daysInMonth);
+      const dueDay = Math.min(c.payment_due_day ?? new Date(moveIn).getDate(), daysInMonth);
       const dateKey = toDateKey(year, month, dueDay);
       if (!map[dateKey]) map[dateKey] = new Set();
       map[dateKey].add(c.name);

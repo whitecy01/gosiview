@@ -184,7 +184,7 @@ export default function ResidentDetailPage() {
     const moveIn = activeContract?.actual_move_in_date ?? "";
     const moveOut = activeContract?.actual_move_out_date ?? "";
     const rent = activeContract?.monthly_rent ?? 0;
-    const dueDay = moveIn ? new Date(moveIn).getDate() : 1;
+    const dueDay = activeContract?.payment_due_day ?? (moveIn ? new Date(moveIn).getDate() : 1);
 
     // 입실일~퇴실일 사이 월별 납부 항목 자동 생성
     const rentPayments: RentPayment[] = [];
@@ -373,6 +373,7 @@ export default function ResidentDetailPage() {
         phone: editPhone || activeContract.phone,
         birth_date: editBirthDate || activeContract.birth_date || null,
         gender: editGender,
+        payment_due_day: infoForm.paymentDueDay ?? null,
         monthly_rent: infoForm.actualMonthlyRent ? infoForm.actualMonthlyRent * 10000 : null,
         contract_start_date: infoForm.contractMoveInDate ?? activeContract.contract_start_date,
         actual_move_in_date: infoForm.actualMoveInDate || null,
@@ -946,7 +947,7 @@ export default function ResidentDetailPage() {
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(문서 작성 날짜)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={detail.actualMoveInDate ? fmtDate(detail.actualMoveInDate) : (room.moveInDate ? fmtDate(room.moveInDate) : "-")} />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : (room.moveOutDate ? fmtDate(room.moveOutDate) : "-")} />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${new Date(detail.actualMoveInDate ?? room.moveInDate ?? detail.contractMoveInDate ?? "").getDate()}일`} highlight="indigo" />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
                   <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
                   <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
