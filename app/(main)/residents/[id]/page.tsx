@@ -978,9 +978,7 @@ export default function ResidentDetailPage() {
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="확정 퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : "-"} />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
                   <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
-                  {detail.earnestMoney != null && (
-                    <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="계약금" value={`₩${detail.earnestMoney.toLocaleString("ko-KR")}`} />
-                  )}
+                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="계약금" value={detail.earnestMoney != null ? `₩${detail.earnestMoney.toLocaleString("ko-KR")}` : "-"} />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
                   <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
                   {activeContract?.birth_date && (

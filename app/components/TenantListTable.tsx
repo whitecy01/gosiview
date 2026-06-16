@@ -698,6 +698,22 @@ function ScheduledInfoModal({
                             </span>
                           </div>
                         </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                            <span className="text-gray-500 block mb-0.5">계약금</span>
+                            {r.earnestMoney != null
+                              ? <span className="text-white font-semibold">₩{r.earnestMoney.toLocaleString('ko-KR')}</span>
+                              : <span className="text-gray-600 italic">미입력</span>
+                            }
+                          </div>
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                            <span className="text-gray-500 block mb-0.5">보증금</span>
+                            {r.contractDeposit != null
+                              ? <span className="text-white font-semibold">₩{r.contractDeposit.toLocaleString('ko-KR')}</span>
+                              : <span className="text-gray-600 italic">미입력</span>
+                            }
+                          </div>
+                        </div>
                       </div>
                     );
                   })()}
