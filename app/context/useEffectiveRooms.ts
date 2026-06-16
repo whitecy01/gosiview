@@ -39,7 +39,7 @@ export function useEffectiveRooms() {
         .filter((c) => {
           const moveInStr = (c.actual_move_in_date ?? "").slice(0, 10);
           if (!moveInStr || moveInStr > todayStr) return false;
-          const moveOutDate = c.actual_move_out_date;
+          const moveOutDate = c.actual_move_out_date ?? c.contract_start_end;
           if (moveOutDate && moveOutDate.slice(0, 10) < todayStr) return false;
           return true;
         })
@@ -59,7 +59,7 @@ export function useEffectiveRooms() {
           gender: current.gender,
           birth_date: current.birth_date,
           moveInDate: moveIn,
-          moveOutDate: current.actual_move_out_date ?? null,
+          moveOutDate: current.actual_move_out_date ?? current.contract_start_end ?? null,
           monthlyRent: current.monthly_rent
             ? `₩${current.monthly_rent.toLocaleString('ko-KR')}`
             : room.roomPrice,
@@ -91,7 +91,7 @@ export function useEffectiveRooms() {
           gender: nextContract.gender,
           birth_date: nextContract.birth_date,
           moveInDate: moveIn,
-          moveOutDate: nextContract.actual_move_out_date ?? null,
+          moveOutDate: nextContract.actual_move_out_date ?? nextContract.contract_start_end ?? null,
           monthlyRent: nextContract.monthly_rent
             ? `₩${nextContract.monthly_rent.toLocaleString('ko-KR')}`
             : room.roomPrice,

@@ -106,6 +106,7 @@ function ResidentForm({
 
   // 계약 정보
   const [contractMoveInDate, setContractMoveInDate] = useState(initial.contractMoveInDate ?? "");
+  const [contractEndDate, setContractEndDate] = useState(initial.contractEndDate ?? "");
   // 입실 정보
   const [actualMoveInDate, setActualMoveInDate] = useState(initial.actualMoveInDate ?? "");
   const [moveOutDate, setMoveOutDate] = useState(initial.moveOutDate ?? "");
@@ -139,6 +140,7 @@ function ResidentForm({
     onSave({
       name, phone, gender, birth_date: birthDate || null,
       contractMoveInDate,
+      contractEndDate: contractEndDate || undefined,
       actualMoveInDate: actualMoveInDate || undefined,
       moveOutDate: moveOutDate || undefined,
       purpose: (purpose || undefined) as ResidencePurpose | undefined,
@@ -191,6 +193,10 @@ function ResidentForm({
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">계약일(문서 작성 날짜) <span className="text-rose-500">*</span></label>
             <input type="date" value={contractMoveInDate} onChange={(e) => handleContractStartChange(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">계약 만료일</label>
+            <input type="date" value={contractEndDate} onChange={(e) => setContractEndDate(e.target.value)} className={`${inputCls} ${contractEndDate ? 'text-indigo-300' : ''}`} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -286,7 +292,7 @@ function ResidentForm({
             )}
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">퇴실일</label>
+            <label className="block text-xs text-gray-400 mb-1.5">확정 퇴실일</label>
             <input type="date" value={moveOutDate} onChange={(e) => setMoveOutDate(e.target.value)} className={`${inputCls} ${moveOutDate ? 'text-emerald-300' : ''}`} />
           </div>
         </div>
@@ -650,6 +656,13 @@ function ScheduledInfoModal({
                             <span className="text-gray-500 block mb-0.5">계약일(문서 작성 날짜)</span>
                             <span className="text-indigo-400 font-semibold">{r.contractMoveInDate}</span>
                           </div>
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                            <span className="text-gray-500 block mb-0.5">계약 만료일</span>
+                            {r.contractEndDate
+                              ? <span className="text-indigo-300 font-semibold">{r.contractEndDate}</span>
+                              : <span className="text-gray-600 italic">미정</span>
+                            }
+                          </div>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                           <div className={`rounded-lg px-3 py-2 text-xs border ${isActualDiff ? 'bg-amber-500/10 border-amber-500/20' : 'bg-[#1A1A1A] border-transparent'}`}>
@@ -660,7 +673,7 @@ function ScheduledInfoModal({
                             }
                           </div>
                           <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
-                            <span className="text-gray-500 block mb-0.5">퇴실일</span>
+                            <span className="text-gray-500 block mb-0.5">확정 퇴실일</span>
                             {effectiveMoveOut
                               ? <span className="text-emerald-400 font-semibold">{effectiveMoveOut}</span>
                               : <span className="text-gray-600 italic">미정</span>
@@ -977,7 +990,8 @@ export default function TenantListTable() {
     for (const c of contracts) {
       if (c.status !== 'scheduled') continue;
       if (!c.actual_move_in_date || c.actual_move_in_date > todayStr) continue;
-      if (c.actual_move_out_date && c.actual_move_out_date < todayStr) continue;
+      const effectiveOut = c.actual_move_out_date ?? c.contract_start_end;
+      if (effectiveOut && effectiveOut < todayStr) continue;
       map[c.room_id] = c.id;
     }
     return map;
@@ -987,7 +1001,8 @@ export default function TenantListTable() {
   const historyCountByRoom = useMemo(() => {
     const map: Record<string, number> = {};
     for (const c of contracts) {
-      if (c.status === 'completed' || (c.actual_move_out_date && c.actual_move_out_date < todayStr)) {
+      const histOut = c.actual_move_out_date ?? c.contract_start_end;
+      if (c.status === 'completed' || (histOut && histOut < todayStr)) {
         map[c.room_id] = (map[c.room_id] ?? 0) + 1;
       }
     }
@@ -1010,6 +1025,7 @@ export default function TenantListTable() {
         gender: c.gender ?? '남',
         birth_date: c.birth_date ?? null,
         contractMoveInDate: c.contract_start_date,
+        contractEndDate: c.contract_start_end ?? undefined,
         actualMoveInDate: c.actual_move_in_date ?? undefined,
         moveOutDate: c.actual_move_out_date ?? undefined,
         purpose: (c.purpose as ResidencePurpose) ?? undefined,
@@ -1032,6 +1048,7 @@ export default function TenantListTable() {
       purpose: record.purpose ?? null,
       real_estate_agency: record.realEstateAgency ?? null,
       contract_start_date: record.contractMoveInDate,
+      contract_start_end: record.contractEndDate ?? null,
       actual_move_in_date: record.actualMoveInDate ?? null,
       actual_move_out_date: record.moveOutDate ?? null,
       monthly_rent: record.monthlyRent ?? null,
@@ -1066,6 +1083,7 @@ export default function TenantListTable() {
       purpose: record.purpose ?? null,
       real_estate_agency: record.realEstateAgency ?? null,
       contract_start_date: record.contractMoveInDate,
+      contract_start_end: record.contractEndDate ?? null,
       actual_move_in_date: record.actualMoveInDate ?? null,
       actual_move_out_date: record.moveOutDate ?? null,
       monthly_rent: record.monthlyRent ?? null,

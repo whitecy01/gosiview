@@ -22,6 +22,7 @@ export type DbContract = {
   purpose: string | null;
   real_estate_agency: string | null;
   contract_start_date: string;
+  contract_start_end: string | null;
   actual_move_in_date: string | null;
   actual_move_out_date: string | null;
   monthly_rent: number | null;
@@ -111,6 +112,7 @@ export type NewContractInput = {
   purpose: string | null;
   real_estate_agency: string | null;
   contract_start_date: string;
+  contract_start_end?: string | null;
   actual_move_in_date: string | null;
   actual_move_out_date: string | null;
   monthly_rent: number | null;
@@ -184,7 +186,8 @@ export async function fetchRoomHistory(roomId: string, today: string): Promise<D
 
   return (data as DbContract[]).filter((c) => {
     if (c.status === 'completed') return true;
-    return !!c.actual_move_out_date && c.actual_move_out_date < today;
+    const out = c.actual_move_out_date ?? c.contract_start_end;
+    return !!out && out < today;
   });
 }
 

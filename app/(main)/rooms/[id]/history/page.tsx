@@ -207,7 +207,7 @@ export default function RoomHistoryPage() {
     });
     let days = 0;
     for (let i = 0; i < sorted.length - 1; i++) {
-      const aOut = sorted[i].actual_move_out_date;
+      const aOut = sorted[i].actual_move_out_date ?? sorted[i].contract_start_end;
       const bIn = sorted[i + 1].actual_move_in_date;
       if (aOut && bIn) {
         const gap = daysBetween(aOut, bIn);
@@ -221,7 +221,7 @@ export default function RoomHistoryPage() {
     ? Math.round(
         history.reduce((s, c) => {
           const moveIn = c.actual_move_in_date;
-          const moveOut = c.actual_move_out_date;
+          const moveOut = c.actual_move_out_date ?? c.contract_start_end;
           return s + (moveIn && moveOut ? daysBetween(moveIn, moveOut) : 0);
         }, 0) / history.length
       )
@@ -282,7 +282,7 @@ export default function RoomHistoryPage() {
                   <th className="px-4 py-3 text-left font-medium">이름</th>
                   <th className="px-4 py-3 text-left font-medium">성별·나이</th>
                   <th className="px-4 py-3 text-left font-medium">입실일</th>
-                  <th className="px-4 py-3 text-left font-medium">퇴실일</th>
+                  <th className="px-4 py-3 text-left font-medium">확정 퇴실일</th>
                   <th className="px-4 py-3 text-left font-medium">거주 기간</th>
                   <th className="px-4 py-3 text-left font-medium">월세</th>
                   <th className="px-4 py-3 text-left font-medium">보증금 반환</th>

@@ -119,7 +119,7 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
             <div>
               <p className="font-bold text-white">{contract.name}</p>
               <p className="text-xs text-gray-500">
-                {contract.status === 'completed' ? '퇴실 처리 완료' : '계약 중'} · {moveIn ? fmtDate(moveIn) : '—'} ~ {moveOut ? fmtDate(moveOut) : '—'}
+                {contract.status === 'completed' ? '퇴실 처리 완료' : '계약 중'} · {moveIn ? fmtDate(moveIn) : '—'} ~ {moveOut ? fmtDate(moveOut) : (contract.contract_start_end ? fmtDate(contract.contract_start_end) : '—')}
               </p>
             </div>
           </div>
@@ -154,8 +154,9 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
             <Section icon={<Calendar className="h-3.5 w-3.5 text-sky-400" />} title="계약 정보">
               <Grid2>
                 <Field label="계약 시작일" value={fmtDate(contract.contract_start_date)} />
+                <Field label="계약 만료일" value={contract.contract_start_end ? fmtDate(contract.contract_start_end) : '—'} />
                 <Field label="실제 입실일" value={contract.actual_move_in_date ? fmtDate(contract.actual_move_in_date) : '—'} />
-                <Field label="실제 퇴실일" value={contract.actual_move_out_date ? fmtDate(contract.actual_move_out_date) : '—'} />
+                <Field label="확정 퇴실일" value={contract.actual_move_out_date ? fmtDate(contract.actual_move_out_date) : '—'} />
                 {moveIn && moveOut && (
                   <Field label="실거주 기간" value={fmtStay(moveIn, moveOut)} highlight />
                 )}

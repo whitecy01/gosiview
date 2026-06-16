@@ -65,6 +65,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
 
   // 입실 정보
   const [actualMoveInDate, setActualMoveInDate] = useState('');
+  const [contractEndDate, setContractEndDate] = useState('');
   const [moveOutDate, setMoveOutDate] = useState('');
 
   // 추가 계약 정보
@@ -114,6 +115,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
         purpose: purpose || null,
         real_estate_agency: realEstateAgency || null,
         contract_start_date: contractMoveInDate,
+        contract_start_end: contractEndDate || null,
         actual_move_in_date: actualMoveInDate || null,
         actual_move_out_date: moveOutDate || null,
         monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
@@ -396,7 +398,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
             {/* 입실 정보 */}
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">입실 정보</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-rose-400">*</span></label>
                   <input
@@ -410,7 +412,16 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">퇴실일</label>
+                  <label className="block text-xs text-gray-400 mb-1.5">계약 만료일</label>
+                  <input
+                    type="date"
+                    value={contractEndDate}
+                    onChange={(e) => setContractEndDate(e.target.value)}
+                    className={`${inputCls} ${contractEndDate ? 'text-indigo-300' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">확정 퇴실일</label>
                   <input
                     type="date"
                     value={moveOutDate}
