@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, Banknote } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, Banknote, CalendarX } from 'lucide-react';
 import { fetchTodos, insertTodo, updateTodo, deleteTodoById, type DbTodo } from '@/app/lib/supabase-data';
 import { useRooms } from '@/app/context/RoomsContext';
 
@@ -79,11 +79,12 @@ function ColorPicker({ selected, onChange }: { selected: string; onChange: (c: s
 // ──────────── Todo 모달 ────────────
 
 function TodoModal({
-  date, todos, rentReminders, onAdd, onEdit, onDelete, onToggle, onColorChange, onClose,
+  date, todos, rentReminders, expiryReminders, onAdd, onEdit, onDelete, onToggle, onColorChange, onClose,
 }: {
   date: string;
   todos: Todo[];
   rentReminders: string[];
+  expiryReminders: string[];
   onAdd: (text: string, color: string) => Promise<void>;
   onEdit: (id: string, text: string, color: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -139,6 +140,19 @@ function TodoModal({
               <div key={name} className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
                 <Banknote size={13} className="shrink-0 text-amber-400" />
                 <span className="text-sm text-amber-200">{name} 월세 납부 필요</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 계약 만료 알림 */}
+        {expiryReminders.length > 0 && (
+          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-500/80">계약 만료 1개월 전</p>
+            {expiryReminders.map((name) => (
+              <div key={name} className="flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2">
+                <CalendarX size={13} className="shrink-0 text-rose-400" />
+                <span className="text-sm text-rose-200">{name} 계약 만료 예정 (1개월 후)</span>
               </div>
             ))}
           </div>
@@ -249,7 +263,7 @@ export default function TodoListPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [viewFilter, setViewFilter] = useState<'all' | 'todo' | 'rent'>('all');
+  const [viewFilter, setViewFilter] = useState<'all' | 'todo' | 'rent' | 'expiry'>('all');
   const { contracts } = useRooms();
 
   const loadTodos = useCallback(async () => {
@@ -262,6 +276,25 @@ export default function TodoListPage() {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfWeek(year, month);
   const todayKey = toDateKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+  // 해당 월의 날짜별 계약 만료 1개월 전 알림
+  const contractExpiryRemindersByDate = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    for (const c of contracts) {
+      if (c.status !== 'scheduled') continue;
+      if (!c.contract_start_end) continue;
+      if (c.actual_move_out_date) continue; // 확정 퇴실일 있으면 제외
+      const expiryDate = new Date(c.contract_start_end + 'T00:00:00');
+      const reminderDate = new Date(expiryDate);
+      reminderDate.setMonth(reminderDate.getMonth() - 1);
+      if (reminderDate.getFullYear() === year && reminderDate.getMonth() + 1 === month) {
+        const dateKey = toDateKey(year, month, reminderDate.getDate());
+        if (!map[dateKey]) map[dateKey] = new Set();
+        map[dateKey].add(c.name);
+      }
+    }
+    return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, [...v]]));
+  }, [contracts, year, month]);
 
   // 해당 월의 날짜별 월세 납부 대상자 이름 목록
   const rentRemindersByDate = useMemo(() => {
@@ -336,9 +369,10 @@ export default function TodoListPage() {
           {/* 필터 버튼 */}
           <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
             {([
-              { key: 'all',  label: '전체' },
-              { key: 'todo', label: '할일' },
-              { key: 'rent', label: '월세 납부' },
+              { key: 'all',    label: '전체' },
+              { key: 'todo',   label: '할일' },
+              { key: 'rent',   label: '월세 납부' },
+              { key: 'expiry', label: '계약 만료' },
             ] as const).map(({ key, label }) => (
               <button
                 key={key}
@@ -347,7 +381,9 @@ export default function TodoListPage() {
                   viewFilter === key
                     ? key === 'rent'
                       ? 'bg-amber-500/20 text-amber-300'
-                      : 'bg-indigo-500/20 text-indigo-300'
+                      : key === 'expiry'
+                        ? 'bg-rose-500/20 text-rose-300'
+                        : 'bg-indigo-500/20 text-indigo-300'
                     : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
@@ -385,6 +421,7 @@ export default function TodoListPage() {
             const dateKey = toDateKey(year, month, day);
             const dayTodos = todosFor(dateKey);
             const dayRentReminders = rentRemindersByDate[dateKey] ?? [];
+            const dayExpiryReminders = contractExpiryRemindersByDate[dateKey] ?? [];
             const isToday = dateKey === todayKey;
             const isSun = idx % 7 === 0;
             const isSat = idx % 7 === 6;
@@ -401,7 +438,7 @@ export default function TodoListPage() {
                   {day}
                 </span>
                 <div className="flex flex-col gap-0.5 flex-1">
-                  {viewFilter !== 'rent' && dayTodos.length > 0 && (
+                  {viewFilter !== 'rent' && viewFilter !== 'expiry' && dayTodos.length > 0 && (
                     <div className="flex flex-col gap-1">
                       {viewFilter === 'all' && <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">할일</span>}
                       {dayTodos.map((todo) => (
@@ -411,12 +448,22 @@ export default function TodoListPage() {
                       ))}
                     </div>
                   )}
-                  {viewFilter !== 'todo' && dayRentReminders.length > 0 && (
+                  {viewFilter !== 'todo' && viewFilter !== 'expiry' && dayRentReminders.length > 0 && (
                     <div className={`flex flex-col gap-1 ${viewFilter === 'all' && dayTodos.length > 0 ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : ''}`}>
                       {viewFilter === 'all' && <span className="text-[9px] font-semibold uppercase tracking-wide text-amber-600/80">월세</span>}
                       {dayRentReminders.map((name) => (
                         <div key={`rent-${name}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-amber-500/15 text-amber-300 border border-amber-500/20">
                           {name} 납부
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {viewFilter !== 'todo' && viewFilter !== 'rent' && dayExpiryReminders.length > 0 && (
+                    <div className={`flex flex-col gap-1 ${viewFilter === 'all' && (dayTodos.length > 0 || dayRentReminders.length > 0) ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : ''}`}>
+                      {viewFilter === 'all' && <span className="text-[9px] font-semibold uppercase tracking-wide text-rose-600/80">만료 예정</span>}
+                      {dayExpiryReminders.map((name) => (
+                        <div key={`expiry-${name}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-rose-500/15 text-rose-300 border border-rose-500/20">
+                          {name} 만료 1개월 전
                         </div>
                       ))}
                     </div>
@@ -433,6 +480,7 @@ export default function TodoListPage() {
           date={selectedDate}
           todos={selectedTodos}
           rentReminders={rentRemindersByDate[selectedDate] ?? []}
+          expiryReminders={contractExpiryRemindersByDate[selectedDate] ?? []}
           onAdd={addTodo}
           onEdit={editTodo}
           onDelete={deleteTodo}

@@ -119,7 +119,7 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
             <div>
               <p className="font-bold text-white">{contract.name}</p>
               <p className="text-xs text-gray-500">
-                {contract.status === 'completed' ? '퇴실 처리 완료' : '계약 중'} · {moveIn ? fmtDate(moveIn) : '—'} ~ {moveOut ? fmtDate(moveOut) : '—'}
+                {contract.status === 'completed' ? '퇴실 처리 완료' : '계약 중'} · {moveIn ? fmtDate(moveIn) : '—'} ~ {moveOut ? fmtDate(moveOut) : (contract.contract_start_end ? fmtDate(contract.contract_start_end) : '—')}
               </p>
             </div>
           </div>
@@ -154,8 +154,9 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
             <Section icon={<Calendar className="h-3.5 w-3.5 text-sky-400" />} title="계약 정보">
               <Grid2>
                 <Field label="계약 시작일" value={fmtDate(contract.contract_start_date)} />
+                <Field label="계약 만료일" value={contract.contract_start_end ? fmtDate(contract.contract_start_end) : '—'} />
                 <Field label="실제 입실일" value={contract.actual_move_in_date ? fmtDate(contract.actual_move_in_date) : '—'} />
-                <Field label="실제 퇴실일" value={contract.actual_move_out_date ? fmtDate(contract.actual_move_out_date) : '—'} />
+                <Field label="확정 퇴실일" value={contract.actual_move_out_date ? fmtDate(contract.actual_move_out_date) : '—'} />
                 {moveIn && moveOut && (
                   <Field label="실거주 기간" value={fmtStay(moveIn, moveOut)} highlight />
                 )}
@@ -171,6 +172,7 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
             <Section icon={<CreditCard className="h-3.5 w-3.5 text-emerald-400" />} title="월세 / 보증금">
               <Grid2>
                 {contract.monthly_rent != null && <Field label="월세" value={fmtMoney(contract.monthly_rent)} highlight />}
+                {contract.earnest_money != null && <Field label="계약금" value={fmtMoney(contract.earnest_money)} />}
                 {contract.contract_deposit != null && <Field label="보증금 총액" value={fmtMoney(contract.contract_deposit)} />}
                 {totalDeducted > 0 && <Field label="차감 합계" value={fmtMoney(totalDeducted)} valueClass="text-rose-400" />}
                 {contract.deposit_total != null && <Field label="실반환액" value={fmtMoney(contract.deposit_total)} highlight />}

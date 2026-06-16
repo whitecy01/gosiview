@@ -102,7 +102,7 @@ function contractToTenantBar(c: DbContract): TenantBar {
     contractId: c.id,
     name: c.name,
     moveInDate: c.actual_move_in_date ?? "",
-    moveOutDate: c.actual_move_out_date ?? c.contract_start_date,
+    moveOutDate: c.actual_move_out_date ?? c.contract_start_end ?? c.contract_start_date,
     gender: c.gender ?? undefined,
     birth_date: c.birth_date ?? undefined,
     monthlyRent: c.monthly_rent ?? undefined,

@@ -76,7 +76,7 @@ export default function LedgerList() {
             <div>
               <h2 className="text-lg font-semibold text-white">입실자 장부 리스트</h2>
               <p className="mt-1 text-sm text-gray-400">
-                입실일, 퇴실일, 월세 납부 시점을 한눈에 볼 수 있도록 정리했습니다.
+                입실일, 확정 퇴실일, 월세 납부 시점을 한눈에 볼 수 있도록 정리했습니다.
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -121,7 +121,7 @@ export default function LedgerList() {
                   <th className="px-6 py-4 font-medium">성별</th>
                   <th className="px-6 py-4 font-medium">나이</th>
                   <th className="px-6 py-4 font-medium">입실일</th>
-                  <th className="px-6 py-4 font-medium">퇴실일</th>
+                  <th className="px-6 py-4 font-medium">확정 퇴실일</th>
                   <th className="px-6 py-4 font-medium">월세</th>
                   <th className="px-6 py-4 font-medium">납부 대상 월일</th>
                   <th className="px-6 py-4 font-medium">월세 납부일</th>
@@ -254,7 +254,7 @@ function PaymentHistoryDrawer({ entry, onClose }: { entry: Room; onClose: () => 
               <p className="mt-1 text-sm font-semibold text-white">{entry.moveInDate}</p>
             </div>
             <div className="rounded-lg bg-[#1A1A1A] px-4 py-3">
-              <p className="text-xs text-gray-500">퇴실일</p>
+              <p className="text-xs text-gray-500">확정 퇴실일</p>
               <p className="mt-1 text-sm font-semibold text-white">{entry.moveOutDate}</p>
             </div>
           </div>

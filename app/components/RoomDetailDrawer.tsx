@@ -341,7 +341,7 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                       <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.utilityIncludedRent}만원`} highlight="emerald" />
                       <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="실제 납부 월세" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
                       <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={room.moveInDate ? fmtDate(room.moveInDate) : "-"} />
-                      <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={room.moveOutDate ? fmtDate(room.moveOutDate) : "-"} />
+                      <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="확정 퇴실일" value={room.moveOutDate ? fmtDate(room.moveOutDate) : "-"} />
                       <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="납부 대상 월일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
                       <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
                       <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
@@ -366,7 +366,7 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                       </div>
                       <div className="flex items-center gap-3 text-sm">
                         <Calendar className="h-4 w-4 text-gray-500 shrink-0" />
-                        <span className="text-gray-400 w-20">퇴실일</span>
+                        <span className="text-gray-400 w-20">확정 퇴실일</span>
                         <span className="text-white font-medium">{room.moveOutDate ?? "-"}</span>
                       </div>
                     </div>

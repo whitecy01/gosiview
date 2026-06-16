@@ -205,11 +205,13 @@ export default function ResidentDetailPage() {
       actualMonthlyRent: Math.round(rent / 10000),
       paymentDueDay: dueDay,
       contractMoveInDate: activeContract?.contract_start_date,
+      contractEndDate: activeContract?.contract_start_end ?? undefined,
       actualMoveInDate: activeContract?.actual_move_in_date ?? undefined,
       actualMoveOutDate: activeContract?.actual_move_out_date ?? undefined,
       contractDeposit: {
         amount: activeContract?.contract_deposit ?? 0,
       },
+      earnestMoney: activeContract?.earnest_money ?? undefined,
       realEstateAgency: (activeContract?.real_estate_agency as RealEstateAgency) ?? undefined,
       depositTotal: activeContract?.deposit_total ?? 0,
       depositDeductions: [],
@@ -376,9 +378,11 @@ export default function ResidentDetailPage() {
         payment_due_day: infoForm.paymentDueDay ?? null,
         monthly_rent: infoForm.actualMonthlyRent ? infoForm.actualMonthlyRent * 10000 : null,
         contract_start_date: infoForm.contractMoveInDate ?? activeContract.contract_start_date,
+        contract_start_end: infoForm.contractEndDate || null,
         actual_move_in_date: infoForm.actualMoveInDate || null,
         actual_move_out_date: infoForm.actualMoveOutDate || null,
         contract_deposit: infoForm.contractDeposit?.amount ?? null,
+        earnest_money: infoForm.earnestMoney ?? null,
         deposit_total: infoForm.contractDeposit?.amount ?? null,
         purpose: infoForm.purpose || null,
         real_estate_agency: infoForm.realEstateAgency || null,
@@ -796,7 +800,16 @@ export default function ResidentDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-xs text-gray-400">퇴실일</label>
+                      <label className="mb-1.5 block text-xs text-gray-400">계약 만료일</label>
+                      <input
+                        type="date"
+                        value={infoForm.contractEndDate ?? ""}
+                        onChange={(e) => setInfoForm((f) => ({ ...f, contractEndDate: e.target.value }))}
+                        className={`${INPUT} ${infoForm.contractEndDate ? "text-indigo-300" : ""}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs text-gray-400">확정 퇴실일</label>
                       <input
                         type="date"
                         value={infoForm.actualMoveOutDate ?? ""}
@@ -807,6 +820,21 @@ export default function ResidentDetailPage() {
                   </div>
                 </div>
 
+                {/* 계약금 */}
+                <div>
+                  <label className="mb-1.5 block text-xs text-gray-400">계약금 <span className="text-gray-600">원</span></label>
+                  <input
+                    type="number"
+                    value={infoForm.earnestMoney || ""}
+                    onChange={(e) =>
+                      setInfoForm((f) => ({
+                        ...f,
+                        earnestMoney: e.target.value ? Number(e.target.value) : undefined,
+                      }))
+                    }
+                    className={INPUT}
+                  />
+                </div>
                 {/* 보증금 */}
                 <div>
                   <label className="mb-1.5 block text-xs text-gray-400">보증금 금액 <span className="text-gray-600">원</span></label>
@@ -945,10 +973,12 @@ export default function ResidentDetailPage() {
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.utilityIncludedRent}만원`} />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="실제 납부 월세" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(문서 작성 날짜)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약 만료일" value={detail.contractEndDate ? fmtDate(detail.contractEndDate) : "-"} highlight="indigo" />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={detail.actualMoveInDate ? fmtDate(detail.actualMoveInDate) : (room.moveInDate ? fmtDate(room.moveInDate) : "-")} />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : (room.moveOutDate ? fmtDate(room.moveOutDate) : "-")} />
+                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="확정 퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : "-"} />
                   <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
                   <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
+                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="계약금" value={detail.earnestMoney != null ? `₩${detail.earnestMoney.toLocaleString("ko-KR")}` : "-"} />
                   <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
                   <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
                   {activeContract?.birth_date && (

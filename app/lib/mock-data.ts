@@ -15,11 +15,13 @@ export type ScheduledResident = {
   gender: '남' | '여';
   birth_date: string | null;
   contractMoveInDate: string;
+  contractEndDate?: string;
   actualMoveInDate?: string;
   moveOutDate?: string;
   purpose?: ResidencePurpose;
   monthlyRent?: number;
   contractDeposit?: number;
+  earnestMoney?: number;
   realEstateAgency?: RealEstateAgency;
 };
 
@@ -235,9 +237,11 @@ export type ResidentDetail = {
   actualMonthlyRent: number;
   paymentDueDay: number;
   contractMoveInDate?: string;
+  contractEndDate?: string;
   actualMoveInDate?: string;
   actualMoveOutDate?: string;
   contractDeposit: { amount: number };
+  earnestMoney?: number;
   realEstateAgency: RealEstateAgency;
   depositTotal: number;
   depositDeductions: DepositDeduction[];
