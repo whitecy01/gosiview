@@ -182,7 +182,7 @@ export default function ResidentDetailPage() {
   // 계약 데이터로 detail 초기화
   function initDetail() {
     const moveIn = activeContract?.actual_move_in_date ?? "";
-    const moveOut = activeContract?.actual_move_out_date ?? "";
+    const moveOut = activeContract?.actual_move_out_date ?? activeContract?.contract_start_end ?? "";
     const rent = activeContract?.monthly_rent ?? 0;
     const dueDay = activeContract?.payment_due_day ?? (moveIn ? new Date(moveIn).getDate() : 1);
 
@@ -306,6 +306,7 @@ export default function ResidentDetailPage() {
       setDbRentPayments(rows);
       setDetail((prev) => {
         if (!prev) return prev;
+        // 생성된 목록 기반으로 DB 데이터 병합
         const merged = prev.rentPayments.map((p) => {
           const db = rows.find((r) => r.month === p.month);
           if (!db) return p;
@@ -317,7 +318,19 @@ export default function ResidentDetailPage() {
             status: db.status,
           };
         });
-        return { ...prev, rentPayments: merged };
+        // 생성된 목록에 없지만 DB에만 있는 달 추가
+        const mergedMonths = new Set(merged.map((p) => p.month));
+        const dbOnly = rows
+          .filter((r) => !mergedMonths.has(r.month))
+          .map((r) => ({
+            month: r.month,
+            paidAt: r.paid_at,
+            amount: r.amount,
+            paymentMethod: r.payment_method as RentPaymentMethod | null,
+            status: r.status,
+          }));
+        const all = [...merged, ...dbOnly].sort((a, b) => a.month.localeCompare(b.month));
+        return { ...prev, rentPayments: all };
       });
     }).catch(console.error);
   // eslint-disable-next-line react-hooks/exhaustive-deps
