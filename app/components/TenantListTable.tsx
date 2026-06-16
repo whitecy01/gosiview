@@ -995,16 +995,29 @@ export default function TenantListTable() {
     const lastMonthStart = new Date(todayStr.slice(0, 7) + '-01');
     lastMonthStart.setMonth(lastMonthStart.getMonth() - 1);
 
+    const currentMonth = todayStr.slice(0, 7); // YYYY-MM
+    const todayDay = new Date(todayStr).getDate(); // 오늘 날짜 (일)
+
     for (const c of contracts) {
       if (set.has(c.id) || c.status !== 'scheduled') continue;
       const moveIn = c.actual_move_in_date;
       if (!moveIn) continue;
       const paidMonths = paidMonthsByContract.get(c.id) ?? new Set<string>();
+
+      // 지난 달까지 미납 체크
       let cur = new Date(moveIn.slice(0, 7) + '-01');
       while (cur <= lastMonthStart) {
         const m = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`;
         if (!paidMonths.has(m)) { set.add(c.id); break; }
         cur.setMonth(cur.getMonth() + 1);
+      }
+
+      // 이번 달 납부일이 지났는데 미납이면 미납으로 표시
+      if (!set.has(c.id) && moveIn.slice(0, 7) <= currentMonth) {
+        const dueDay = c.payment_due_day ?? new Date(moveIn).getDate();
+        if (todayDay >= dueDay && !paidMonths.has(currentMonth)) {
+          set.add(c.id);
+        }
       }
     }
 
