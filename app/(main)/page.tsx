@@ -438,7 +438,7 @@ export default function TodoListPage() {
                   {day}
                 </span>
                 <div className="flex flex-col gap-0.5 flex-1">
-                  {viewFilter !== 'rent' && dayTodos.length > 0 && (
+                  {viewFilter !== 'rent' && viewFilter !== 'expiry' && dayTodos.length > 0 && (
                     <div className="flex flex-col gap-1">
                       {viewFilter === 'all' && <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">할일</span>}
                       {dayTodos.map((todo) => (
