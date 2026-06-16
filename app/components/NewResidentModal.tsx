@@ -73,6 +73,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   const [purposeCustom, setPurposeCustom] = useState(false);
   const [rentAmount, setRentAmount] = useState('');
   const [contractDeposit, setContractDeposit] = useState('');
+  const [earnestMoney, setEarnestMoney] = useState('');
   const [realEstateAgency, setRealEstateAgency] = useState('');
   const [agencyCustom, setAgencyCustom] = useState(false);
 
@@ -120,6 +121,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
         actual_move_out_date: moveOutDate || null,
         monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
         contract_deposit: contractDeposit ? Number(contractDeposit) : null,
+        earnest_money: earnestMoney ? Number(earnestMoney) : null,
         deposit_total: contractDeposit ? Number(contractDeposit) : null,
         status: 'scheduled',
       });
@@ -319,6 +321,23 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                       placeholder="200000"
                       value={contractDeposit}
                       onChange={(e) => setContractDeposit(e.target.value)}
+                      className={inputCls}
+                    />
+                    <span className="text-xs text-gray-500 shrink-0">원</span>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">계약금</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      step={10000}
+                      placeholder="100000"
+                      value={earnestMoney}
+                      onChange={(e) => setEarnestMoney(e.target.value)}
                       className={inputCls}
                     />
                     <span className="text-xs text-gray-500 shrink-0">원</span>

@@ -21,6 +21,7 @@ export type ScheduledResident = {
   purpose?: ResidencePurpose;
   monthlyRent?: number;
   contractDeposit?: number;
+  earnestMoney?: number;
   realEstateAgency?: RealEstateAgency;
 };
 
@@ -240,6 +241,7 @@ export type ResidentDetail = {
   actualMoveInDate?: string;
   actualMoveOutDate?: string;
   contractDeposit: { amount: number };
+  earnestMoney?: number;
   realEstateAgency: RealEstateAgency;
   depositTotal: number;
   depositDeductions: DepositDeduction[];

@@ -120,6 +120,7 @@ function ResidentForm({
     initial.monthlyRent ? String(initial.monthlyRent / 10000) : ""
   );
   const [contractDeposit, setContractDeposit] = useState(String(initial.contractDeposit ?? ""));
+  const [earnestMoney, setEarnestMoney] = useState(String(initial.earnestMoney ?? ""));
   const [realEstateAgency, setRealEstateAgency] = useState<string>(initial.realEstateAgency ?? "");
   const [agencyCustom, setAgencyCustom] = useState(
     !!initial.realEstateAgency && !allAgencies.includes(initial.realEstateAgency)
@@ -146,6 +147,7 @@ function ResidentForm({
       purpose: (purpose || undefined) as ResidencePurpose | undefined,
       monthlyRent: monthlyRent ? Number(monthlyRent) * 10000 : undefined,
       contractDeposit: contractDeposit ? Number(contractDeposit) : undefined,
+      earnestMoney: earnestMoney ? Number(earnestMoney) : undefined,
       realEstateAgency: (realEstateAgency || undefined) as RealEstateAgency | undefined,
     });
   }
@@ -211,6 +213,15 @@ function ResidentForm({
             <label className="block text-xs text-gray-400 mb-1.5">보증금</label>
             <div className="flex items-center gap-1.5">
               <input type="number" min={0} step={10000} value={contractDeposit} onChange={(e) => setContractDeposit(e.target.value)} placeholder="200000" className={inputCls} />
+              <span className="text-xs text-gray-500 shrink-0">원</span>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">계약금</label>
+            <div className="flex items-center gap-1.5">
+              <input type="number" min={0} step={10000} value={earnestMoney} onChange={(e) => setEarnestMoney(e.target.value)} placeholder="100000" className={inputCls} />
               <span className="text-xs text-gray-500 shrink-0">원</span>
             </div>
           </div>
@@ -1031,6 +1042,7 @@ export default function TenantListTable() {
         purpose: (c.purpose as ResidencePurpose) ?? undefined,
         monthlyRent: c.monthly_rent ?? undefined,
         contractDeposit: c.contract_deposit ?? undefined,
+        earnestMoney: c.earnest_money ?? undefined,
         realEstateAgency: (c.real_estate_agency as RealEstateAgency) ?? undefined,
       };
       result[c.room_id] = [...(result[c.room_id] ?? []), r];
@@ -1053,6 +1065,7 @@ export default function TenantListTable() {
       actual_move_out_date: record.moveOutDate ?? null,
       monthly_rent: record.monthlyRent ?? null,
       contract_deposit: record.contractDeposit ?? null,
+      earnest_money: record.earnestMoney ?? null,
       deposit_total: record.contractDeposit ?? null,
       status: 'scheduled',
     });
@@ -1088,6 +1101,7 @@ export default function TenantListTable() {
       actual_move_out_date: record.moveOutDate ?? null,
       monthly_rent: record.monthlyRent ?? null,
       contract_deposit: record.contractDeposit ?? null,
+      earnest_money: record.earnestMoney ?? null,
     });
   }
 

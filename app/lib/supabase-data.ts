@@ -27,6 +27,7 @@ export type DbContract = {
   actual_move_out_date: string | null;
   monthly_rent: number | null;
   contract_deposit: number | null;
+  earnest_money: number | null;
   deposit_total: number | null;
   payment_due_day: number | null;
   deposit_returned: boolean;
@@ -117,6 +118,7 @@ export type NewContractInput = {
   actual_move_out_date: string | null;
   monthly_rent: number | null;
   contract_deposit: number | null;
+  earnest_money?: number | null;
   deposit_total: number | null;
   payment_due_day?: number | null;
   deposit_returned?: boolean;
