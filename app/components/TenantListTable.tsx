@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History, Settings } from "lucide-react";
+import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History, Settings, LayoutGrid, List } from "lucide-react";
 import { OptionsManagerModal, SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, PURPOSES_LS_KEY, AGENCIES_LS_KEY } from "./OptionsManagerModal";
 import {
   ROOM_TYPE_INFO,
@@ -938,6 +938,7 @@ function RoomManagementModal({
 export default function TenantListTable() {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<'list' | 'floor'>('list');
   const [scheduledRoom, setScheduledRoom] = useState<Room | null>(null);
   const [managementRoom, setManagementRoom] = useState<Room | null>(null);
   const [showOptionsManager, setShowOptionsManager] = useState(false);
@@ -1184,6 +1185,21 @@ export default function TenantListTable() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* 뷰 모드 토글 */}
+            <div className="flex items-center rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                <List className="h-3.5 w-3.5" />목록
+              </button>
+              <button
+                onClick={() => setViewMode('floor')}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'floor' ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />층별
+              </button>
+            </div>
             <button
               onClick={() => setShowOptionsManager(true)}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2.5 text-xs font-medium text-gray-400 transition-colors hover:border-indigo-500/50 hover:text-indigo-400"
@@ -1203,7 +1219,76 @@ export default function TenantListTable() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* 층별 보기 */}
+        {viewMode === 'floor' && (() => {
+          const floors = Array.from(new Set(filtered.map((r) => r.floor))).sort((a, b) => a - b);
+          return (
+            <div className="p-6 space-y-8">
+              {floors.map((floor) => {
+                const floorRooms = filtered.filter((r) => r.floor === floor);
+                return (
+                  <div key={floor}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">{floor}층</span>
+                      <div className="flex-1 h-px bg-[#2A2A2A]" />
+                      <span className="text-xs text-gray-600">{floorRooms.length}개 호실</span>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {floorRooms.map((room) => {
+                        const contractId = activeContractByRoom[room.id];
+                        const isUnpaid = contractId ? unpaidContractIds.has(contractId) : false;
+                        const activeC = contracts.find(c => c.id === contractId);
+                        const info = getRentDueInfo(room.moveInDate, today, activeC?.payment_due_day);
+                        const st = {
+                          occupied: { cls: 'border-emerald-500/30 bg-emerald-500/5', dot: 'bg-emerald-400', text: '입실중' },
+                          contract: { cls: 'border-indigo-500/30 bg-indigo-500/5', dot: 'bg-indigo-400', text: '입실 전' },
+                          vacant:   { cls: 'border-[#2A2A2A] bg-[#111]',           dot: 'bg-gray-600',   text: '공실' },
+                          maintenance: { cls: 'border-amber-500/30 bg-amber-500/5', dot: 'bg-amber-400', text: '점검' },
+                        }[room.status];
+                        return (
+                          <button
+                            key={room.id}
+                            onClick={() => router.push(`/residents/${room.id}`)}
+                            className={`w-36 rounded-xl border p-3 text-left transition-all hover:border-indigo-500/50 hover:shadow-lg ${st.cls}`}
+                          >
+                            {/* 호실 + 상태 */}
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-base font-bold text-indigo-400">{room.id}호</span>
+                              <div className="flex items-center gap-1">
+                                <div className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                                <span className="text-[10px] text-gray-500">{st.text}</span>
+                              </div>
+                            </div>
+                            {/* 이름 */}
+                            <p className="text-xs font-semibold text-white truncate mb-0.5">
+                              {room.resident ?? <span className="text-gray-600 font-normal">공실</span>}
+                            </p>
+                            {/* 납부 상태 */}
+                            {room.status === 'occupied' && (
+                              <div className="mt-2 flex items-center justify-between">
+                                {isUnpaid ? (
+                                  <span className="text-[10px] font-semibold text-rose-400">미납</span>
+                                ) : (
+                                  <span className="text-[10px] text-gray-600">정상</span>
+                                )}
+                                {info && (
+                                  <span className="text-[10px] text-amber-500/80">매월 {info.day}일</span>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* 목록 보기 */}
+        {viewMode === 'list' && <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm whitespace-nowrap">
             <thead className="border-b border-[#2A2A2A] text-xs uppercase tracking-wide">
               <tr>
@@ -1364,8 +1449,7 @@ export default function TenantListTable() {
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+        </div>}</div>
 
       {showOptionsManager && (
         <OptionsManagerModal
