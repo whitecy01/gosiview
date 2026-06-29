@@ -1370,14 +1370,14 @@ export default function TenantListTable() {
                     <span className="text-[10px] text-gray-600">{floorRoomsMap[floor].length}개</span>
                   </div>
                   {/* 목록과 동일한 테이블 */}
-                  <table className="text-left text-xs whitespace-nowrap border-collapse">
+                  <table className="text-left text-xs whitespace-nowrap border-collapse w-full table-fixed">
                     <thead className="border-b border-[#2A2A2A] text-[10px] uppercase tracking-wide">
                       <tr>
-                        <th className="px-3 py-1 font-medium bg-indigo-500/10 text-indigo-400">호실</th>
-                        <th className="px-3 py-1 font-medium bg-violet-500/10 text-violet-400">이름</th>
-                        <th className="px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">납부</th>
-                        <th className="px-3 py-1 font-medium bg-amber-500/10 text-amber-400">납부일</th>
-                        <th className="px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">이력</th>
+                        <th className="w-[15%] px-3 py-1 font-medium bg-indigo-500/10 text-indigo-400">호실</th>
+                        <th className="w-[35%] px-3 py-1 font-medium bg-violet-500/10 text-violet-400">이름</th>
+                        <th className="w-[15%] px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">납부</th>
+                        <th className="w-[20%] px-3 py-1 font-medium bg-amber-500/10 text-amber-400">납부일</th>
+                        <th className="w-[15%] px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">이력</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#1E1E1E]">
