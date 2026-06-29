@@ -275,6 +275,7 @@ export default function ResidentDetailPage() {
   const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
 
 
+
   // 현금 승계 (DB)
   const [dbCashSuccessions, setDbCashSuccessions] = useState<DbCashSuccession[]>([]);
 
@@ -1098,7 +1099,12 @@ export default function ResidentDetailPage() {
                 </div>
                 {detail.depositReturn.returned ? (
                   <button
-                    onClick={() => setDetail((p) => p ? { ...p, depositReturn: { returned: false, returnedAt: null } } : p)}
+                    onClick={async () => {
+                      setDetail((p) => p ? { ...p, depositReturn: { returned: false, returnedAt: null } } : p);
+                      if (activeContract) {
+                        await editContract(activeContract.id, { deposit_returned: false, deposit_returned_at: null });
+                      }
+                    }}
                     className="text-xs text-gray-500 hover:text-rose-400 transition-colors"
                   >
                     취소

@@ -5,6 +5,7 @@ import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { type MaintenanceRecord } from '@/app/lib/mock-data';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 import { useRooms } from '@/app/context/RoomsContext';
+import RoomListModal, { type RoomModalType } from '@/app/components/RoomListModal';
 import { fetchAllMaintenanceRecords, fetchAllRentPayments, type DbRentPayment } from '@/app/lib/supabase-data';
 
 // ──────────── 헬퍼 ────────────
@@ -379,6 +380,7 @@ function StatCard({ title, value, subtitle, color }: { title: string; value: str
 export default function StatsPage() {
   const { effectiveRooms, stats } = useEffectiveRooms();
   const { contracts } = useRooms();
+  const [activeModal, setActiveModal] = useState<RoomModalType>(null);
   const [detailIdx, setDetailIdx] = useState<number | null>(null);
   const [paymentMonthIdx, setPaymentMonthIdx] = useState(5);
   const [allRentPayments, setAllRentPayments] = useState<DbRentPayment[]>([]);
@@ -468,11 +470,30 @@ export default function StatsPage() {
     return rp.month === monthStr && rp.status === 'overdue';
   }).length;
 
+  const modalRooms = activeModal ? effectiveRooms.filter((r) => r.status === activeModal) : [];
+
   return (
     <main className="w-full space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">통계</h1>
-        <p className="mt-1 text-sm text-gray-400">입실 현황, 수입, 납부 상태를 한눈에 확인하세요.</p>
+      {/* 현황 카드 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {([
+          { key: null,                        title: "총 방 개수",   value: `${stats.totalRooms}개`,    subtitle: "전체 관리 방" },
+          { key: "occupied" as RoomModalType, title: "총 입실자 수", value: `${stats.occupiedRooms}명`, subtitle: `${stats.occupancyRate}% 입실률` },
+          { key: "vacant"   as RoomModalType, title: "현재 공실",   value: `${stats.vacantRooms}개`,   subtitle: "즉시 입실 가능" },
+          { key: "contract" as RoomModalType, title: "계약",        value: `${stats.contractRooms}개`, subtitle: "계약 진행 방" },
+        ] as const).map((stat, idx) => (
+          <div
+            key={idx}
+            onClick={() => stat.key && setActiveModal(stat.key)}
+            className={`rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm transition-colors ${
+              stat.key ? "cursor-pointer hover:border-[#3A3A3A] hover:bg-[#161616]" : ""
+            }`}
+          >
+            <h3 className="text-sm font-medium text-gray-400">{stat.title}</h3>
+            <p className="mt-2 text-3xl font-bold text-white">{stat.value}</p>
+            <p className="mt-1 text-sm text-gray-500">{stat.subtitle}</p>
+          </div>
+        ))}
       </div>
 
       {/* 요약 카드 */}
