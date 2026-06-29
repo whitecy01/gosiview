@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History, Settings } from "lucide-react";
-import { OptionsManagerModal, SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, PURPOSES_LS_KEY, AGENCIES_LS_KEY } from "./OptionsManagerModal";
+import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History, Settings, LayoutGrid, List } from "lucide-react";
+import { OptionsManagerModal, SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, DEFAULT_DETAIL_OPTIONS, PURPOSES_LS_KEY, AGENCIES_LS_KEY, DETAIL_OPTIONS_LS_KEY } from "./OptionsManagerModal";
 import {
   ROOM_TYPE_INFO,
   type Room,
@@ -18,12 +18,12 @@ import { useToday } from "../context/MockDateContext";
 import {
   fetchAllMaintenanceRecords,
   insertMaintenanceRecord,
+  updateMaintenanceRecord,
   deleteMaintenanceRecord,
   fetchAllRentPayments,
   type DbRentPayment,
 } from "../lib/supabase-data";
 
-const DETAIL_OPTIONS = ["도배", "매트리스교체", "에어컨청소", "전구교체", "장판교체", "화장실청소"];
 
 function formatPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 11);
@@ -752,16 +752,15 @@ function ScheduledInfoModal({
 }
 
 function RoomManagementModal({
-  room,
-  records,
-  onAdd,
-  onDelete,
-  onClose,
+  room, records, allDetailOptions, onAdd, onUpdate, onDelete, onAddDetailOption, onClose,
 }: {
   room: Room;
   records: MaintenanceRecord[];
+  allDetailOptions: string[];
   onAdd: (record: MaintenanceRecord) => void;
+  onUpdate: (id: string, record: { date: string; amount: number; details: string[] }) => void;
   onDelete: (id: string) => void;
+  onAddDetailOption: (item: string) => void;
   onClose: () => void;
 }) {
   const now = new Date();
@@ -770,10 +769,17 @@ function RoomManagementModal({
   const [date, setDate] = useState(() => now.toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
   const [selectedDetails, setSelectedDetails] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editDetails, setEditDetails] = useState<string[]>([]);
+  const [customDetail, setCustomDetail] = useState("");
+  const [showCustomDetail, setShowCustomDetail] = useState(false);
+  const [editCustomDetail, setEditCustomDetail] = useState("");
+  const [showEditCustomDetail, setShowEditCustomDetail] = useState(false);
 
   const MONTH_NAMES = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
 
-  // 연도별로 해당 월에 속한 records 인덱스 모아두기
   function recordsForMonth(month: number): { record: MaintenanceRecord; index: number }[] {
     return records
       .map((r, i) => ({ record: r, index: i }))
@@ -784,8 +790,8 @@ function RoomManagementModal({
       .sort((a, b) => b.record.date.localeCompare(a.record.date));
   }
 
-  function toggleDetail(d: string) {
-    setSelectedDetails((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
+  function toggleDetail(d: string, list: string[], setList: (v: string[]) => void) {
+    setList(list.includes(d) ? list.filter(x => x !== d) : [...list, d]);
   }
 
   function handleAdd() {
@@ -797,8 +803,23 @@ function RoomManagementModal({
     setShowForm(false);
   }
 
-  // 해당 연도에 기록이 있는지
+  function startEdit(record: MaintenanceRecord) {
+    if (!record.id) return;
+    setEditingId(record.id);
+    setEditDate(record.date);
+    setEditAmount(String(record.amount));
+    setEditDetails([...record.details]);
+    setShowForm(false);
+  }
+
+  function handleUpdate() {
+    if (!editingId || !editDate || !editAmount || editDetails.length === 0) return;
+    onUpdate(editingId, { date: editDate, amount: Number(editAmount), details: editDetails });
+    setEditingId(null);
+  }
+
   const hasRecordsInYear = records.some(r => r.date.startsWith(String(viewYear)));
+  const inputCls = "w-full rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 py-1.5 text-xs text-white outline-none focus:border-amber-500 transition-colors";
 
   return (
     <>
@@ -812,7 +833,6 @@ function RoomManagementModal({
               <h3 className="text-base font-semibold text-white">방 관리</h3>
               <p className="mt-0.5 text-sm text-gray-400">{room.id}호 · 관리 이력</p>
             </div>
-            {/* 연도 선택 */}
             <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-1 py-1">
               <button onClick={() => setViewYear(y => y - 1)} className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:text-white transition-colors">‹</button>
               <span className="w-14 text-center text-sm font-semibold text-white">{viewYear}년</span>
@@ -820,10 +840,8 @@ function RoomManagementModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowForm(v => !v)}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
-            >
+            <button onClick={() => { setShowForm(v => !v); setEditingId(null); }}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20">
               <Plus className="h-3.5 w-3.5" />추가
             </button>
             <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-[#1A1A1A] hover:text-white">
@@ -834,34 +852,81 @@ function RoomManagementModal({
 
         {/* 추가 폼 */}
         {showForm && (
-          <div className="border-b border-[#2A2A2A] px-6 py-4 shrink-0 space-y-4 bg-[#111]">
+          <div className="border-b border-[#2A2A2A] px-6 py-4 shrink-0 space-y-3 bg-[#111]">
             <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide">새 관리 이력 추가</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">날짜</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none focus:border-amber-500 transition-colors" />
+                <label className="block text-xs text-gray-400 mb-1">날짜</label>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">금액 (원)</label>
-                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="300000" className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-sm text-white outline-none focus:border-amber-500 transition-colors placeholder:text-gray-600" />
+                <label className="block text-xs text-gray-400 mb-1">금액 (원)</label>
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="300000" className={inputCls} />
               </div>
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-2">관리 항목</label>
-              <div className="flex flex-wrap gap-2">
-                {DETAIL_OPTIONS.map((d) => {
-                  const active = selectedDetails.includes(d);
-                  return (
-                    <button key={d} onClick={() => toggleDetail(d)} className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${active ? (DETAIL_COLOR[d] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20") : "border-[#2A2A2A] bg-[#1A1A1A] text-gray-500 hover:text-gray-300"}`}>
+              <label className="block text-xs text-gray-400 mb-1.5">관리 항목</label>
+              {!showCustomDetail ? (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') { setShowCustomDetail(true); setCustomDetail(''); }
+                    else if (e.target.value) toggleDetail(e.target.value, selectedDetails, setSelectedDetails);
+                  }}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-xs text-white outline-none focus:border-amber-500 transition-colors appearance-none"
+                >
+                  <option value="">항목 선택</option>
+                  {allDetailOptions.filter(d => !selectedDetails.includes(d)).map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                  <option value="__custom__">+ 직접 입력</option>
+                </select>
+              ) : (
+                <div className="flex gap-1.5">
+                  <input autoFocus value={customDetail}
+                    onChange={(e) => setCustomDetail(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && customDetail.trim()) {
+                        const v = customDetail.trim();
+                        toggleDetail(v, selectedDetails, setSelectedDetails);
+                        if (!allDetailOptions.includes(v)) onAddDetailOption(v);
+                        setCustomDetail(''); setShowCustomDetail(false);
+                      }
+                      if (e.key === 'Escape') { setCustomDetail(''); setShowCustomDetail(false); }
+                    }}
+                    placeholder="항목 직접 입력 후 Enter"
+                    className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2 text-xs text-white outline-none focus:border-amber-500 transition-colors placeholder:text-gray-600"
+                  />
+                  <button onClick={() => {
+                    const v = customDetail.trim();
+                    if (v) {
+                      toggleDetail(v, selectedDetails, setSelectedDetails);
+                      if (!allDetailOptions.includes(v)) onAddDetailOption(v);
+                    }
+                    setCustomDetail(''); setShowCustomDetail(false);
+                  }} className="shrink-0 rounded-lg bg-amber-500/20 px-3 py-2 text-xs font-semibold text-amber-400 hover:bg-amber-500/30">추가</button>
+                  <button onClick={() => { setCustomDetail(''); setShowCustomDetail(false); }} className="shrink-0 flex items-center justify-center h-9 w-9 rounded-lg border border-[#2A2A2A] text-gray-500 hover:text-white">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              {selectedDetails.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {selectedDetails.map((d) => (
+                    <span key={d} className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg border ${DETAIL_COLOR[d] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
                       {d}
-                    </button>
-                  );
-                })}
-              </div>
+                      <button onClick={() => toggleDetail(d, selectedDetails, setSelectedDetails)} className="opacity-60 hover:opacity-100">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowForm(false)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
-              <button onClick={handleAdd} disabled={!date || !amount || selectedDetails.length === 0} className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed">저장</button>
+              <button onClick={() => setShowForm(false)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 hover:text-white">취소</button>
+              <button onClick={handleAdd} disabled={!date || !amount || selectedDetails.length === 0}
+                className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-black hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed">저장</button>
             </div>
           </div>
         )}
@@ -879,46 +944,112 @@ function RoomManagementModal({
                 const month = mi + 1;
                 const monthRecords = recordsForMonth(month);
                 const isEmpty = monthRecords.length === 0;
-
                 return (
-                  <div
-                    key={month}
-                    className={`rounded-xl border p-3 flex flex-col gap-2 min-h-[100px] ${isEmpty ? "border-[#1A1A1A] bg-[#0C0C0C]" : "border-[#2A2A2A] bg-[#161616]"}`}
-                  >
-                    {/* 월 헤더 */}
+                  <div key={month} className={`rounded-xl border p-3 flex flex-col gap-2 min-h-[100px] ${isEmpty ? "border-[#1A1A1A] bg-[#0C0C0C]" : "border-[#2A2A2A] bg-[#161616]"}`}>
                     <div className="flex items-center justify-between">
                       <span className={`text-xs font-bold ${isEmpty ? "text-gray-700" : "text-amber-400"}`}>{name}</span>
-                      {!isEmpty && (
-                        <span className="text-[10px] text-gray-500">{monthRecords.length}건</span>
-                      )}
+                      {!isEmpty && <span className="text-[10px] text-gray-500">{monthRecords.length}건</span>}
                     </div>
-
-                    {/* 이벤트 */}
                     {!isEmpty && (
                       <div className="flex flex-col gap-1.5">
-                        {monthRecords.map(({ record, index }) => {
+                        {monthRecords.map(({ record }) => {
                           const day = record.date.split("-")[2];
+                          const isEditing = editingId === record.id;
                           return (
-                            <div key={index} className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1.5">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] text-gray-500">{parseInt(day)}일</span>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[10px] font-semibold text-emerald-400">₩{record.amount.toLocaleString("ko-KR")}</span>
-                                  <button
-                                    onClick={() => record.id && onDelete(record.id)}
-                                    className="flex h-4 w-4 items-center justify-center rounded text-gray-700 hover:text-rose-400 transition-colors"
-                                  >
-                                    <Trash2 className="h-2.5 w-2.5" />
-                                  </button>
+                            <div key={record.id} className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1.5">
+                              {isEditing ? (
+                                <div className="space-y-2">
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className={inputCls} />
+                                    <input type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className={inputCls} />
+                                  </div>
+                                  <div>
+                                    {!showEditCustomDetail ? (
+                                      <select
+                                        value=""
+                                        onChange={(e) => {
+                                          if (e.target.value === '__custom__') { setShowEditCustomDetail(true); setEditCustomDetail(''); }
+                                          else if (e.target.value) toggleDetail(e.target.value, editDetails, setEditDetails);
+                                        }}
+                                        className="w-full rounded border border-[#2A2A2A] bg-[#0D0D0D] px-2 py-1 text-[10px] text-white outline-none focus:border-amber-500 appearance-none"
+                                      >
+                                        <option value="">항목 선택</option>
+                                        {allDetailOptions.filter(d => !editDetails.includes(d)).map((d) => (
+                                          <option key={d} value={d}>{d}</option>
+                                        ))}
+                                        <option value="__custom__">+ 직접 입력</option>
+                                      </select>
+                                    ) : (
+                                      <div className="flex gap-1">
+                                        <input autoFocus value={editCustomDetail}
+                                          onChange={(e) => setEditCustomDetail(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && editCustomDetail.trim()) {
+                                              const v = editCustomDetail.trim();
+                                              toggleDetail(v, editDetails, setEditDetails);
+                                              if (!allDetailOptions.includes(v)) onAddDetailOption(v);
+                                              setEditCustomDetail(''); setShowEditCustomDetail(false);
+                                            }
+                                            if (e.key === 'Escape') { setEditCustomDetail(''); setShowEditCustomDetail(false); }
+                                          }}
+                                          placeholder="직접 입력 후 Enter"
+                                          className="flex-1 rounded border border-[#2A2A2A] bg-[#0D0D0D] px-2 py-1 text-[10px] text-white outline-none focus:border-amber-500 placeholder:text-gray-600"
+                                        />
+                                        <button onClick={() => {
+                                          const v = editCustomDetail.trim();
+                                          if (v) {
+                                            toggleDetail(v, editDetails, setEditDetails);
+                                            if (!allDetailOptions.includes(v)) onAddDetailOption(v);
+                                          }
+                                          setEditCustomDetail(''); setShowEditCustomDetail(false);
+                                        }} className="shrink-0 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-400">추가</button>
+                                        <button onClick={() => { setEditCustomDetail(''); setShowEditCustomDetail(false); }} className="shrink-0 flex items-center justify-center w-6 rounded border border-[#2A2A2A] text-gray-500 hover:text-white">
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    )}
+                                    {editDetails.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {editDetails.map((d) => (
+                                          <span key={d} className={`inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border ${DETAIL_COLOR[d] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
+                                            {d}
+                                            <button onClick={() => toggleDetail(d, editDetails, setEditDetails)} className="opacity-60 hover:opacity-100">
+                                              <X className="h-2.5 w-2.5" />
+                                            </button>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex justify-end gap-1">
+                                    <button onClick={() => setEditingId(null)} className="rounded px-2 py-0.5 text-[10px] text-gray-500 hover:text-white border border-[#2A2A2A]">취소</button>
+                                    <button onClick={handleUpdate} disabled={!editDate || !editAmount || editDetails.length === 0}
+                                      className="rounded px-2 py-0.5 text-[10px] font-semibold bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-40">저장</button>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {record.details.map((d) => (
-                                  <span key={d} className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${DETAIL_COLOR[d] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
-                                    {d}
-                                  </span>
-                                ))}
-                              </div>
+                              ) : (
+                                <>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] text-gray-500">{parseInt(day)}일</span>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] font-semibold text-emerald-400">₩{record.amount.toLocaleString("ko-KR")}</span>
+                                      <button onClick={() => startEdit(record)} className="flex h-4 w-4 items-center justify-center rounded text-gray-700 hover:text-indigo-400 transition-colors">
+                                        <Pencil className="h-2.5 w-2.5" />
+                                      </button>
+                                      <button onClick={() => record.id && onDelete(record.id)} className="flex h-4 w-4 items-center justify-center rounded text-gray-700 hover:text-rose-400 transition-colors">
+                                        <Trash2 className="h-2.5 w-2.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {record.details.map((d) => (
+                                      <span key={d} className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${DETAIL_COLOR[d] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
+                                        {d}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           );
                         })}
@@ -938,11 +1069,13 @@ function RoomManagementModal({
 export default function TenantListTable() {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<'list' | 'floor'>('list');
   const [scheduledRoom, setScheduledRoom] = useState<Room | null>(null);
   const [managementRoom, setManagementRoom] = useState<Room | null>(null);
   const [showOptionsManager, setShowOptionsManager] = useState(false);
   const [managedPurposes, setManagedPurposes] = useState<string[]>(DEFAULT_PURPOSES);
   const [managedAgencies, setManagedAgencies] = useState<string[]>(DEFAULT_AGENCIES);
+  const [managedDetailOptions, setManagedDetailOptions] = useState<string[]>(DEFAULT_DETAIL_OPTIONS);
   const { effectiveRooms, today, todayStr } = useEffectiveRooms();
   const { contracts, addContract, editContract, removeContract } = useRooms();
   const [maintenanceData, setMaintenanceData] = useState<Record<string, MaintenanceRecord[]>>({});
@@ -954,6 +1087,8 @@ export default function TenantListTable() {
       const a = localStorage.getItem(AGENCIES_LS_KEY);
       if (p) setManagedPurposes(JSON.parse(p));
       if (a) setManagedAgencies(JSON.parse(a));
+      const d = localStorage.getItem(DETAIL_OPTIONS_LS_KEY);
+      if (d) setManagedDetailOptions(JSON.parse(d));
     } catch { /* ignore */ }
   }, []);
 
@@ -1142,6 +1277,14 @@ export default function TenantListTable() {
     }));
   }
 
+  async function handleUpdateRecord(roomId: string, id: string, data: { date: string; amount: number; details: string[] }) {
+    await updateMaintenanceRecord(id, data);
+    setMaintenanceData((prev) => ({
+      ...prev,
+      [roomId]: (prev[roomId] ?? []).map((r) => r.id === id ? { ...r, ...data } : r),
+    }));
+  }
+
   async function handleDeleteRecord(roomId: string, id: string) {
     await deleteMaintenanceRecord(id);
     setMaintenanceData((prev) => ({
@@ -1175,13 +1318,21 @@ export default function TenantListTable() {
 
   return (
     <>
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#111] shadow-sm overflow-hidden">
-        <div className="flex flex-col gap-4 border-b border-[#2A2A2A] p-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">입실자 목록</h2>
-            <p className="mt-1 text-sm text-gray-400">
-              전체 호실의 입실 현황과 예정 일정, 방 관리 이력을 확인할 수 있습니다.
-            </p>
+      <div className={`rounded-xl border border-[#2A2A2A] bg-[#111] shadow-sm overflow-hidden ${viewMode === 'list' ? 'w-fit mx-auto' : 'w-full'}`}>
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+          <div className="flex items-center rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              <List className="h-3.5 w-3.5" />목록
+            </button>
+            <button
+              onClick={() => setViewMode('floor')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'floor' ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />층별
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -1203,20 +1354,94 @@ export default function TenantListTable() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm whitespace-nowrap">
-            <thead className="border-b border-[#2A2A2A] text-xs uppercase tracking-wide">
+        {/* 층별 보기 */}
+        {viewMode === 'floor' && (() => {
+          const floors = Array.from(new Set(filtered.map((r) => r.floor))).sort((a, b) => a - b);
+          const floorRoomsMap = Object.fromEntries(
+            floors.map((f) => [f, filtered.filter((r) => r.floor === f).sort((a, b) => a.id.localeCompare(b.id))])
+          );
+          return (
+            <div className="grid grid-cols-3 gap-3 p-4">
+              {floors.map((floor) => (
+                <div key={floor} className="flex-1 min-w-0 rounded-xl border border-[#2A2A2A] bg-[#0D0D0D] overflow-hidden">
+                  {/* 층 헤더 */}
+                  <div className="flex items-center gap-2 border-b border-[#2A2A2A] bg-[#111] px-3 py-2">
+                    <span className="text-xs font-bold text-indigo-400">{floor}층</span>
+                    <span className="text-[10px] text-gray-600">{floorRoomsMap[floor].length}개</span>
+                  </div>
+                  {/* 목록과 동일한 테이블 */}
+                  <table className="text-left text-xs whitespace-nowrap border-collapse">
+                    <thead className="border-b border-[#2A2A2A] text-[10px] uppercase tracking-wide">
+                      <tr>
+                        <th className="px-3 py-1 font-medium bg-indigo-500/10 text-indigo-400">호실</th>
+                        <th className="px-3 py-1 font-medium bg-violet-500/10 text-violet-400">이름</th>
+                        <th className="px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">납부</th>
+                        <th className="px-3 py-1 font-medium bg-amber-500/10 text-amber-400">납부일</th>
+                        <th className="px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">이력</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#1E1E1E]">
+                      {floorRoomsMap[floor].map((room) => {
+                        const contractId = activeContractByRoom[room.id];
+                        const isUnpaid = contractId ? unpaidContractIds.has(contractId) : false;
+                        const activeC = contracts.find(c => c.id === contractId);
+                        const info = getRentDueInfo(room.moveInDate, today, activeC?.payment_due_day);
+                        return (
+                          <tr key={room.id} className="hover:bg-[#161616] transition-colors cursor-pointer" onClick={() => router.push(`/residents/${room.id}`)}>
+                            <td className="px-3 py-1 bg-indigo-500/5">
+                              <span className="font-bold text-indigo-400">{room.id}</span>
+                            </td>
+                            <td className="px-3 py-1 bg-violet-500/5">
+                              <span className="text-violet-200 truncate">{room.resident ?? <span className="text-gray-600">-</span>}</span>
+                            </td>
+                            <td className="px-3 py-1">
+                              {room.status === 'occupied'
+                                ? isUnpaid
+                                  ? <span className="inline-flex rounded-full border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-400">미납</span>
+                                  : <span className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400">정상</span>
+                                : <span className="text-gray-600">-</span>
+                              }
+                            </td>
+                            <td className="px-3 py-1 bg-amber-500/5">
+                              {info
+                                ? <span className="text-[10px] text-amber-300">매월 {info.day}일</span>
+                                : <span className="text-gray-600">-</span>
+                              }
+                            </td>
+                            <td className="px-3 py-1">
+                              <button onClick={(e) => { e.stopPropagation(); router.push(`/rooms/${room.id}/history`); }}
+                                className="flex items-center gap-1 rounded border border-[#2A2A2A] bg-[#1A1A1A] px-1.5 py-0.5 text-[10px] text-gray-400 hover:border-indigo-500/50 hover:text-indigo-400">
+                                <History className="h-3 w-3" />이력
+                                {(historyCountByRoom[room.id] ?? 0) > 0 && (
+                                  <span className="rounded-full bg-indigo-500/20 px-1 text-[9px] font-semibold text-indigo-400">{historyCountByRoom[room.id]}</span>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* 목록 보기 */}
+        {viewMode === 'list' && <div className="overflow-x-auto">
+          <table className="text-left text-xs whitespace-nowrap border-collapse">
+            <thead className="border-b border-[#2A2A2A] text-[11px] uppercase tracking-wide">
               <tr>
-                <th className="px-6 py-4 font-medium bg-indigo-500/10 text-indigo-400">호실</th>
-                <th className="px-6 py-4 font-medium bg-violet-500/10 text-violet-400">이름</th>
-                <th className="px-6 py-4 font-medium bg-teal-500/10 text-teal-400">연락처</th>
-                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">상태</th>
-                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">납부 상태</th>
-                <th className="px-6 py-4 font-medium bg-amber-500/10 text-amber-400">월세 납부일</th>
-                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">예약(예정 입실)</th>
-                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">방 관리</th>
-                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">상세</th>
-                <th className="px-6 py-4 font-medium bg-[#1A1A1A] text-gray-400">이력</th>
+                <th className="min-w-[70px] px-3 py-1 font-medium bg-indigo-500/10 text-indigo-400">호실</th>
+                <th className="min-w-[100px] px-3 py-1 font-medium bg-violet-500/10 text-violet-400">이름</th>
+                <th className="min-w-[136px] px-3 py-1 font-medium bg-teal-500/10 text-teal-400">연락처</th>
+                <th className="min-w-[90px] px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">납부 상태</th>
+                <th className="min-w-[100px] px-3 py-1 font-medium bg-amber-500/10 text-amber-400">월세 납부일</th>
+                <th className="min-w-[90px] px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">예약(예정 입실)</th>
+                <th className="min-w-[90px] px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">방 관리</th>
+                <th className="min-w-[72px] px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">상세</th>
+                <th className="min-w-[72px] px-3 py-1 font-medium bg-[#1A1A1A] text-gray-400">이력</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1E1E1E]">
@@ -1228,13 +1453,13 @@ export default function TenantListTable() {
 
                 return (
                   <tr key={room.id} className="transition-colors hover:bg-[#161616]">
-                    <td className="px-6 py-4 bg-indigo-500/5">
-                      <span className="text-base font-bold text-indigo-400">{room.id}호</span>
+                    <td className="px-3 py-1 bg-indigo-500/5">
+                      <span className="text-sm font-bold text-indigo-400">{room.id}호</span>
                     </td>
-                    <td className="px-6 py-4 bg-violet-500/5">
+                    <td className="px-3 py-1 bg-violet-500/5">
                       {room.status === 'occupied' && room.resident ? (
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/10 border border-violet-500/20 text-xs font-bold text-violet-300">
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500/10 border border-violet-500/20 text-[10px] font-bold text-violet-300">
                             {room.resident[0]}
                           </div>
                           <span className="font-medium text-violet-200">{room.resident}</span>
@@ -1243,34 +1468,29 @@ export default function TenantListTable() {
                         <span className="text-gray-600">-</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 bg-teal-500/5">
+                    <td className="px-3 py-1 bg-teal-500/5">
                       <span className="font-medium text-teal-400">{room.status === 'occupied' ? (room.phone ?? "-") : "-"}</span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${statusStyle[room.status]}`}>
-                        {statusLabel[room.status]}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-1">
                       {(() => {
                         if (room.status !== 'occupied') return <span className="text-gray-600">-</span>;
                         const contractId = activeContractByRoom[room.id];
                         if (!contractId) return <span className="text-gray-600">-</span>;
                         if (unpaidContractIds.has(contractId)) {
                           return (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-400">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold text-rose-400">
                               미납
                             </span>
                           );
                         }
                         return (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400">
                             정상
                           </span>
                         );
                       })()}
                     </td>
-                    <td className="px-6 py-4 bg-amber-500/5">
+                    <td className="px-3 py-1 bg-amber-500/5">
                       {(() => {
                         if (room.status === "occupied") {
                           const activeC = contracts.find(c => c.id === activeContractByRoom[room.id]);
@@ -1279,14 +1499,13 @@ export default function TenantListTable() {
                           const { day, daysUntil } = info;
                           return (
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-xs text-gray-500">매월 <span className="text-amber-300 font-semibold">{day}일</span></span>
+                              <span className="text-[11px] text-gray-500">매월 <span className="text-amber-300 font-semibold">{day}일</span></span>
                               {daysUntil === 0 && (
-                                <span className="text-xs font-medium text-amber-400">🔔 오늘</span>
+                                <span className="text-[11px] font-medium text-amber-400">🔔 오늘</span>
                               )}
                             </div>
                           );
                         }
-                        // 공실인데 예약자 있으면 예약자 기준 납부일 표시
                         const scheduled = scheduledData[room.id] ?? [];
                         if (scheduled.length > 0) {
                           const next = [...scheduled].sort((a, b) => a.contractMoveInDate.localeCompare(b.contractMoveInDate))[0];
@@ -1294,8 +1513,8 @@ export default function TenantListTable() {
                           const base = next.actualMoveInDate ?? "";
                           return (
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-xs text-gray-600">예약자 기준</span>
-                              <span className="text-xs text-indigo-400 font-medium">매월 {day}일</span>
+                              <span className="text-[10px] text-gray-600">예약자 기준</span>
+                              <span className="text-[11px] text-indigo-400 font-medium">매월 {day}일</span>
                               <span className="text-[10px] text-gray-600">{base} 입실</span>
                             </div>
                           );
@@ -1303,50 +1522,50 @@ export default function TenantListTable() {
                         return <span className="text-gray-600">-</span>;
                       })()}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-1">
                       <button
                         onClick={() => setScheduledRoom(room)}
-                        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
                           hasScheduled
                             ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"
                             : "border-[#2A2A2A] bg-[#1A1A1A] text-gray-500 hover:text-gray-300"
                         }`}
                       >
-                        <CalendarDays className="h-3.5 w-3.5" />
+                        <CalendarDays className="h-3 w-3" />
                         {hasScheduled ? `${roomScheduled.length}건` : "없음"}
                       </button>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-1">
                       <button
                         onClick={() => setManagementRoom(room)}
-                        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
                           hasMaintenance
                             ? "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
                             : "border-[#2A2A2A] bg-[#1A1A1A] text-gray-500 hover:text-gray-300"
                         }`}
                       >
-                        <Wrench className="h-3.5 w-3.5" />
+                        <Wrench className="h-3 w-3" />
                         {hasMaintenance ? `${roomRecords.length}건` : "없음"}
                       </button>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-1">
                       <button
                         onClick={() => router.push(`/residents/${room.id}`)}
-                        className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs text-gray-400 transition-colors hover:border-indigo-500/50 hover:text-indigo-400"
+                        className="flex items-center gap-1 rounded border border-[#2A2A2A] bg-[#1A1A1A] px-1.5 py-0.5 text-[10px] text-gray-400 transition-colors hover:border-indigo-500/50 hover:text-indigo-400"
                       >
-                        상세 보기
-                        <ChevronRight className="h-3.5 w-3.5" />
+                        상세
+                        <ChevronRight className="h-3 w-3" />
                       </button>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-1">
                       <button
                         onClick={() => router.push(`/rooms/${room.id}/history`)}
-                        className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs text-gray-400 transition-colors hover:border-indigo-500/50 hover:text-indigo-400"
+                        className="flex items-center gap-1 rounded border border-[#2A2A2A] bg-[#1A1A1A] px-1.5 py-0.5 text-[10px] text-gray-400 transition-colors hover:border-indigo-500/50 hover:text-indigo-400"
                       >
-                        <History className="h-3.5 w-3.5" />
+                        <History className="h-3 w-3" />
                         이력
                         {(historyCountByRoom[room.id] ?? 0) > 0 && (
-                          <span className="ml-0.5 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-400">
+                          <span className="ml-0.5 rounded-full bg-indigo-500/20 px-1 py-0.5 text-[10px] font-semibold text-indigo-400">
                             {historyCountByRoom[room.id]}
                           </span>
                         )}
@@ -1357,22 +1576,23 @@ export default function TenantListTable() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-6 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={10} className="px-3 py-8 text-center text-xs text-gray-500">
                     검색 결과가 없습니다.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+        </div>}</div>
 
       {showOptionsManager && (
         <OptionsManagerModal
           purposes={managedPurposes}
           agencies={managedAgencies}
+          detailOptions={managedDetailOptions}
           onPurposesChange={updatePurposes}
           onAgenciesChange={updateAgencies}
+          onDetailOptionsChange={(v) => { setManagedDetailOptions(v); localStorage.setItem(DETAIL_OPTIONS_LS_KEY, JSON.stringify(v)); }}
           onClose={() => setShowOptionsManager(false)}
         />
       )}
@@ -1394,8 +1614,15 @@ export default function TenantListTable() {
         <RoomManagementModal
           room={managementRoom}
           records={maintenanceData[managementRoom.id] ?? []}
+          allDetailOptions={managedDetailOptions}
           onAdd={(record) => handleAddRecord(managementRoom.id, record)}
+          onUpdate={(id, data) => handleUpdateRecord(managementRoom.id, id, data)}
           onDelete={(id) => handleDeleteRecord(managementRoom.id, id)}
+          onAddDetailOption={(item) => {
+            const next = [...managedDetailOptions, item];
+            setManagedDetailOptions(next);
+            localStorage.setItem(DETAIL_OPTIONS_LS_KEY, JSON.stringify(next));
+          }}
           onClose={() => setManagementRoom(null)}
         />
       )}

@@ -407,6 +407,16 @@ export async function insertMaintenanceRecord(input: {
   return data as DbMaintenanceRecord;
 }
 
+export async function updateMaintenanceRecord(id: string, input: {
+  date: string;
+  amount: number;
+  details: string[];
+}): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from('maintenance_records').update(input).eq('id', id);
+  if (error) throw error;
+}
+
 export async function deleteMaintenanceRecord(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from('maintenance_records').delete().eq('id', id);
@@ -463,4 +473,73 @@ export async function upsertRentPayment(input: {
     .single();
   if (error) throw error;
   return data as DbRentPayment;
+}
+
+// ──────────── 반복 할일 ────────────
+
+export type DbRecurringTodo = {
+  id: string;
+  text: string;
+  color: string;
+  recurrence_type: 'weekday' | 'date';
+  weekdays: number[] | null;
+  day_of_month: number | null;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+};
+
+export async function fetchRecurringTodos(): Promise<DbRecurringTodo[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('recurring_todos')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data as DbRecurringTodo[];
+}
+
+export async function insertRecurringTodo(input: {
+  text: string;
+  color: string;
+  recurrence_type: 'weekday' | 'date';
+  weekdays: number[] | null;
+  day_of_month: number | null;
+  start_date: string;
+  end_date: string;
+}): Promise<DbRecurringTodo> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('recurring_todos')
+    .insert(input)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as DbRecurringTodo;
+}
+
+export async function updateRecurringTodo(id: string, input: Partial<{
+  text: string;
+  color: string;
+  recurrence_type: 'weekday' | 'date';
+  weekdays: number[] | null;
+  day_of_month: number | null;
+  start_date: string;
+  end_date: string;
+}>): Promise<DbRecurringTodo> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('recurring_todos')
+    .update(input)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as DbRecurringTodo;
+}
+
+export async function deleteRecurringTodo(id: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from('recurring_todos').delete().eq('id', id);
+  if (error) throw error;
 }

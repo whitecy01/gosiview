@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Home, CheckCircle2, XCircle, ChevronDown, ChevronUp,
-  Banknote, RotateCcw, Loader2, LogOut, Eye,
+  Banknote, RotateCcw, Loader2, LogOut, Eye, Pencil, X,
 } from "lucide-react";
 import { useRooms } from "@/app/context/RoomsContext";
 import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
@@ -42,11 +42,42 @@ function ExpandedRow({
   contract,
   onRestore,
   restoring,
+  onUpdateDeposit,
+  onUpdateReturn,
 }: {
   contract: DbContract;
   onRestore: () => void;
   restoring: boolean;
+  onUpdateDeposit: (amount: number) => Promise<void>;
+  onUpdateReturn: (returned: boolean, returnedAt: string | null) => Promise<void>;
 }) {
+  const [editingDeposit, setEditingDeposit] = useState(false);
+  const [depositValue, setDepositValue] = useState("");
+  const [showReturnForm, setShowReturnForm] = useState(false);
+  const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
+  const [saving, setSaving] = useState(false);
+
+  async function saveDeposit() {
+    if (!depositValue) return;
+    setSaving(true);
+    await onUpdateDeposit(Number(depositValue));
+    setSaving(false);
+    setEditingDeposit(false);
+  }
+
+  async function saveReturn() {
+    setSaving(true);
+    await onUpdateReturn(true, returnDate);
+    setSaving(false);
+    setShowReturnForm(false);
+  }
+
+  async function cancelReturn() {
+    setSaving(true);
+    await onUpdateReturn(false, null);
+    setSaving(false);
+  }
+
   return (
     <tr className="border-t border-[#1E1E1E]">
       <td colSpan={10} className="px-6 py-4 bg-[#0D0D0D]">
@@ -54,32 +85,75 @@ function ExpandedRow({
           {/* 보증금 */}
           {contract.deposit_total != null && (
             <div className="rounded-xl border border-[#2A2A2A] overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-[#2A2A2A] bg-[#111] px-4 py-2.5">
-                <Banknote className="h-3.5 w-3.5 text-emerald-400" />
-                <span className="text-xs font-semibold text-gray-300">보증금</span>
-              </div>
-              <div className="grid grid-cols-2 divide-x divide-[#1E1E1E]">
-                <div className="px-3 py-2.5">
-                  <p className="mb-0.5 text-xs text-gray-500">총액</p>
-                  <p className="text-sm font-bold text-white">₩{contract.deposit_total.toLocaleString("ko-KR")}</p>
+              <div className="flex items-center justify-between border-b border-[#2A2A2A] bg-[#111] px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Banknote className="h-3.5 w-3.5 text-emerald-400" />
+                  <span className="text-xs font-semibold text-gray-300">보증금</span>
                 </div>
+              </div>
+              <div className="divide-y divide-[#1E1E1E]">
+                {/* 총액 수정 */}
                 <div className="px-3 py-2.5">
-                  <p className="mb-0.5 text-xs text-gray-500">반환</p>
-                  <div className="flex items-center gap-1">
-                    {contract.deposit_returned ? (
-                      <>
+                  <p className="mb-1 text-xs text-gray-500">총액</p>
+                  {editingDeposit ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        autoFocus
+                        type="number"
+                        value={depositValue}
+                        onChange={(e) => setDepositValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveDeposit(); if (e.key === 'Escape') setEditingDeposit(false); }}
+                        className="w-28 rounded border border-indigo-500/50 bg-[#1A1A1A] px-2 py-1 text-sm font-bold text-white outline-none"
+                      />
+                      <button onClick={saveDeposit} disabled={saving} className="rounded bg-indigo-500/20 px-2 py-0.5 text-xs font-semibold text-indigo-400 hover:bg-indigo-500/30 disabled:opacity-40">저장</button>
+                      <button onClick={() => setEditingDeposit(false)} className="text-gray-600 hover:text-gray-400"><X className="h-3 w-3" /></button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-bold text-white">₩{contract.deposit_total.toLocaleString("ko-KR")}</p>
+                      <button onClick={() => { setDepositValue(String(contract.deposit_total)); setEditingDeposit(true); }} className="text-gray-600 hover:text-indigo-400 transition-colors">
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* 반환 처리 */}
+                <div className="px-3 py-2.5">
+                  <p className="mb-1 text-xs text-gray-500">반환</p>
+                  {contract.deposit_returned ? (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                         <span className="text-xs text-emerald-400">
                           {contract.deposit_returned_at ? fmtDate(contract.deposit_returned_at) : "완료"}
                         </span>
-                      </>
-                    ) : (
-                      <>
+                      </div>
+                      <button onClick={cancelReturn} disabled={saving} className="text-xs text-gray-600 hover:text-rose-400 transition-colors">취소</button>
+                    </div>
+                  ) : showReturnForm ? (
+                    <div className="space-y-1.5">
+                      <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)}
+                        className="w-full rounded border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1 text-xs text-white outline-none focus:border-emerald-500" />
+                      <div className="flex gap-1.5">
+                        <button onClick={saveReturn} disabled={saving || !returnDate}
+                          className="flex-1 rounded bg-emerald-500/20 py-1 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-40">
+                          {saving ? "저장 중…" : "반환 완료"}
+                        </button>
+                        <button onClick={() => setShowReturnForm(false)} className="rounded border border-[#2A2A2A] px-2 py-1 text-xs text-gray-500 hover:text-white">취소</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
                         <XCircle className="h-3.5 w-3.5 text-rose-400" />
                         <span className="text-xs text-rose-400">미반환</span>
-                      </>
-                    )}
-                  </div>
+                      </div>
+                      <button onClick={() => setShowReturnForm(true)}
+                        className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                        반환 처리
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -402,6 +476,14 @@ export default function RoomHistoryPage() {
                           contract={contract}
                           onRestore={() => handleRestore(contract)}
                           restoring={restoringId === contract.id}
+                          onUpdateDeposit={async (amount) => {
+                            await updateContract(contract.id, { contract_deposit: amount, deposit_total: amount });
+                            setHistory((prev) => prev.map((c) => c.id === contract.id ? { ...c, contract_deposit: amount, deposit_total: amount } : c));
+                          }}
+                          onUpdateReturn={async (returned, returnedAt) => {
+                            await updateContract(contract.id, { deposit_returned: returned, deposit_returned_at: returnedAt ?? undefined });
+                            setHistory((prev) => prev.map((c) => c.id === contract.id ? { ...c, deposit_returned: returned, deposit_returned_at: returnedAt } : c));
+                          }}
                         />
                       )}
                     </>

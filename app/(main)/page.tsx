@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, Banknote, CalendarX } from 'lucide-react';
-import { fetchTodos, insertTodo, updateTodo, deleteTodoById, type DbTodo } from '@/app/lib/supabase-data';
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, Banknote, CalendarX, Repeat } from 'lucide-react';
+import {
+  fetchTodos, insertTodo, updateTodo, deleteTodoById, type DbTodo,
+  fetchRecurringTodos, insertRecurringTodo, updateRecurringTodo, deleteRecurringTodo, type DbRecurringTodo,
+} from '@/app/lib/supabase-data';
 import { useRooms } from '@/app/context/RoomsContext';
 
 // ──────────── 타입 ────────────
@@ -13,6 +16,17 @@ type Todo = {
   text: string;
   done: boolean;
   color: string;
+};
+
+type RecurringTodo = {
+  id: string;
+  text: string;
+  color: string;
+  recurrenceType: 'weekday' | 'date';
+  weekdays: number[] | null;
+  dayOfMonth: number | null;
+  startDate: string;
+  endDate: string;
 };
 
 // ──────────── 색상 설정 ────────────
@@ -58,6 +72,47 @@ function getFirstDayOfWeek(year: number, month: number) {
 function fromDb(db: DbTodo): Todo {
   return { id: db.id, date: db.date, text: db.text, done: db.done, color: db.color ?? 'gray' };
 }
+function fromDbRecurring(db: DbRecurringTodo): RecurringTodo {
+  return {
+    id: db.id,
+    text: db.text,
+    color: db.color ?? 'gray',
+    recurrenceType: db.recurrence_type,
+    weekdays: db.weekdays,
+    dayOfMonth: db.day_of_month,
+    startDate: db.start_date,
+    endDate: db.end_date,
+  };
+}
+function addYears(dateStr: string, years: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setFullYear(d.getFullYear() + years);
+  return d.toISOString().slice(0, 10);
+}
+function getRecurringForDate(dateKey: string, recurringTodos: RecurringTodo[]): RecurringTodo[] {
+  const date = new Date(dateKey + 'T00:00:00');
+  const dayOfWeek = date.getDay();
+  const dayOfMonth = date.getDate();
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const daysInThisMonth = getDaysInMonth(year, month);
+  return recurringTodos.filter((rt) => {
+    if (dateKey < rt.startDate || dateKey > rt.endDate) return false;
+    if (rt.recurrenceType === 'weekday') {
+      return rt.weekdays?.includes(dayOfWeek) ?? false;
+    } else {
+      const effectiveDay = Math.min(rt.dayOfMonth!, daysInThisMonth);
+      return dayOfMonth === effectiveDay;
+    }
+  });
+}
+function recurringDescription(rt: RecurringTodo): string {
+  if (rt.recurrenceType === 'weekday') {
+    const days = (rt.weekdays ?? []).slice().sort((a, b) => a - b).map((d) => WEEKDAYS[d]).join(', ');
+    return `매주 ${days}`;
+  }
+  return `매월 ${rt.dayOfMonth}일`;
+}
 
 // ──────────── 색상 선택기 ────────────
 
@@ -76,13 +131,293 @@ function ColorPicker({ selected, onChange }: { selected: string; onChange: (c: s
   );
 }
 
+// ──────────── 반복 일정 관리 모달 ────────────
+
+function RecurringTodoManagerModal({
+  recurringTodos,
+  onClose,
+  onAdd,
+  onUpdate,
+  onDelete,
+}: {
+  recurringTodos: RecurringTodo[];
+  onClose: () => void;
+  onAdd: (rt: Omit<RecurringTodo, 'id'>) => Promise<void>;
+  onUpdate: (id: string, rt: Omit<RecurringTodo, 'id'>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const today = new Date();
+  const todayStr = toDateKey(today.getFullYear(), today.getMonth() + 1, today.getDate());
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [formText, setFormText] = useState('');
+  const [formColor, setFormColor] = useState<string>('indigo');
+  const [formType, setFormType] = useState<'weekday' | 'date'>('weekday');
+  const [formWeekdays, setFormWeekdays] = useState<number[]>([]);
+  const [formDayOfMonth, setFormDayOfMonth] = useState<number>(1);
+  const [formStartDate, setFormStartDate] = useState(todayStr);
+  const [saving, setSaving] = useState(false);
+
+  function openAdd() {
+    setEditingId(null);
+    setFormText('');
+    setFormColor('indigo');
+    setFormType('weekday');
+    setFormWeekdays([]);
+    setFormDayOfMonth(1);
+    setFormStartDate(todayStr);
+    setShowForm(true);
+  }
+
+  function openEdit(rt: RecurringTodo) {
+    setEditingId(rt.id);
+    setFormText(rt.text);
+    setFormColor(rt.color);
+    setFormType(rt.recurrenceType);
+    setFormWeekdays(rt.weekdays ?? []);
+    setFormDayOfMonth(rt.dayOfMonth ?? 1);
+    setFormStartDate(rt.startDate);
+    setShowForm(true);
+  }
+
+  function cancelForm() {
+    setShowForm(false);
+    setEditingId(null);
+  }
+
+  async function saveForm() {
+    if (!formText.trim() || saving) return;
+    if (formType === 'weekday' && formWeekdays.length === 0) return;
+    setSaving(true);
+    try {
+      const data: Omit<RecurringTodo, 'id'> = {
+        text: formText.trim(),
+        color: formColor,
+        recurrenceType: formType,
+        weekdays: formType === 'weekday' ? [...formWeekdays].sort((a, b) => a - b) : null,
+        dayOfMonth: formType === 'date' ? formDayOfMonth : null,
+        startDate: formStartDate,
+        endDate: addYears(formStartDate, 5),
+      };
+      if (editingId) {
+        await onUpdate(editingId, data);
+      } else {
+        await onAdd(data);
+      }
+      cancelForm();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleWeekday(day: number) {
+    setFormWeekdays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
+  }
+
+  const canSave = formText.trim() && (formType === 'date' || formWeekdays.length > 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative flex w-full max-w-md flex-col rounded-2xl border border-[#2A2A2A] bg-[#111] shadow-2xl max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4 shrink-0">
+          <div className="flex items-center gap-2">
+            <Repeat size={16} className="text-indigo-400" />
+            <h2 className="text-base font-semibold text-white">반복 일정 관리</h2>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          {/* List */}
+          {!showForm && (
+            <div className="p-4 space-y-2">
+              {recurringTodos.length === 0 && (
+                <p className="py-6 text-center text-sm text-gray-500">등록된 반복 일정이 없습니다.</p>
+              )}
+              {recurringTodos.map((rt) => (
+                <div key={rt.id} className="flex items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#161616] px-4 py-3">
+                  <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${dotClass(rt.color)}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{rt.text}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{recurringDescription(rt)}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openEdit(rt)}
+                      className="rounded p-1.5 text-gray-500 hover:text-gray-300 hover:bg-[#222] transition-colors"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(rt.id)}
+                      className="rounded p-1.5 text-gray-500 hover:text-rose-400 hover:bg-[#222] transition-colors"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Form */}
+          {showForm && (
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">내용</label>
+                <input
+                  autoFocus
+                  value={formText}
+                  onChange={(e) => setFormText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveForm(); if (e.key === 'Escape') cancelForm(); }}
+                  placeholder="반복 일정 내용"
+                  className="w-full rounded-xl border border-[#2A2A2A] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-gray-600 outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 mb-2 block">색상</label>
+                <ColorPicker selected={formColor} onChange={setFormColor} />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 mb-1.5 block">반복 유형</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setFormType('weekday')}
+                    className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-colors ${
+                      formType === 'weekday'
+                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                        : 'border border-[#2A2A2A] text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    요일
+                  </button>
+                  <button
+                    onClick={() => setFormType('date')}
+                    className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-colors ${
+                      formType === 'date'
+                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                        : 'border border-[#2A2A2A] text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    날짜
+                  </button>
+                </div>
+              </div>
+
+              {formType === 'weekday' && (
+                <div>
+                  <label className="text-xs text-gray-500 mb-1.5 block">요일 선택</label>
+                  <div className="flex gap-1">
+                    {WEEKDAYS.map((label, i) => (
+                      <button
+                        key={i}
+                        onClick={() => toggleWeekday(i)}
+                        className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-colors ${
+                          formWeekdays.includes(i)
+                            ? i === 0
+                              ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                              : i === 6
+                                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                                : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                            : 'border border-[#2A2A2A] text-gray-500 hover:text-gray-300'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {formType === 'date' && (
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">매월 몇 일 (1–31)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={formDayOfMonth}
+                    onChange={(e) => setFormDayOfMonth(Math.min(31, Math.max(1, Number(e.target.value))))}
+                    className="w-full rounded-xl border border-[#2A2A2A] bg-[#161616] px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 transition-colors"
+                  />
+                  {formDayOfMonth > 28 && (
+                    <p className="mt-1 text-xs text-gray-500">※ 날짜가 적은 달(2월 등)은 해당 월 마지막 날에 표시됩니다</p>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">시작일</label>
+                <input
+                  type="date"
+                  value={formStartDate}
+                  onChange={(e) => setFormStartDate(e.target.value)}
+                  className="w-full rounded-xl border border-[#2A2A2A] bg-[#161616] px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 transition-colors [color-scheme:dark]"
+                />
+              </div>
+
+              <div className="rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 py-2">
+                <p className="text-xs text-gray-500">종료일 (시작일로부터 5년)</p>
+                <p className="text-sm text-gray-300 mt-0.5">{addYears(formStartDate, 5)}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-[#2A2A2A] px-4 py-3 shrink-0">
+          {!showForm ? (
+            <button
+              onClick={openAdd}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 transition-colors"
+            >
+              <Plus size={15} />
+              반복 일정 추가
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={cancelForm}
+                className="flex-1 rounded-xl border border-[#2A2A2A] py-2.5 text-sm font-semibold text-gray-400 hover:text-white transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={saveForm}
+                disabled={saving || !canSave}
+                className="flex-1 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 transition-colors disabled:opacity-50"
+              >
+                {saving ? '저장 중...' : editingId ? '수정' : '추가'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ──────────── Todo 모달 ────────────
 
 function TodoModal({
-  date, todos, rentReminders, expiryReminders, onAdd, onEdit, onDelete, onToggle, onColorChange, onClose,
+  date, todos, recurringTodos, rentReminders, expiryReminders,
+  onAdd, onEdit, onDelete, onToggle, onColorChange, onClose,
 }: {
   date: string;
   todos: Todo[];
+  recurringTodos: RecurringTodo[];
   rentReminders: string[];
   expiryReminders: string[];
   onAdd: (text: string, color: string) => Promise<void>;
@@ -158,8 +493,25 @@ function TodoModal({
           </div>
         )}
 
+        {/* 반복 일정 */}
+        {recurringTodos.length > 0 && (
+          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500/80 flex items-center gap-1">
+              <Repeat size={10} />
+              반복 일정
+            </p>
+            {recurringTodos.map((rt) => (
+              <div key={rt.id} className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#161616] px-3 py-2">
+                <span className={`shrink-0 w-2 h-2 rounded-full ${dotClass(rt.color)}`} />
+                <span className="text-sm text-gray-200 flex-1">{rt.text}</span>
+                <Repeat size={11} className="shrink-0 text-gray-600" />
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Todo list */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2 max-h-72">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2 max-h-60">
           {todos.length === 0 && (
             <p className="py-4 text-center text-sm text-gray-500">등록된 할일이 없습니다.</p>
           )}
@@ -176,7 +528,7 @@ function TodoModal({
                   {todo.done && <Check size={11} className="text-white" />}
                 </button>
 
-                {/* 색상 dot (현재 색상 표시) */}
+                {/* 색상 dot */}
                 <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${dotClass(todo.color)}`} />
 
                 {/* 텍스트 */}
@@ -262,8 +614,10 @@ export default function TodoListPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [recurringTodos, setRecurringTodos] = useState<RecurringTodo[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [viewFilter, setViewFilter] = useState<'all' | 'todo' | 'rent' | 'expiry'>('all');
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
   const { contracts } = useRooms();
 
   const loadTodos = useCallback(async () => {
@@ -271,7 +625,13 @@ export default function TodoListPage() {
     setTodos(data.map(fromDb));
   }, []);
 
+  const loadRecurringTodos = useCallback(async () => {
+    const data = await fetchRecurringTodos();
+    setRecurringTodos(data.map(fromDbRecurring));
+  }, []);
+
   useEffect(() => { loadTodos(); }, [loadTodos]);
+  useEffect(() => { loadRecurringTodos(); }, [loadRecurringTodos]);
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfWeek(year, month);
@@ -283,7 +643,7 @@ export default function TodoListPage() {
     for (const c of contracts) {
       if (c.status !== 'scheduled') continue;
       if (!c.contract_start_end) continue;
-      if (c.actual_move_out_date) continue; // 확정 퇴실일 있으면 제외
+      if (c.actual_move_out_date) continue;
       const expiryDate = new Date(c.contract_start_end + 'T00:00:00');
       const reminderDate = new Date(expiryDate);
       reminderDate.setMonth(reminderDate.getMonth() - 1);
@@ -348,6 +708,35 @@ export default function TodoListPage() {
     setTodos(prev => prev.map(t => t.id === id ? fromDb(updated) : t));
   }
 
+  async function addRecurringTodo(rt: Omit<RecurringTodo, 'id'>) {
+    const created = await insertRecurringTodo({
+      text: rt.text,
+      color: rt.color,
+      recurrence_type: rt.recurrenceType,
+      weekdays: rt.weekdays,
+      day_of_month: rt.dayOfMonth,
+      start_date: rt.startDate,
+      end_date: rt.endDate,
+    });
+    setRecurringTodos(prev => [...prev, fromDbRecurring(created)]);
+  }
+  async function editRecurringTodo(id: string, rt: Omit<RecurringTodo, 'id'>) {
+    const updated = await updateRecurringTodo(id, {
+      text: rt.text,
+      color: rt.color,
+      recurrence_type: rt.recurrenceType,
+      weekdays: rt.weekdays,
+      day_of_month: rt.dayOfMonth,
+      start_date: rt.startDate,
+      end_date: rt.endDate,
+    });
+    setRecurringTodos(prev => prev.map(r => r.id === id ? fromDbRecurring(updated) : r));
+  }
+  async function deleteRecurringTodoHandler(id: string) {
+    await deleteRecurringTodo(id);
+    setRecurringTodos(prev => prev.filter(r => r.id !== id));
+  }
+
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
@@ -355,14 +744,10 @@ export default function TodoListPage() {
   while (cells.length % 7 !== 0) cells.push(null);
 
   const selectedTodos = selectedDate ? todosFor(selectedDate) : [];
+  const selectedRecurring = selectedDate ? getRecurringForDate(selectedDate, recurringTodos) : [];
 
   return (
     <main className="w-full space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Todo List</h1>
-        <p className="mt-1 text-sm text-gray-400">날짜를 클릭해 할일을 추가·수정·삭제하세요.</p>
-      </div>
-
       <div className="rounded-2xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
         {/* Month navigation + filter */}
         <div className="mb-6 flex items-center justify-between">
@@ -392,15 +777,24 @@ export default function TodoListPage() {
             ))}
           </div>
 
-          {/* 월 이동 */}
+          {/* 오른쪽: 반복 설정 + 월 이동 */}
           <div className="flex items-center gap-3">
-            <button onClick={prevMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
-              <ChevronLeft size={18} />
+            <button
+              onClick={() => setShowRecurringModal(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 py-1.5 text-xs font-medium text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors"
+            >
+              <Repeat size={13} />
+              반복 설정
             </button>
-            <h2 className="text-lg font-bold text-white">{year}년 {month}월</h2>
-            <button onClick={nextMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
-              <ChevronRight size={18} />
-            </button>
+            <div className="flex items-center gap-3">
+              <button onClick={prevMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+                <ChevronLeft size={18} />
+              </button>
+              <h2 className="text-lg font-bold text-white">{year}년 {month}월</h2>
+              <button onClick={nextMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+                <ChevronRight size={18} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -420,11 +814,13 @@ export default function TodoListPage() {
             if (!day) return <div key={idx} />;
             const dateKey = toDateKey(year, month, day);
             const dayTodos = todosFor(dateKey);
+            const dayRecurring = getRecurringForDate(dateKey, recurringTodos);
             const dayRentReminders = rentRemindersByDate[dateKey] ?? [];
             const dayExpiryReminders = contractExpiryRemindersByDate[dateKey] ?? [];
             const isToday = dateKey === todayKey;
             const isSun = idx % 7 === 0;
             const isSat = idx % 7 === 6;
+            const showTodos = viewFilter !== 'rent' && viewFilter !== 'expiry';
 
             return (
               <button
@@ -438,19 +834,25 @@ export default function TodoListPage() {
                   {day}
                 </span>
                 <div className="flex flex-col gap-0.5 flex-1">
-                  {viewFilter !== 'rent' && viewFilter !== 'expiry' && dayTodos.length > 0 && (
+                  {showTodos && (dayTodos.length > 0 || dayRecurring.length > 0) && (
                     <div className="flex flex-col gap-1">
-                      {viewFilter === 'all' && <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">할일</span>}
+                      {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">할일</span>}
                       {dayTodos.map((todo) => (
                         <div key={todo.id} className={`truncate rounded px-1.5 py-1 text-xs leading-tight ${colorStyle(todo.color, todo.done)}`}>
                           {todo.text}
                         </div>
                       ))}
+                      {dayRecurring.map((rt) => (
+                        <div key={`rt-${rt.id}`} className={`truncate rounded px-1.5 py-1 text-xs leading-tight flex items-center gap-1 ${colorStyle(rt.color, false)}`}>
+                          <Repeat size={9} className="shrink-0 opacity-60" />
+                          <span className="truncate">{rt.text}</span>
+                        </div>
+                      ))}
                     </div>
                   )}
                   {viewFilter !== 'todo' && viewFilter !== 'expiry' && dayRentReminders.length > 0 && (
-                    <div className={`flex flex-col gap-1 ${viewFilter === 'all' && dayTodos.length > 0 ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : ''}`}>
-                      {viewFilter === 'all' && <span className="text-[9px] font-semibold uppercase tracking-wide text-amber-600/80">월세</span>}
+                    <div className={`flex flex-col gap-1 ${viewFilter === 'all' && (dayTodos.length > 0 || dayRecurring.length > 0) ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : ''}`}>
+                      {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-600/80">월세</span>}
                       {dayRentReminders.map((name) => (
                         <div key={`rent-${name}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-amber-500/15 text-amber-300 border border-amber-500/20">
                           {name} 납부
@@ -459,8 +861,8 @@ export default function TodoListPage() {
                     </div>
                   )}
                   {viewFilter !== 'todo' && viewFilter !== 'rent' && dayExpiryReminders.length > 0 && (
-                    <div className={`flex flex-col gap-1 ${viewFilter === 'all' && (dayTodos.length > 0 || dayRentReminders.length > 0) ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : ''}`}>
-                      {viewFilter === 'all' && <span className="text-[9px] font-semibold uppercase tracking-wide text-rose-600/80">만료 예정</span>}
+                    <div className={`flex flex-col gap-1 ${viewFilter === 'all' && (dayTodos.length > 0 || dayRecurring.length > 0 || dayRentReminders.length > 0) ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : ''}`}>
+                      {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-600/80">만료 예정</span>}
                       {dayExpiryReminders.map((name) => (
                         <div key={`expiry-${name}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-rose-500/15 text-rose-300 border border-rose-500/20">
                           {name} 만료 1개월 전
@@ -479,6 +881,7 @@ export default function TodoListPage() {
         <TodoModal
           date={selectedDate}
           todos={selectedTodos}
+          recurringTodos={selectedRecurring}
           rentReminders={rentRemindersByDate[selectedDate] ?? []}
           expiryReminders={contractExpiryRemindersByDate[selectedDate] ?? []}
           onAdd={addTodo}
@@ -487,6 +890,16 @@ export default function TodoListPage() {
           onToggle={toggleTodo}
           onColorChange={changeTodoColor}
           onClose={() => setSelectedDate(null)}
+        />
+      )}
+
+      {showRecurringModal && (
+        <RecurringTodoManagerModal
+          recurringTodos={recurringTodos}
+          onClose={() => setShowRecurringModal(false)}
+          onAdd={addRecurringTodo}
+          onUpdate={editRecurringTodo}
+          onDelete={deleteRecurringTodoHandler}
         />
       )}
     </main>
