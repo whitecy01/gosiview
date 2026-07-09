@@ -303,6 +303,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     <input
                       type="number"
                       min={0}
+                      step={0.1}
                       placeholder="70"
                       value={rentAmount}
                       onChange={(e) => setRentAmount(e.target.value)}
@@ -317,7 +318,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     <input
                       type="number"
                       min={0}
-                      step={10000}
+                      step={1000}
                       placeholder="200000"
                       value={contractDeposit}
                       onChange={(e) => setContractDeposit(e.target.value)}
@@ -334,7 +335,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     <input
                       type="number"
                       min={0}
-                      step={10000}
+                      step={1000}
                       placeholder="100000"
                       value={earnestMoney}
                       onChange={(e) => setEarnestMoney(e.target.value)}

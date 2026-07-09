@@ -205,14 +205,14 @@ function ResidentForm({
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">금액(관포)</label>
             <div className="flex items-center gap-1.5">
-              <input type="number" min={0} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} placeholder="70" className={inputCls} />
+              <input type="number" min={0} step={0.1} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} placeholder="70" className={inputCls} />
               <span className="text-xs text-gray-500 shrink-0">만원</span>
             </div>
           </div>
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">보증금</label>
             <div className="flex items-center gap-1.5">
-              <input type="number" min={0} step={10000} value={contractDeposit} onChange={(e) => setContractDeposit(e.target.value)} placeholder="200000" className={inputCls} />
+              <input type="number" min={0} step={1000} value={contractDeposit} onChange={(e) => setContractDeposit(e.target.value)} placeholder="200000" className={inputCls} />
               <span className="text-xs text-gray-500 shrink-0">원</span>
             </div>
           </div>
@@ -221,7 +221,7 @@ function ResidentForm({
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">계약금</label>
             <div className="flex items-center gap-1.5">
-              <input type="number" min={0} step={10000} value={earnestMoney} onChange={(e) => setEarnestMoney(e.target.value)} placeholder="100000" className={inputCls} />
+              <input type="number" min={0} step={1000} value={earnestMoney} onChange={(e) => setEarnestMoney(e.target.value)} placeholder="100000" className={inputCls} />
               <span className="text-xs text-gray-500 shrink-0">원</span>
             </div>
           </div>

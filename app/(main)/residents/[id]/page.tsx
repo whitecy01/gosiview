@@ -754,6 +754,7 @@ export default function ResidentDetailPage() {
                     <label className="mb-1.5 block text-xs text-gray-400">금액(관포) <span className="text-gray-600">만원</span></label>
                     <input
                       type="number"
+                      step={0.1}
                       value={infoForm.utilityIncludedRent || ""}
                       onChange={(e) => setInfoForm((f) => ({ ...f, utilityIncludedRent: Number(e.target.value) }))}
                       className={INPUT}
@@ -763,6 +764,7 @@ export default function ResidentDetailPage() {
                     <label className="mb-1.5 block text-xs text-gray-400">실제 납부 월세 <span className="text-gray-600">만원</span></label>
                     <input
                       type="number"
+                      step={0.1}
                       value={infoForm.actualMonthlyRent || ""}
                       onChange={(e) => setInfoForm((f) => ({ ...f, actualMonthlyRent: Number(e.target.value) }))}
                       className={INPUT}

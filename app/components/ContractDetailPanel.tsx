@@ -218,25 +218,29 @@ export default function ContractDetailPanel({ contract, onClose }: Props) {
             )}
 
             {/* 보증금 차감 이력 */}
-            {deductions.length > 0 && (
-              <Section icon={<XCircle className="h-3.5 w-3.5 text-rose-400" />} title={`보증금 차감 이력 (${deductions.length}건)`}>
-                <div className="divide-y divide-[#1E1E1E]">
-                  {deductions.map((d) => (
-                    <div key={d.id} className="flex items-center justify-between py-2.5 px-1">
-                      <div>
-                        <p className="text-sm text-white">{d.reason}</p>
-                        <p className="text-xs text-gray-500">{fmtDate(d.date)}</p>
+            <Section icon={<XCircle className="h-3.5 w-3.5 text-rose-400" />} title={`보증금 차감 이력 (${deductions.length}건)`}>
+              {deductions.length > 0 ? (
+                <>
+                  <div className="divide-y divide-[#1E1E1E]">
+                    {deductions.map((d) => (
+                      <div key={d.id} className="flex items-center justify-between py-2.5 px-1">
+                        <div>
+                          <p className="text-sm text-white">{d.reason}</p>
+                          <p className="text-xs text-gray-500">{fmtDate(d.date)}</p>
+                        </div>
+                        <p className="text-sm font-semibold text-rose-400">-{fmtMoney(d.amount)}</p>
                       </div>
-                      <p className="text-sm font-semibold text-rose-400">-{fmtMoney(d.amount)}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2 flex justify-between border-t border-[#2A2A2A] pt-2">
-                  <span className="text-xs text-gray-500">차감 합계</span>
-                  <span className="text-sm font-bold text-rose-400">-{fmtMoney(totalDeducted)}</span>
-                </div>
-              </Section>
-            )}
+                    ))}
+                  </div>
+                  <div className="mt-2 flex justify-between border-t border-[#2A2A2A] pt-2">
+                    <span className="text-xs text-gray-500">차감 합계</span>
+                    <span className="text-sm font-bold text-rose-400">-{fmtMoney(totalDeducted)}</span>
+                  </div>
+                </>
+              ) : (
+                <p className="py-3 text-center text-xs text-gray-500">차감 이력이 없습니다.</p>
+              )}
+            </Section>
 
             {/* 현금 승계 */}
             {cashSuccessions.length > 0 && (
