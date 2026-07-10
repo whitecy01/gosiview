@@ -32,6 +32,8 @@ export type DbContract = {
   payment_due_day: number | null;
   deposit_returned: boolean;
   deposit_returned_at: string | null;
+  memo: string | null;
+  contract_months: number | null;
   status: 'scheduled' | 'completed';
   created_at: string;
   updated_at: string;
@@ -123,6 +125,8 @@ export type NewContractInput = {
   payment_due_day?: number | null;
   deposit_returned?: boolean;
   deposit_returned_at?: string | null;
+  memo?: string | null;
+  contract_months?: number | null;
   status: 'scheduled' | 'completed';
 };
 
@@ -294,6 +298,17 @@ export async function fetchCashSuccessions(contractId: string): Promise<DbCashSu
     .select('*')
     .eq('contract_id', contractId)
     .order('billing_start', { ascending: true });
+  if (error) throw error;
+  return data as DbCashSuccession[];
+}
+
+/** 전체 현금 승계 조회 (출력 페이지 캘린더용) */
+export async function fetchAllCashSuccessions(): Promise<DbCashSuccession[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('cash_successions')
+    .select('*')
+    .order('billing_end', { ascending: true });
   if (error) throw error;
   return data as DbCashSuccession[];
 }

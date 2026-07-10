@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, Banknote, CalendarX, Repeat } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, Banknote, CalendarX, Repeat, Wrench } from 'lucide-react';
 import {
   fetchTodos, insertTodo, updateTodo, deleteTodoById, type DbTodo,
   fetchRecurringTodos, insertRecurringTodo, updateRecurringTodo, deleteRecurringTodo, type DbRecurringTodo,
+  fetchAllMaintenanceRecords, type DbMaintenanceRecord,
 } from '@/app/lib/supabase-data';
 import { useRooms } from '@/app/context/RoomsContext';
 
@@ -412,7 +413,7 @@ function RecurringTodoManagerModal({
 // ──────────── Todo 모달 ────────────
 
 function TodoModal({
-  date, todos, recurringTodos, rentReminders, expiryReminders,
+  date, todos, recurringTodos, rentReminders, expiryReminders, maintenanceRecords,
   onAdd, onEdit, onDelete, onToggle, onColorChange, onClose,
 }: {
   date: string;
@@ -420,6 +421,7 @@ function TodoModal({
   recurringTodos: RecurringTodo[];
   rentReminders: string[];
   expiryReminders: string[];
+  maintenanceRecords: DbMaintenanceRecord[];
   onAdd: (text: string, color: string) => Promise<void>;
   onEdit: (id: string, text: string, color: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -456,62 +458,19 @@ function TodoModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative flex w-full max-w-md flex-col rounded-2xl border border-[#2A2A2A] bg-[#111] shadow-2xl"
+        className="relative flex max-h-[85vh] w-full max-w-xl flex-col overflow-y-auto rounded-2xl border border-[#2A2A2A] bg-[#111] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
-          <h2 className="text-base font-semibold text-white">{label}</h2>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#2A2A2A] bg-[#111] px-6 py-4">
+          <h2 className="text-lg font-semibold text-white">{label}</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
             <X size={16} />
           </button>
         </div>
 
-        {/* 월세 납부 알림 */}
-        {rentReminders.length > 0 && (
-          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-500/80">월세 납부일</p>
-            {rentReminders.map((name) => (
-              <div key={name} className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
-                <Banknote size={13} className="shrink-0 text-amber-400" />
-                <span className="text-sm text-amber-200">{name} 월세 납부 필요</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 계약 만료 알림 */}
-        {expiryReminders.length > 0 && (
-          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-500/80">계약 만료 1개월 전</p>
-            {expiryReminders.map((name) => (
-              <div key={name} className="flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2">
-                <CalendarX size={13} className="shrink-0 text-rose-400" />
-                <span className="text-sm text-rose-200">{name} 계약 만료 예정 (1개월 후)</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 반복 일정 */}
-        {recurringTodos.length > 0 && (
-          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500/80 flex items-center gap-1">
-              <Repeat size={10} />
-              반복 일정
-            </p>
-            {recurringTodos.map((rt) => (
-              <div key={rt.id} className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#161616] px-3 py-2">
-                <span className={`shrink-0 w-2 h-2 rounded-full ${dotClass(rt.color)}`} />
-                <span className="text-sm text-gray-200 flex-1">{rt.text}</span>
-                <Repeat size={11} className="shrink-0 text-gray-600" />
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Todo list */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2 max-h-60">
+        <div className="shrink-0 px-6 py-4 space-y-2">
           {todos.length === 0 && (
             <p className="py-4 text-center text-sm text-gray-500">등록된 할일이 없습니다.</p>
           )}
@@ -577,8 +536,69 @@ function TodoModal({
           ))}
         </div>
 
+        {/* 반복 일정 */}
+        {recurringTodos.length > 0 && (
+          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500/80 flex items-center gap-1">
+              <Repeat size={10} />
+              반복 일정
+            </p>
+            {recurringTodos.map((rt) => (
+              <div key={rt.id} className="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#161616] px-3 py-2">
+                <span className={`shrink-0 w-2 h-2 rounded-full ${dotClass(rt.color)}`} />
+                <span className="text-sm text-gray-200 flex-1">{rt.text}</span>
+                <Repeat size={11} className="shrink-0 text-gray-600" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 월세 납부 알림 */}
+        {rentReminders.length > 0 && (
+          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-500/80">월세 납부일</p>
+            {rentReminders.map((name) => (
+              <div key={name} className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                <Banknote size={13} className="shrink-0 text-amber-400" />
+                <span className="text-sm text-amber-200">{name} 월세 납부 필요</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 계약 만료 알림 */}
+        {expiryReminders.length > 0 && (
+          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-500/80">계약 만료 1개월 전</p>
+            {expiryReminders.map((name) => (
+              <div key={name} className="flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2">
+                <CalendarX size={13} className="shrink-0 text-rose-400" />
+                <span className="text-sm text-rose-200">{name} 계약 만료 예정 (1개월 후)</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 유지보수 */}
+        {maintenanceRecords.length > 0 && (
+          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500/80">유지보수</p>
+            {maintenanceRecords.map((m) => (
+              <div key={m.id} className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-2">
+                <Wrench size={13} className="shrink-0 text-violet-400" />
+                <span className="flex-1 text-sm text-violet-200">
+                  {m.room_id}호 {m.details.join(', ')}
+                </span>
+                <span className="shrink-0 text-xs font-semibold text-violet-300">
+                  ₩{m.amount.toLocaleString('ko-KR')}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Add input */}
-        <div className="border-t border-[#2A2A2A] px-6 py-4 space-y-3">
+        <div className="sticky bottom-0 mt-auto border-t border-[#2A2A2A] bg-[#111] px-6 py-4 space-y-3">
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">색상</span>
             <ColorPicker selected={newColor} onChange={setNewColor} />
@@ -615,8 +635,9 @@ export default function TodoListPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [recurringTodos, setRecurringTodos] = useState<RecurringTodo[]>([]);
+  const [maintenanceRecords, setMaintenanceRecords] = useState<DbMaintenanceRecord[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [viewFilter, setViewFilter] = useState<'all' | 'todo' | 'rent' | 'expiry'>('all');
+  const [viewFilter, setViewFilter] = useState<'all' | 'todo' | 'rent' | 'expiry' | 'maintenance'>('all');
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const { contracts } = useRooms();
 
@@ -630,8 +651,24 @@ export default function TodoListPage() {
     setRecurringTodos(data.map(fromDbRecurring));
   }, []);
 
+  const loadMaintenance = useCallback(async () => {
+    const data = await fetchAllMaintenanceRecords();
+    setMaintenanceRecords(data);
+  }, []);
+
   useEffect(() => { loadTodos(); }, [loadTodos]);
   useEffect(() => { loadRecurringTodos(); }, [loadRecurringTodos]);
+  useEffect(() => { loadMaintenance(); }, [loadMaintenance]);
+
+  // 날짜별 유지보수 기록
+  const maintenanceByDate = useMemo(() => {
+    const map: Record<string, DbMaintenanceRecord[]> = {};
+    for (const r of maintenanceRecords) {
+      const key = r.date.slice(0, 10);
+      (map[key] ??= []).push(r);
+    }
+    return map;
+  }, [maintenanceRecords]);
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfWeek(year, month);
@@ -754,10 +791,11 @@ export default function TodoListPage() {
           {/* 필터 버튼 */}
           <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
             {([
-              { key: 'all',    label: '전체' },
-              { key: 'todo',   label: '할일' },
-              { key: 'rent',   label: '월세 납부' },
-              { key: 'expiry', label: '계약 만료' },
+              { key: 'all',         label: '전체' },
+              { key: 'todo',        label: '할일' },
+              { key: 'rent',        label: '월세 납부' },
+              { key: 'expiry',      label: '계약 만료' },
+              { key: 'maintenance', label: '유지보수' },
             ] as const).map(({ key, label }) => (
               <button
                 key={key}
@@ -768,7 +806,9 @@ export default function TodoListPage() {
                       ? 'bg-amber-500/20 text-amber-300'
                       : key === 'expiry'
                         ? 'bg-rose-500/20 text-rose-300'
-                        : 'bg-indigo-500/20 text-indigo-300'
+                        : key === 'maintenance'
+                          ? 'bg-violet-500/20 text-violet-300'
+                          : 'bg-indigo-500/20 text-indigo-300'
                     : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
@@ -817,10 +857,14 @@ export default function TodoListPage() {
             const dayRecurring = getRecurringForDate(dateKey, recurringTodos);
             const dayRentReminders = rentRemindersByDate[dateKey] ?? [];
             const dayExpiryReminders = contractExpiryRemindersByDate[dateKey] ?? [];
+            const dayMaintenance = maintenanceByDate[dateKey] ?? [];
             const isToday = dateKey === todayKey;
             const isSun = idx % 7 === 0;
             const isSat = idx % 7 === 6;
-            const showTodos = viewFilter !== 'rent' && viewFilter !== 'expiry';
+            const show = (k: 'todo' | 'rent' | 'expiry' | 'maintenance') => viewFilter === 'all' || viewFilter === k;
+            // 전체 보기일 때만 위쪽 블록과 구분선을 그림
+            const divider = (hasAbove: boolean) =>
+              viewFilter === 'all' && hasAbove ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : '';
 
             return (
               <button
@@ -834,7 +878,7 @@ export default function TodoListPage() {
                   {day}
                 </span>
                 <div className="flex flex-col gap-0.5 flex-1">
-                  {showTodos && (dayTodos.length > 0 || dayRecurring.length > 0) && (
+                  {show('todo') && (dayTodos.length > 0 || dayRecurring.length > 0) && (
                     <div className="flex flex-col gap-1">
                       {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">할일</span>}
                       {dayTodos.map((todo) => (
@@ -850,8 +894,8 @@ export default function TodoListPage() {
                       ))}
                     </div>
                   )}
-                  {viewFilter !== 'todo' && viewFilter !== 'expiry' && dayRentReminders.length > 0 && (
-                    <div className={`flex flex-col gap-1 ${viewFilter === 'all' && (dayTodos.length > 0 || dayRecurring.length > 0) ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : ''}`}>
+                  {show('rent') && dayRentReminders.length > 0 && (
+                    <div className={`flex flex-col gap-1 ${divider(dayTodos.length > 0 || dayRecurring.length > 0)}`}>
                       {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-600/80">월세</span>}
                       {dayRentReminders.map((name) => (
                         <div key={`rent-${name}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-amber-500/15 text-amber-300 border border-amber-500/20">
@@ -860,12 +904,23 @@ export default function TodoListPage() {
                       ))}
                     </div>
                   )}
-                  {viewFilter !== 'todo' && viewFilter !== 'rent' && dayExpiryReminders.length > 0 && (
-                    <div className={`flex flex-col gap-1 ${viewFilter === 'all' && (dayTodos.length > 0 || dayRecurring.length > 0 || dayRentReminders.length > 0) ? 'mt-2 pt-2 border-t border-[#2A2A2A]' : ''}`}>
+                  {show('expiry') && dayExpiryReminders.length > 0 && (
+                    <div className={`flex flex-col gap-1 ${divider(dayTodos.length > 0 || dayRecurring.length > 0 || dayRentReminders.length > 0)}`}>
                       {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-600/80">만료 예정</span>}
                       {dayExpiryReminders.map((name) => (
                         <div key={`expiry-${name}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-rose-500/15 text-rose-300 border border-rose-500/20">
                           {name} 만료 1개월 전
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {show('maintenance') && dayMaintenance.length > 0 && (
+                    <div className={`flex flex-col gap-1 ${divider(dayTodos.length > 0 || dayRecurring.length > 0 || dayRentReminders.length > 0 || dayExpiryReminders.length > 0)}`}>
+                      {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-violet-600/80">유지보수</span>}
+                      {dayMaintenance.map((m) => (
+                        <div key={`mt-${m.id}`} className="flex items-center gap-1 truncate rounded px-1.5 py-1 text-xs leading-tight bg-violet-500/15 text-violet-300 border border-violet-500/20">
+                          <Wrench size={9} className="shrink-0 opacity-70" />
+                          <span className="truncate">{m.room_id}호 {m.details.join(', ')}</span>
                         </div>
                       ))}
                     </div>
@@ -884,6 +939,7 @@ export default function TodoListPage() {
           recurringTodos={selectedRecurring}
           rentReminders={rentRemindersByDate[selectedDate] ?? []}
           expiryReminders={contractExpiryRemindersByDate[selectedDate] ?? []}
+          maintenanceRecords={maintenanceByDate[selectedDate] ?? []}
           onAdd={addTodo}
           onEdit={editTodo}
           onDelete={deleteTodo}

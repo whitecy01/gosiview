@@ -23,6 +23,12 @@ const REAL_FLOOR_PLANS: Partial<Record<FloorNumber, { src: string; alt: string }
 };
 const FLOOR_PLAN_PDF_SRC = "/floor-plans/spacehorim-floorplan.pdf";
 
+const STATUS_STYLE: Record<string, { dot: string; label: string; labelClass: string }> = {
+  occupied: { dot: "bg-indigo-500", label: "입실 중", labelClass: "text-indigo-400" },
+  vacant: { dot: "bg-emerald-500", label: "공실", labelClass: "text-emerald-400" },
+  contract: { dot: "bg-rose-500", label: "계약", labelClass: "text-rose-400" },
+};
+
 export default function FloorPlan() {
   const [currentFloor, setCurrentFloor] = useState<FloorNumber>(1);
   const { effectiveRooms } = useEffectiveRooms();
@@ -97,10 +103,44 @@ export default function FloorPlan() {
           </div>
         </div>
 
-        <div className="flex items-center justify-center">
-          <div className="w-full max-w-[1100px]">
-            {renderFloor()}
+        <div className="flex items-start gap-6">
+          {/* 도면 */}
+          <div className="flex min-w-0 flex-1 items-center justify-center">
+            <div className="w-full max-w-[1100px]">
+              {renderFloor()}
+            </div>
           </div>
+
+          {/* 방 목록 */}
+          <aside className="w-64 shrink-0 overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#0D0D0D]">
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] bg-[#111] px-3 py-2.5">
+              <span className="text-xs font-semibold text-gray-300">{currentFloor}층 입실 현황</span>
+              <span className="text-[10px] text-gray-600">{rooms.length}개</span>
+            </div>
+            <ul className="max-h-[560px] divide-y divide-[#1A1A1A] overflow-y-auto">
+              {rooms.map((room) => {
+                const style = STATUS_STYLE[room.status] ?? STATUS_STYLE.vacant;
+                const isSelected = selectedRoom?.id === room.id;
+                return (
+                  <li key={room.id}>
+                    <button
+                      onClick={() => handleSelectRoom(room)}
+                      className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
+                        isSelected ? "bg-indigo-500/10" : "hover:bg-[#161616]"
+                      }`}
+                    >
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
+                      <span className="w-10 shrink-0 text-xs font-bold text-indigo-400">{room.id}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-gray-200">
+                        {room.resident ?? <span className="text-gray-600">—</span>}
+                      </span>
+                      <span className={`shrink-0 text-[10px] font-medium ${style.labelClass}`}>{style.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </aside>
         </div>
 
         {/* Legend */}

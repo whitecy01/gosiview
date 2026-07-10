@@ -499,6 +499,11 @@ export default function RoomHistoryPage() {
         <ContractDetailPanel
           contract={detailContract}
           onClose={() => setDetailContract(null)}
+          onUpdated={(updated) => {
+            setDetailContract(updated);
+            setHistory((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+            refetch();
+          }}
         />
       )}
     </>

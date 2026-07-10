@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Room } from "./shared";
+import { Room, RoomOverlayLabel } from "./shared";
 
 interface FloorProps {
   rooms: Room[];
@@ -8,24 +8,24 @@ interface FloorProps {
 }
 
 // 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
-const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
+const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string; labelClass?: string; labelInline?: boolean }[] = [
   // 위 줄: 207, 208, 209, 210, 211, 212
-  { id: "207", top: "35%", left: "22.5%",  width: "9%", height: "19%" },
-  { id: "208", top: "35%", left: "32%",  width: "9%", height: "19%" },
-  { id: "209", top: "35%", left: "41.8%",  width: "9%", height: "19%" },
-  { id: "210", top: "35%", left: "51.5%",  width: "9%", height: "19%" },
-  { id: "211", top: "35%", left: "62%",  width: "10%", height: "19%" },
+  { id: "207", top: "35%", left: "22.5%",  width: "9%", height: "19%", labelClass: "translate-y-5"},
+  { id: "208", top: "35%", left: "32%",  width: "9%", height: "19%" ,labelClass: "translate-y-5"},
+  { id: "209", top: "35%", left: "41.8%",  width: "9%", height: "19%", labelClass: "translate-y-5" },
+  { id: "210", top: "35%", left: "51.5%",  width: "9%", height: "19%" , labelClass: "translate-y-5"},
+  { id: "211", top: "35%", left: "62%",  width: "10%", height: "19%" , labelClass: "translate-y-5"},
 
-  { id: "212", top: "35%", left: "76%",  width: "14%", height: "15%" },
-  { id: "213", top: "51%", left: "76%",  width: "14%", height: "14%" },
+  { id: "212", top: "35%", left: "76%",  width: "14%", height: "15%", labelInline: true, labelClass: "translate-y-5"},
+  { id: "213", top: "51%", left: "76%",  width: "14%", height: "14%", labelInline: true, labelClass: "translate-y-5"},
 
   // 아래 줄: 206, 205, 204, 203, 202, 201, 213
-  { id: "206", top: "61%", left: "15%",  width: "8%", height: "18.5%" },
-  { id: "205", top: "61%", left: "24%",  width: "8%", height: "18.5%" },
-  { id: "204", top: "61%", left: "34%",  width: "8%", height: "18.5%" },
-  { id: "203", top: "61%", left: "42%",  width: "9%", height: "18.5%" },
-  { id: "202", top: "61%", left: "52%",  width: "8%", height: "18.5%" },
-  { id: "201", top: "61%", left: "60.5%",  width: "11.5%", height: "18.5%" },
+  { id: "206", top: "61%", left: "15%",  width: "8%", height: "18.5%", labelClass: "-translate-y-4" },
+  { id: "205", top: "61%", left: "24%",  width: "8%", height: "18.5%" , labelClass: "-translate-y-4"},
+  { id: "204", top: "61%", left: "33%",  width: "8.5%", height: "18.5%" , labelClass: "-translate-y-4"},
+  { id: "203", top: "61%", left: "42%",  width: "9%", height: "18.5%" , labelClass: "-translate-y-4"},
+  { id: "202", top: "61%", left: "52%",  width: "8%", height: "18.5%" , labelClass: "-translate-y-4"},
+  { id: "201", top: "61%", left: "60.5%",  width: "11.5%", height: "18.5%", labelClass: "-translate-y-4"},
 ];
 
 function statusColor(status: Room["status"], selected: boolean) {
@@ -50,7 +50,7 @@ export default function Floor2({ rooms, selectedRoom, onSelectRoom }: FloorProps
       />
 
       {/* 방 오버레이 */}
-      {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
+      {ROOM_OVERLAYS.map(({ id, top, left, width, height, labelClass, labelInline }) => {
         const room = rooms.find((r) => r.id === id);
         if (!room) return null;
         const isSelected = selectedRoom?.id === id;
@@ -60,8 +60,9 @@ export default function Floor2({ rooms, selectedRoom, onSelectRoom }: FloorProps
             key={id}
             onClick={() => onSelectRoom(room)}
             style={{ top, left, width, height }}
-            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}
-          />
+            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}>
+            <RoomOverlayLabel room={room} className={labelClass} inline={labelInline} />
+          </button>
         );
       })}
     </div>

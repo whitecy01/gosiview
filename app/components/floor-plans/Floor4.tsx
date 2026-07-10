@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Room } from "./shared";
+import { Room, RoomOverlayLabel } from "./shared";
 
 interface FloorProps {
   rooms: Room[];
@@ -16,16 +16,16 @@ const LABEL_CORRECTIONS: { top: string; left: string; width: string; height: str
 ];
 
 // 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
-const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
+const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string; labelClass?: string }[] = [
   // 위 줄: 404, 405, 406, 407
-  { id: "404", top: "55.5%", left: "14%",  width: "14%", height: "17%" },
-  { id: "405", top: "55.5%", left: "28.5%", width: "13.5%", height: "17%" },
-  { id: "406", top: "55.5%", left: "43%", width: "14%", height: "17%" },
-  { id: "407", top: "55%", left: "76.5%", width: "13%", height: "26%" },
+  { id: "404", top: "55.5%", left: "14%",  width: "14%", height: "17%", labelClass: "-translate-y-5" },
+  { id: "405", top: "55.5%", left: "28.5%", width: "13.5%", height: "17%" , labelClass: "-translate-y-5"},
+  { id: "406", top: "55.5%", left: "43%", width: "14%", height: "17%", labelClass: "-translate-y-5" },
+  { id: "407", top: "55%", left: "76.5%", width: "13%", height: "26%" , labelClass: "translate-y-7"},
   // 아래 줄: 403, 402, 401
-  { id: "403", top: "81.5%", left: "24%", width: "15%", height: "17%" },
-  { id: "402", top: "81.5%", left: "40%", width: "16%", height: "17%" },
-  { id: "401", top: "81.5%", left: "56.5%", width: "15%",  height: "17%" },
+  { id: "403", top: "81.5%", left: "24%", width: "15%", height: "17%", labelClass: "-translate-y-0 -translate-x-9"},
+  { id: "402", top: "81.5%", left: "40%", width: "16%", height: "17%", labelClass: "items-end pr-1"},
+  { id: "401", top: "81.5%", left: "56.5%", width: "15%",  height: "17%", labelClass: "items-start pr-1 translate-x-2"},
 ];
 
 function statusColor(status: Room["status"], selected: boolean) {
@@ -57,7 +57,7 @@ export default function Floor4({ rooms, selectedRoom, onSelectRoom }: FloorProps
         </div>
       ))}
 
-      {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
+      {ROOM_OVERLAYS.map(({ id, top, left, width, height, labelClass }) => {
         const room = rooms.find((r) => r.id === id);
         if (!room) return null;
         const isSelected = selectedRoom?.id === id;
@@ -67,8 +67,9 @@ export default function Floor4({ rooms, selectedRoom, onSelectRoom }: FloorProps
             key={id}
             onClick={() => onSelectRoom(room)}
             style={{ top, left, width, height }}
-            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}
-          />
+            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}>
+            <RoomOverlayLabel room={room} className={labelClass} />
+          </button>
         );
       })}
     </div>

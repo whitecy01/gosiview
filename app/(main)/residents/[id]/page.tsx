@@ -15,6 +15,7 @@ import {
   Printer,
   X,
   Settings,
+  StickyNote,
 } from "lucide-react";
 import {
   RESIDENT_DETAIL_BY_ROOM,
@@ -45,6 +46,7 @@ import {
   type DbCashSuccession,
   type DbRentPayment,
 } from "@/app/lib/supabase-data";
+import { fromDbCash, toDbCashInput } from "@/app/lib/cash-succession";
 
 // ────────────── 상수 ──────────────
 
@@ -83,55 +85,6 @@ function fmtDate(d: string) {
 function fmtMonthKo(m: string) {
   const [y, mo] = m.split("-");
   return `${y}년 ${parseInt(mo)}월`;
-}
-
-function fromDbCash(db: DbCashSuccession): CashSuccessionRecord {
-  return {
-    billingStart: db.billing_start ?? undefined,
-    billingEnd: db.billing_end ?? undefined,
-    landlordStart: db.landlord_start ?? undefined,
-    landlordEnd: db.landlord_end ?? undefined,
-    tenantStart: db.tenant_start ?? undefined,
-    tenantEnd: db.tenant_end ?? undefined,
-    totalAmount: db.total_amount ?? undefined,
-    totalKwh: db.total_kwh ?? undefined,
-    landlordAmount: db.landlord_amount ?? undefined,
-    landlordKwh: db.landlord_kwh ?? undefined,
-    landlordStartMeter: db.landlord_start_meter ?? undefined,
-    landlordEndMeter: db.landlord_end_meter ?? undefined,
-    tenantAmount: db.tenant_amount ?? undefined,
-    tenantKwh: db.tenant_kwh ?? undefined,
-    bankName: db.bank_name ?? undefined,
-    accountHolder: db.account_holder ?? undefined,
-    accountNumber: db.account_number ?? undefined,
-    paymentDate: db.payment_date ?? undefined,
-    notes: db.notes ?? undefined,
-  };
-}
-
-function toDbCashInput(contractId: string, rec: CashSuccessionRecord) {
-  return {
-    contract_id: contractId,
-    billing_start: rec.billingStart ?? null,
-    billing_end: rec.billingEnd ?? null,
-    landlord_start: rec.landlordStart ?? null,
-    landlord_end: rec.landlordEnd ?? null,
-    tenant_start: rec.tenantStart ?? null,
-    tenant_end: rec.tenantEnd ?? null,
-    total_amount: rec.totalAmount ?? null,
-    total_kwh: rec.totalKwh ?? null,
-    landlord_amount: rec.landlordAmount ?? null,
-    landlord_kwh: rec.landlordKwh ?? null,
-    landlord_start_meter: rec.landlordStartMeter ?? null,
-    landlord_end_meter: rec.landlordEndMeter ?? null,
-    tenant_amount: rec.tenantAmount ?? null,
-    tenant_kwh: rec.tenantKwh ?? null,
-    bank_name: rec.bankName ?? null,
-    account_holder: rec.accountHolder ?? null,
-    account_number: rec.accountNumber ?? null,
-    payment_date: rec.paymentDate ?? null,
-    notes: rec.notes ?? null,
-  };
 }
 
 // ────────────── 공통 스타일 ──────────────
@@ -221,6 +174,8 @@ export default function ResidentDetailPage() {
       },
       rentPayments,
       cashSuccessions: [],
+      memo: activeContract?.memo ?? undefined,
+      contractMonths: activeContract?.contract_months ?? undefined,
     });
   }
 
@@ -236,6 +191,11 @@ export default function ResidentDetailPage() {
       if (a) setAllAgencies(JSON.parse(a));
     } catch { /* ignore */ }
   }, []);
+
+  // 메모 (기본 정보와 독립 섹션)
+  const [editingMemo, setEditingMemo] = useState(false);
+  const [memoDraft, setMemoDraft] = useState("");
+  const [memoSaving, setMemoSaving] = useState(false);
 
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState<Partial<ResidentDetail>>({});
@@ -400,6 +360,7 @@ export default function ResidentDetailPage() {
         deposit_total: infoForm.contractDeposit?.amount ?? null,
         purpose: infoForm.purpose || null,
         real_estate_agency: infoForm.realEstateAgency || null,
+        contract_months: infoForm.contractMonths ?? null,
       });
 
       // DB 저장 성공 후 UI 반영
@@ -418,6 +379,33 @@ export default function ResidentDetailPage() {
       setInfoSaveError(e instanceof Error ? e.message : 'DB 저장 실패. 다시 시도해 주세요.');
     } finally {
       setInfoSaving(false);
+    }
+  }
+
+  // ── 메모 ──
+
+  async function saveMemo() {
+    if (!activeContract) return;
+    setMemoSaving(true);
+    try {
+      const value = memoDraft.trim() || null;
+      await editContract(activeContract.id, { memo: value });
+      setDetail((p) => p ? { ...p, memo: value ?? undefined } : p);
+      setEditingMemo(false);
+    } finally {
+      setMemoSaving(false);
+    }
+  }
+
+  async function deleteMemo() {
+    if (!activeContract) return;
+    setMemoSaving(true);
+    try {
+      await editContract(activeContract.id, { memo: null });
+      setDetail((p) => p ? { ...p, memo: undefined } : p);
+      setEditingMemo(false);
+    } finally {
+      setMemoSaving(false);
     }
   }
 
@@ -678,7 +666,8 @@ export default function ResidentDetailPage() {
 
       {detail && (
         <>
-          {/* ── 기본 정보 ── */}
+          {/* ── 기본 정보 + 메모 ── */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
           <div className={CARD}>
             <div className={SECTION_HEADER}>
               <div>
@@ -798,6 +787,20 @@ export default function ResidentDetailPage() {
                         onChange={(e) => setInfoForm((f) => ({ ...f, contractMoveInDate: e.target.value }))}
                         className={INPUT}
                       />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs text-gray-400">계약 개월 수</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={infoForm.contractMonths ?? ""}
+                          onChange={(e) => setInfoForm((f) => ({ ...f, contractMonths: e.target.value ? Number(e.target.value) : undefined }))}
+                          placeholder="24"
+                          className={INPUT}
+                        />
+                        <span className="shrink-0 text-xs text-gray-500">개월</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -982,27 +985,104 @@ export default function ResidentDetailPage() {
                     </div>
                   );
                 })()}
-                {/* 정보 그리드 */}
-                <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
-                  <InfoField icon={<Home className="h-3.5 w-3.5" />} label="호실" value={`${id}호`} />
-                  <InfoField icon={<Home className="h-3.5 w-3.5" />} label="방 유형" value={room.roomType} />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.utilityIncludedRent}만원`} />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="실제 납부 월세" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(문서 작성 날짜)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약 만료일" value={detail.contractEndDate ? fmtDate(detail.contractEndDate) : "-"} highlight="indigo" />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={detail.actualMoveInDate ? fmtDate(detail.actualMoveInDate) : (room.moveInDate ? fmtDate(room.moveInDate) : "-")} />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="확정 퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : "-"} />
-                  <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
-                  <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="계약금" value={detail.earnestMoney != null ? `₩${detail.earnestMoney.toLocaleString("ko-KR")}` : "-"} />
-                  <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
-                  <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
-                  {activeContract?.birth_date && (
-                    <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="출생년도" value={activeContract.birth_date} />
-                  )}
+                {/* 정보 그룹 */}
+                <div className="space-y-4">
+                  <FieldGroup title="방">
+                    <InfoField icon={<Home className="h-3.5 w-3.5" />} label="호실" value={`${id}호`} />
+                    <InfoField icon={<Home className="h-3.5 w-3.5" />} label="방 유형" value={room.roomType} />
+                    <InfoField icon={<Target className="h-3.5 w-3.5" />} label="거주 목적" value={detail.purpose} />
+                  </FieldGroup>
+
+                  <FieldGroup title="계약 기간">
+                    <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약일(문서 작성 날짜)" value={detail.contractMoveInDate ? fmtDate(detail.contractMoveInDate) : "-"} highlight="indigo" />
+                    <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약 만료일" value={detail.contractEndDate ? fmtDate(detail.contractEndDate) : "-"} highlight="indigo" />
+                    <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="계약 개월 수" value={detail.contractMonths != null ? `${detail.contractMonths}개월` : "-"} highlight="indigo" />
+                    <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="입실일" value={detail.actualMoveInDate ? fmtDate(detail.actualMoveInDate) : (room.moveInDate ? fmtDate(room.moveInDate) : "-")} />
+                    <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="확정 퇴실일" value={detail.actualMoveOutDate ? fmtDate(detail.actualMoveOutDate) : "-"} />
+                  </FieldGroup>
+
+                  <FieldGroup title="금액">
+                    <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="금액(관포)" value={`${detail.utilityIncludedRent}만원`} />
+                    <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="실제 납부 월세" value={`${detail.actualMonthlyRent}만원`} highlight="emerald" />
+                    <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
+                    <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="계약금" value={detail.earnestMoney != null ? `₩${detail.earnestMoney.toLocaleString("ko-KR")}` : "-"} />
+                    <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
+                  </FieldGroup>
+
+                  <FieldGroup title="기타">
+                    <InfoField icon={<MapPin className="h-3.5 w-3.5" />} label="부동산" value={detail.realEstateAgency} />
+                    {activeContract?.birth_date && (
+                      <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="출생년도" value={activeContract.birth_date} />
+                    )}
+                  </FieldGroup>
                 </div>
               </div>
             )}
+          </div>
+
+          {/* ── 메모 ── */}
+          <div className={`${CARD} self-start`}>
+            <div className={SECTION_HEADER}>
+              <div className="flex items-center gap-2">
+                <StickyNote className="h-4 w-4 text-amber-400" />
+                <h2 className="text-base font-semibold text-white">메모</h2>
+              </div>
+              {!editingMemo && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => { setMemoDraft(detail.memo ?? ""); setEditingMemo(true); }}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:text-white"
+                  >
+                    <Pencil className="h-3 w-3" />{detail.memo ? "수정" : "작성"}
+                  </button>
+                  {detail.memo && (
+                    <button
+                      onClick={deleteMemo}
+                      disabled={memoSaving}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] text-gray-600 transition-colors hover:border-rose-500/40 hover:text-rose-400 disabled:opacity-40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6">
+              {editingMemo ? (
+                <div className="space-y-3">
+                  <textarea
+                    autoFocus
+                    rows={8}
+                    value={memoDraft}
+                    onChange={(e) => setMemoDraft(e.target.value)}
+                    placeholder="입실자 관련 메모를 입력하세요"
+                    className={`${INPUT} resize-y`}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setEditingMemo(false)}
+                      disabled={memoSaving}
+                      className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white disabled:opacity-40"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={saveMemo}
+                      disabled={!activeContract || memoSaving}
+                      className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:opacity-40"
+                    >
+                      {memoSaving ? "저장 중…" : "저장"}
+                    </button>
+                  </div>
+                </div>
+              ) : detail.memo ? (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{detail.memo}</p>
+              ) : (
+                <p className="py-8 text-center text-sm text-gray-500">작성된 메모가 없습니다.</p>
+              )}
+            </div>
+          </div>
           </div>
 
           {/* ── 보증금 관리 이력 ── */}
@@ -1833,6 +1913,16 @@ export default function ResidentDetailPage() {
         />
       )}
     </main>
+  );
+}
+
+/** 기본 정보 조회 뷰에서 비슷한 항목끼리 묶어 보여주는 그룹 */
+function FieldGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-[#2A2A2A] bg-[#0D0D0D] px-4 py-3.5">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{title}</p>
+      <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">{children}</div>
+    </div>
   );
 }
 

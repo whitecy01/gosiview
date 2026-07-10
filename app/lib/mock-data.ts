@@ -16,6 +16,7 @@ export type ScheduledResident = {
   birth_date: string | null;
   contractMoveInDate: string;
   contractEndDate?: string;
+  contractMonths?: number;
   actualMoveInDate?: string;
   moveOutDate?: string;
   purpose?: ResidencePurpose;
@@ -248,6 +249,8 @@ export type ResidentDetail = {
   depositReturn: { returned: boolean; returnedAt: string | null };
   rentPayments: RentPayment[];
   cashSuccessions: CashSuccessionRecord[];
+  memo?: string;
+  contractMonths?: number;
 };
 
 // ──────────── 빈 데이터 (Supabase 연동 전까지 빈 상태) ────────────
