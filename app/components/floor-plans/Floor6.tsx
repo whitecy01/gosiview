@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Room } from "./shared";
+import { Room, RoomOverlayLabel } from "./shared";
 
 interface FloorProps {
   rooms: Room[];
@@ -8,7 +8,7 @@ interface FloorProps {
 }
 
 // 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
-const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
+const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string; labelClass?: string }[] = [
   { id: "607", top: "56.5%", left: "12%",   width: "10%", height: "21%" },
   { id: "606", top: "56.5%", left: "22.5%",  width: "9%", height: "21%" },
   { id: "605", top: "56.5%", left: "32%",  width: "6%", height: "21%" },
@@ -37,7 +37,7 @@ export default function Floor6({ rooms, selectedRoom, onSelectRoom }: FloorProps
         priority
       />
 
-      {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
+      {ROOM_OVERLAYS.map(({ id, top, left, width, height, labelClass }) => {
         const room = rooms.find((r) => r.id === id);
         if (!room) return null;
         const isSelected = selectedRoom?.id === id;
@@ -47,8 +47,9 @@ export default function Floor6({ rooms, selectedRoom, onSelectRoom }: FloorProps
             key={id}
             onClick={() => onSelectRoom(room)}
             style={{ top, left, width, height }}
-            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}
-          />
+            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}>
+            <RoomOverlayLabel room={room} className={labelClass} />
+          </button>
         );
       })}
     </div>

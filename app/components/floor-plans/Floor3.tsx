@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Room } from "./shared";
+import { Room, RoomOverlayLabel } from "./shared";
 
 interface FloorProps {
   rooms: Room[];
@@ -8,22 +8,22 @@ interface FloorProps {
 }
 
 // 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
-const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
+const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string; labelClass?: string; labelInline?: boolean }[] = [
   // 위 줄: 307, 308, 309, 310, 311, 312
-  { id: "307", top: "35%", left: "22.5%", width: "9%",   height: "19%" },
-  { id: "308", top: "35%", left: "32%",   width: "9%",   height: "19%" },
-  { id: "309", top: "35%", left: "41.8%", width: "9%",   height: "19%" },
-  { id: "310", top: "35%", left: "51.5%", width: "9%",   height: "19%" },
-  { id: "311", top: "35%", left: "62%",   width: "10%",  height: "19%" },
-  { id: "312", top: "35%", left: "76%",   width: "14%",  height: "15%" },
-  { id: "313", top: "51%", left: "76%",   width: "14%",  height: "14%" },
+  { id: "307", top: "35%", left: "22.5%", width: "9%",   height: "19%" , labelClass: "translate-y-5"},
+  { id: "308", top: "35%", left: "32%",   width: "9%",   height: "19%" , labelClass: "translate-y-5"},
+  { id: "309", top: "35%", left: "41.8%", width: "9%",   height: "19%" , labelClass: "translate-y-5"},
+  { id: "310", top: "35%", left: "51.5%", width: "9%",   height: "19%" , labelClass: "translate-y-5"},
+  { id: "311", top: "35%", left: "62%",   width: "10%",  height: "19%" , labelClass: "translate-y-5"},
+  { id: "312", top: "35%", left: "76%",   width: "14%",  height: "15%" , labelInline: true, labelClass: "translate-y-5"},
+  { id: "313", top: "51%", left: "76%",   width: "14%",  height: "14%" , labelInline: true , labelClass: "translate-y-5"},
   // 아래 줄: 306, 305, 304, 303, 302, 301
-  { id: "306", top: "61%", left: "15%",   width: "8%",   height: "18.5%" },
-  { id: "305", top: "61%", left: "24%",   width: "8%",   height: "18.5%" },
-  { id: "304", top: "61%", left: "33%",   width: "8%",   height: "18.5%" },
-  { id: "303", top: "61%", left: "42%",   width: "9%",   height: "18.5%" },
-  { id: "302", top: "61%", left: "52%",   width: "8%",   height: "18.5%" },
-  { id: "301", top: "61%", left: "60.5%", width: "11.5%", height: "18.5%" },
+  { id: "306", top: "61%", left: "15%",   width: "8%",   height: "18.5%" , labelClass: "-translate-y-6"},
+  { id: "305", top: "61%", left: "24%",   width: "8%",   height: "18.5%", labelClass: "-translate-y-6" },
+  { id: "304", top: "61%", left: "33%",   width: "8%",   height: "18.5%", labelClass: "-translate-y-6" },
+  { id: "303", top: "61%", left: "42%",   width: "9%",   height: "18.5%", labelClass: "-translate-y-6" },
+  { id: "302", top: "61%", left: "52%",   width: "8%",   height: "18.5%" , labelClass: "-translate-y-6"},
+  { id: "301", top: "61%", left: "60.5%", width: "11.5%", height: "18.5%" , labelClass: "-translate-y-6"},
 ];
 
 function statusColor(status: Room["status"], selected: boolean) {
@@ -45,7 +45,7 @@ export default function Floor3({ rooms, selectedRoom, onSelectRoom }: FloorProps
         priority
       />
 
-      {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
+      {ROOM_OVERLAYS.map(({ id, top, left, width, height, labelClass, labelInline }) => {
         const room = rooms.find((r) => r.id === id);
         if (!room) return null;
         const isSelected = selectedRoom?.id === id;
@@ -55,8 +55,9 @@ export default function Floor3({ rooms, selectedRoom, onSelectRoom }: FloorProps
             key={id}
             onClick={() => onSelectRoom(room)}
             style={{ top, left, width, height }}
-            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}
-          />
+            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}>
+            <RoomOverlayLabel room={room} className={labelClass} inline={labelInline} />
+          </button>
         );
       })}
     </div>

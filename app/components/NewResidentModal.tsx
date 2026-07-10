@@ -66,6 +66,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   // 입실 정보
   const [actualMoveInDate, setActualMoveInDate] = useState('');
   const [contractEndDate, setContractEndDate] = useState('');
+  const [contractMonths, setContractMonths] = useState('');
   const [moveOutDate, setMoveOutDate] = useState('');
 
   // 추가 계약 정보
@@ -117,6 +118,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
         real_estate_agency: realEstateAgency || null,
         contract_start_date: contractMoveInDate,
         contract_start_end: contractEndDate || null,
+        contract_months: contractMonths ? Number(contractMonths) : null,
         actual_move_in_date: actualMoveInDate || null,
         actual_move_out_date: moveOutDate || null,
         monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
@@ -303,6 +305,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     <input
                       type="number"
                       min={0}
+                      step={0.1}
                       placeholder="70"
                       value={rentAmount}
                       onChange={(e) => setRentAmount(e.target.value)}
@@ -317,7 +320,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     <input
                       type="number"
                       min={0}
-                      step={10000}
+                      step={1000}
                       placeholder="200000"
                       value={contractDeposit}
                       onChange={(e) => setContractDeposit(e.target.value)}
@@ -334,7 +337,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     <input
                       type="number"
                       min={0}
-                      step={10000}
+                      step={1000}
                       placeholder="100000"
                       value={earnestMoney}
                       onChange={(e) => setEarnestMoney(e.target.value)}
@@ -438,6 +441,20 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
                     onChange={(e) => setContractEndDate(e.target.value)}
                     className={`${inputCls} ${contractEndDate ? 'text-indigo-300' : ''}`}
                   />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">계약 개월 수</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      value={contractMonths}
+                      onChange={(e) => setContractMonths(e.target.value)}
+                      placeholder="24"
+                      className={inputCls}
+                    />
+                    <span className="shrink-0 text-xs text-gray-500">개월</span>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1.5">확정 퇴실일</label>

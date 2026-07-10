@@ -107,6 +107,7 @@ function ResidentForm({
   // 계약 정보
   const [contractMoveInDate, setContractMoveInDate] = useState(initial.contractMoveInDate ?? "");
   const [contractEndDate, setContractEndDate] = useState(initial.contractEndDate ?? "");
+  const [contractMonths, setContractMonths] = useState(initial.contractMonths != null ? String(initial.contractMonths) : "");
   // 입실 정보
   const [actualMoveInDate, setActualMoveInDate] = useState(initial.actualMoveInDate ?? "");
   const [moveOutDate, setMoveOutDate] = useState(initial.moveOutDate ?? "");
@@ -142,6 +143,7 @@ function ResidentForm({
       name, phone, gender, birth_date: birthDate || null,
       contractMoveInDate,
       contractEndDate: contractEndDate || undefined,
+      contractMonths: contractMonths ? Number(contractMonths) : undefined,
       actualMoveInDate: actualMoveInDate || undefined,
       moveOutDate: moveOutDate || undefined,
       purpose: (purpose || undefined) as ResidencePurpose | undefined,
@@ -203,16 +205,25 @@ function ResidentForm({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
+            <label className="block text-xs text-gray-400 mb-1.5">계약 개월 수</label>
+            <div className="flex items-center gap-1.5">
+              <input type="number" min={1} value={contractMonths} onChange={(e) => setContractMonths(e.target.value)} placeholder="24" className={inputCls} />
+              <span className="shrink-0 text-xs text-gray-500">개월</span>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
             <label className="block text-xs text-gray-400 mb-1.5">금액(관포)</label>
             <div className="flex items-center gap-1.5">
-              <input type="number" min={0} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} placeholder="70" className={inputCls} />
+              <input type="number" min={0} step={0.1} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} placeholder="70" className={inputCls} />
               <span className="text-xs text-gray-500 shrink-0">만원</span>
             </div>
           </div>
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">보증금</label>
             <div className="flex items-center gap-1.5">
-              <input type="number" min={0} step={10000} value={contractDeposit} onChange={(e) => setContractDeposit(e.target.value)} placeholder="200000" className={inputCls} />
+              <input type="number" min={0} step={1000} value={contractDeposit} onChange={(e) => setContractDeposit(e.target.value)} placeholder="200000" className={inputCls} />
               <span className="text-xs text-gray-500 shrink-0">원</span>
             </div>
           </div>
@@ -221,7 +232,7 @@ function ResidentForm({
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">계약금</label>
             <div className="flex items-center gap-1.5">
-              <input type="number" min={0} step={10000} value={earnestMoney} onChange={(e) => setEarnestMoney(e.target.value)} placeholder="100000" className={inputCls} />
+              <input type="number" min={0} step={1000} value={earnestMoney} onChange={(e) => setEarnestMoney(e.target.value)} placeholder="100000" className={inputCls} />
               <span className="text-xs text-gray-500 shrink-0">원</span>
             </div>
           </div>
@@ -671,6 +682,13 @@ function ScheduledInfoModal({
                             <span className="text-gray-500 block mb-0.5">계약 만료일</span>
                             {r.contractEndDate
                               ? <span className="text-indigo-300 font-semibold">{r.contractEndDate}</span>
+                              : <span className="text-gray-600 italic">미정</span>
+                            }
+                          </div>
+                          <div className="rounded-lg bg-[#1A1A1A] px-3 py-2 text-xs">
+                            <span className="text-gray-500 block mb-0.5">계약 개월 수</span>
+                            {r.contractMonths != null
+                              ? <span className="text-indigo-300 font-semibold">{r.contractMonths}개월</span>
                               : <span className="text-gray-600 italic">미정</span>
                             }
                           </div>
@@ -1201,6 +1219,7 @@ export default function TenantListTable() {
         birth_date: c.birth_date ?? null,
         contractMoveInDate: c.contract_start_date,
         contractEndDate: c.contract_start_end ?? undefined,
+        contractMonths: c.contract_months ?? undefined,
         actualMoveInDate: c.actual_move_in_date ?? undefined,
         moveOutDate: c.actual_move_out_date ?? undefined,
         purpose: (c.purpose as ResidencePurpose) ?? undefined,
@@ -1225,6 +1244,7 @@ export default function TenantListTable() {
       real_estate_agency: record.realEstateAgency ?? null,
       contract_start_date: record.contractMoveInDate,
       contract_start_end: record.contractEndDate ?? null,
+      contract_months: record.contractMonths ?? null,
       actual_move_in_date: record.actualMoveInDate ?? null,
       actual_move_out_date: record.moveOutDate ?? null,
       monthly_rent: record.monthlyRent ?? null,
@@ -1261,6 +1281,7 @@ export default function TenantListTable() {
       real_estate_agency: record.realEstateAgency ?? null,
       contract_start_date: record.contractMoveInDate,
       contract_start_end: record.contractEndDate ?? null,
+      contract_months: record.contractMonths ?? null,
       actual_move_in_date: record.actualMoveInDate ?? null,
       actual_move_out_date: record.moveOutDate ?? null,
       monthly_rent: record.monthlyRent ?? null,

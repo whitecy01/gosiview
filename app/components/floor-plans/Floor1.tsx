@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Room } from "./shared";
+import { Room, RoomOverlayLabel } from "./shared";
 
 interface FloorProps {
   rooms: Room[];
@@ -8,12 +8,12 @@ interface FloorProps {
 }
 
 // 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
-const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
-  { id: "105", top: "54%", left: "13.5%",  width: "9%", height: "20%" },
-  { id: "104", top: "54%", left: "23%",   width: "9%", height: "20%" },
-  { id: "103", top: "54%", left: "32%", width: "9%", height: "20%" },
-  { id: "102", top: "54%", left: "41.7%",   width: "9%", height: "20%" },
-  { id: "101", top: "54%", left: "51.3%", width: "9%", height: "20%" },
+const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string; labelClass?: string }[] = [
+  { id: "105", top: "54%", left: "13.5%",  width: "9%", height: "20%", labelClass: "-translate-y-4"  },
+  { id: "104", top: "54%", left: "23%",   width: "9%", height: "20%", labelClass: "-translate-y-4"  },
+  { id: "103", top: "54%", left: "32%", width: "9%", height: "20%", labelClass: "-translate-y-4"  },
+  { id: "102", top: "54%", left: "41.7%",   width: "9%", height: "20%", labelClass: "-translate-y-4"  },
+  { id: "101", top: "54%", left: "51.3%", width: "9%", height: "20%", labelClass: "-translate-y-4"  },
 ];
 
 function statusColor(status: Room["status"], selected: boolean) {
@@ -38,7 +38,7 @@ export default function Floor1({ rooms, selectedRoom, onSelectRoom }: FloorProps
       />
 
       {/* 방 오버레이 */}
-      {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
+      {ROOM_OVERLAYS.map(({ id, top, left, width, height, labelClass }) => {
         const room = rooms.find((r) => r.id === id);
         if (!room) return null;
         const isSelected = selectedRoom?.id === id;
@@ -50,6 +50,7 @@ export default function Floor1({ rooms, selectedRoom, onSelectRoom }: FloorProps
             style={{ top, left, width, height }}
             className={`absolute rounded border cursor-pointer transition-all duration-150 flex flex-col items-center justify-center gap-0.5 ${statusColor(room.status, isSelected)}`}
           >
+            <RoomOverlayLabel room={room} className={labelClass} />
           </button>
         );
       })}

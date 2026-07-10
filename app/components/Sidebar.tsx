@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, CalendarRange, LayoutDashboard, Users, LogOut, ListTodo, BarChart2 } from 'lucide-react';
+import { Building2, CalendarRange, LayoutDashboard, Users, LogOut, ListTodo, BarChart2, Printer } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/app/lib/supabase/client';
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/residents', icon: Users, label: '입실자 관리' },
   { href: '/calendar', icon: CalendarRange, label: '연간 캘린더' },
   { href: '/stats', icon: BarChart2, label: '통계' },
+  { href: '/print', icon: Printer, label: '출력' },
 ];
 
 export default function Sidebar({ collapsed }: SidebarProps) {

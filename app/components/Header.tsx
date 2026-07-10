@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { PanelLeftClose, PanelLeftOpen, UserPlus, LogOut } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, UserPlus, LogOut, Bell } from 'lucide-react';
 import { createClient } from '@/app/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import ChangelogModal from './ChangelogModal';
+import { CHANGELOG_SEEN_KEY, LATEST_VERSION } from '@/app/lib/changelog';
 
 interface HeaderProps {
   collapsed: boolean;
@@ -15,6 +17,8 @@ export default function Header({ collapsed, onToggle, onNewResident }: HeaderPro
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,6 +27,22 @@ export default function Header({ collapsed, onToggle, onNewResident }: HeaderPro
       setEmail(data.user?.email ?? null);
     });
   }, []);
+
+  // 마지막으로 본 버전과 다르면 배지 표시
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem(CHANGELOG_SEEN_KEY);
+      if (seen !== LATEST_VERSION) setHasUnread(true);
+    } catch { /* ignore */ }
+  }, []);
+
+  function openChangelog() {
+    setShowChangelog(true);
+    setHasUnread(false);
+    try {
+      localStorage.setItem(CHANGELOG_SEEN_KEY, LATEST_VERSION);
+    } catch { /* ignore */ }
+  }
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
@@ -72,6 +92,19 @@ export default function Header({ collapsed, onToggle, onNewResident }: HeaderPro
             신규 입실자 등록
           </button>
 
+          {/* 업데이트 소식 */}
+          <button
+            type="button"
+            onClick={openChangelog}
+            title="업데이트 소식"
+            className="relative flex items-center justify-center rounded-lg p-2 text-gray-400 transition-colors hover:bg-[#1A1A1A] hover:text-white"
+          >
+            <Bell className="h-5 w-5" />
+            {hasUnread && (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-[#0A0A0A]" />
+            )}
+          </button>
+
           {/* 프로필 드롭다운 */}
           <div className="relative" ref={dropdownRef}>
             <button
@@ -110,6 +143,8 @@ export default function Header({ collapsed, onToggle, onNewResident }: HeaderPro
           </div>
         </div>
       </div>
+
+      {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
     </header>
   );
 }

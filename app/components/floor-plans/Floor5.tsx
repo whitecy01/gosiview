@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Room } from "./shared";
+import { Room, RoomOverlayLabel } from "./shared";
 
 interface FloorProps {
   rooms: Room[];
@@ -8,14 +8,14 @@ interface FloorProps {
 }
 
 // 실제 도면 이미지 기준 각 방의 위치 (%, 이미지 좌상단 기준)
-const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string }[] = [
-  { id: "506", top: "52%", left: "12.8%",   width: "9.5%", height: "28%" },
-  { id: "505", top: "60%", left: "23.5%",  width: "8%", height: "20%" },
-  { id: "504", top: "60%", left: "33%",  width: "8%", height: "20%" },
-  { id: "503", top: "60%", left: "42%",  width: "8%", height: "20%" },
-  { id: "502", top: "60%", left: "51%",  width: "8%", height: "20%" },
-  { id: "501", top: "60%", left: "60%",  width: "11%", height: "20%" },
-  { id: "507", top: "52%", left: "76%",  width: "13.5%", height: "15%" },
+const ROOM_OVERLAYS: { id: string; top: string; left: string; width: string; height: string; labelClass?: string; labelInline?: boolean }[] = [
+  { id: "506", top: "52%", left: "12.8%",   width: "9.5%", height: "28%", labelClass: "translate-y-9"},
+  { id: "505", top: "60%", left: "23.5%",  width: "8%", height: "20%", labelClass: "-translate-y-5" },
+  { id: "504", top: "60%", left: "33%",  width: "8%", height: "20%" , labelClass: "-translate-y-5"},
+  { id: "503", top: "60%", left: "42%",  width: "8%", height: "20%" , labelClass: "-translate-y-5"},
+  { id: "502", top: "60%", left: "51%",  width: "8%", height: "20%" , labelClass: "-translate-y-5"},
+  { id: "501", top: "60%", left: "60%",  width: "11%", height: "20%" , labelClass: "-translate-y-5"},
+  { id: "507", top: "52%", left: "76%",  width: "13.5%", height: "15%" , labelInline: true , labelClass: "-translate-y-5"},
 ];
 
 function statusColor(status: Room["status"], selected: boolean) {
@@ -37,7 +37,7 @@ export default function Floor5({ rooms, selectedRoom, onSelectRoom }: FloorProps
         priority
       />
 
-      {ROOM_OVERLAYS.map(({ id, top, left, width, height }) => {
+      {ROOM_OVERLAYS.map(({ id, top, left, width, height, labelClass, labelInline }) => {
         const room = rooms.find((r) => r.id === id);
         if (!room) return null;
         const isSelected = selectedRoom?.id === id;
@@ -47,8 +47,9 @@ export default function Floor5({ rooms, selectedRoom, onSelectRoom }: FloorProps
             key={id}
             onClick={() => onSelectRoom(room)}
             style={{ top, left, width, height }}
-            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}
-          />
+            className={`absolute rounded border cursor-pointer transition-all duration-150 ${statusColor(room.status, isSelected)}`}>
+            <RoomOverlayLabel room={room} className={labelClass} inline={labelInline} />
+          </button>
         );
       })}
     </div>
