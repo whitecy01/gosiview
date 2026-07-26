@@ -1,10 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Printer, Zap, X } from "lucide-react";
-import { fetchAllCashSuccessions, type DbCashSuccession } from "@/app/lib/supabase-data";
+import { ChevronLeft, ChevronRight, Printer, Zap, X, Wrench, Users } from "lucide-react";
+import {
+  fetchAllCashSuccessions, fetchAllMaintenanceRecords, fetchCommonSpaces,
+  type DbCashSuccession, type DbMaintenanceRecord, type DbCommonSpace,
+} from "@/app/lib/supabase-data";
 import { fromDbCash } from "@/app/lib/cash-succession";
 import { useRooms } from "@/app/context/RoomsContext";
+import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
 import { type CashSuccessionRecord } from "@/app/lib/mock-data";
 
 // ────────────── 상수 ──────────────
@@ -91,6 +95,118 @@ function printItems(items: CashItem[], title: string) {
   win.print();
 }
 
+// ────────────── 유지보수 출력 ──────────────
+
+function printMaintenance(records: DbMaintenanceRecord[], title: string, label: (r: DbMaintenanceRecord) => string) {
+  if (records.length === 0) return;
+  const win = window.open("", "_blank");
+  if (!win) return;
+  const total = records.reduce((s, r) => s + r.amount, 0);
+  const td = 'style="border:1px solid #ccc;padding:6px 8px;"';
+  const rowsHtml = records
+    .map((r) => `
+      <tr>
+        <td ${td}>${r.date}</td>
+        <td ${td}>${label(r)}</td>
+        <td style="border:1px solid #ccc;padding:6px 8px;text-align:left;">${r.details.join(", ")}</td>
+        <td style="border:1px solid #ccc;padding:6px 8px;text-align:right;">₩${r.amount.toLocaleString("ko-KR")}</td>
+      </tr>`)
+    .join("");
+  win.document.head.innerHTML = `<meta charset="utf-8"><title>${title}</title><style>${PRINT_STYLE}</style>`;
+  win.document.body.innerHTML = `
+    <h2>방 유지보수 내역 — ${title}</h2>
+    <p>총 ${records.length}건 · 합계 ₩${total.toLocaleString("ko-KR")}</p>
+    <table>
+      <thead>
+        <tr>
+          <th style="border:1px solid #ccc;padding:6px 8px;">날짜</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;">대상</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;">항목</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;">금액</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+        <tr>
+          <td style="border:1px solid #ccc;padding:6px 8px;font-weight:bold;" colspan="3">합계</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right;font-weight:bold;">₩${total.toLocaleString("ko-KR")}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+  win.focus();
+  win.print();
+}
+
+// ────────────── 입실 현황표 출력 ──────────────
+
+type OccupancyRow = {
+  roomId: string;
+  floor: number;
+  status: "occupied" | "vacant" | "contract";
+  name: string;
+  moveIn: string;
+  moveOut: string;
+  rent: string;
+  dueDay: string;
+};
+
+const STATUS_LABEL: Record<OccupancyRow["status"], string> = {
+  occupied: "입실중", vacant: "공실", contract: "예정",
+};
+
+function printOccupancy(rows: OccupancyRow[]) {
+  const win = window.open("", "_blank");
+  if (!win) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const occupied = rows.filter((r) => r.status === "occupied").length;
+  const vacant = rows.filter((r) => r.status === "vacant").length;
+  const contract = rows.filter((r) => r.status === "contract").length;
+
+  const style = `
+    body{font-family:sans-serif;color:#000;padding:12px;}
+    h2{font-size:14px;font-weight:bold;margin-bottom:2px;}
+    p{margin-bottom:8px;font-size:9px;color:#555;}
+    table{width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;}
+    th,td{border:1px solid #ccc;padding:1.5px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    th{background:#f5f5f5;}
+    td.name{text-align:left;}
+    tr.vacant td{color:#999;}
+    /* 한 장에 맞게 행 높이·글자 자동 축소 */
+    @page{size:A4 portrait;margin:0.6cm;}
+  `;
+  const rowHtml = (r: OccupancyRow) => `
+    <tr class="${r.status === "vacant" ? "vacant" : ""}">
+      <td>${r.roomId}</td>
+      <td class="name">${r.name}</td>
+      <td>${STATUS_LABEL[r.status]}</td>
+      <td>${r.moveIn}</td>
+      <td>${r.moveOut}</td>
+      <td style="text-align:right;">${r.rent}</td>
+      <td>${r.dueDay}</td>
+    </tr>`;
+
+  win.document.head.innerHTML = `<meta charset="utf-8"><title>입실 현황표</title><style>${style}</style>`;
+  win.document.body.innerHTML = `
+    <h2>입실 현황표</h2>
+    <p>${today} 기준 · 전체 ${rows.length}실 · 입실중 ${occupied} · 공실 ${vacant} · 예정 ${contract}</p>
+    <table>
+      <colgroup>
+        <col style="width:9%"><col style="width:22%"><col style="width:10%">
+        <col style="width:17%"><col style="width:17%"><col style="width:16%"><col style="width:9%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>호실</th><th>이름</th><th>상태</th><th>입실일</th><th>만료일</th><th>월세</th><th>납부일</th>
+        </tr>
+      </thead>
+      <tbody>${rows.map(rowHtml).join("")}</tbody>
+    </table>
+  `;
+  win.focus();
+  win.print();
+}
+
 // ────────────── 날짜별 모달 ──────────────
 
 function DayModal({ date, items, onClose }: { date: string; items: CashItem[]; onClose: () => void }) {
@@ -171,15 +287,69 @@ export default function PrintPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [rows, setRows] = useState<DbCashSuccession[]>([]);
+  const [maintenance, setMaintenance] = useState<DbMaintenanceRecord[]>([]);
+  const [commonSpaces, setCommonSpaces] = useState<DbCommonSpace[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [tab, setTab] = useState<"cash" | "maintenance" | "occupancy">("cash");
+  const [maintScope, setMaintScope] = useState<"month" | "year">("month");
   const { contracts } = useRooms();
+  const { effectiveRooms } = useEffectiveRooms();
+
+  /** 입실 현황표 행 (호실 오름차순) */
+  const occupancyRows = useMemo<OccupancyRow[]>(() => {
+    const contractById = new Map(contracts.map((c) => [c.id, c]));
+    return [...effectiveRooms]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((room) => {
+        const c = room.contractId ? contractById.get(room.contractId) : undefined;
+        const dueDay = c?.payment_due_day ?? (room.moveInDate ? new Date(room.moveInDate).getDate() : null);
+        return {
+          roomId: room.id,
+          floor: room.floor,
+          status: room.status,
+          name: room.resident ?? "-",
+          moveIn: room.moveInDate ? room.moveInDate.slice(0, 10) : "-",
+          moveOut: room.moveOutDate ? room.moveOutDate.slice(0, 10) : "-",
+          rent: room.monthlyRent ?? "-",
+          dueDay: dueDay ? `${dueDay}일` : "-",
+        };
+      });
+  }, [effectiveRooms, contracts]);
 
   const load = useCallback(async () => {
-    const data = await fetchAllCashSuccessions();
-    setRows(data);
+    const [cash, maint, spaces] = await Promise.all([
+      fetchAllCashSuccessions(),
+      fetchAllMaintenanceRecords(),
+      fetchCommonSpaces(),
+    ]);
+    setRows(cash);
+    setMaintenance(maint);
+    setCommonSpaces(spaces);
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const maintLabel = useCallback((r: DbMaintenanceRecord) => {
+    if (r.common_space_id) return commonSpaces.find((s) => s.id === r.common_space_id)?.name ?? "공용 공간";
+    return `${r.room_id}호`;
+  }, [commonSpaces]);
+
+  /** 선택 기간(월/연)에 해당하는 유지보수 내역 (날짜 오름차순) */
+  const maintInPeriod = useMemo(() => {
+    const prefix = maintScope === "month"
+      ? `${year}-${String(month).padStart(2, "0")}`
+      : `${year}-`;
+    return maintenance
+      .filter((r) => r.date.startsWith(prefix))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [maintenance, maintScope, year, month]);
+
+  const maintTotal = useMemo(
+    () => maintInPeriod.reduce((s, r) => s + r.amount, 0),
+    [maintInPeriod]
+  );
+
+  const periodLabel = maintScope === "month" ? `${year}년 ${month}월` : `${year}년`;
 
   /** 청구 종료일(billing_end) 기준으로 그룹핑 */
   const itemsByDate = useMemo(() => {
@@ -231,6 +401,35 @@ export default function PrintPage() {
 
   return (
     <main className="w-full space-y-6">
+      {/* 탭 */}
+      <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1 w-fit">
+        <button
+          onClick={() => setTab("cash")}
+          className={`flex items-center gap-1.5 rounded-md px-4 py-1.5 text-xs font-medium transition-colors ${
+            tab === "cash" ? "bg-amber-500/20 text-amber-300" : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <Zap className="h-3.5 w-3.5" />현금 승계
+        </button>
+        <button
+          onClick={() => setTab("maintenance")}
+          className={`flex items-center gap-1.5 rounded-md px-4 py-1.5 text-xs font-medium transition-colors ${
+            tab === "maintenance" ? "bg-violet-500/20 text-violet-300" : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <Wrench className="h-3.5 w-3.5" />유지보수
+        </button>
+        <button
+          onClick={() => setTab("occupancy")}
+          className={`flex items-center gap-1.5 rounded-md px-4 py-1.5 text-xs font-medium transition-colors ${
+            tab === "occupancy" ? "bg-indigo-500/20 text-indigo-300" : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <Users className="h-3.5 w-3.5" />입실 현황
+        </button>
+      </div>
+
+      {tab === "cash" && (
       <div className="rounded-2xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
         {/* 헤더 */}
         <div className="mb-6 flex items-center justify-between">
@@ -312,6 +511,160 @@ export default function PrintPage() {
           })}
         </div>
       </div>
+      )}
+
+      {tab === "maintenance" && (
+        <div className="rounded-2xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
+          {/* 헤더 */}
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-violet-400" />
+              <div>
+                <h2 className="text-sm font-semibold text-white">유지보수 출력</h2>
+                <p className="text-xs text-gray-500">기간을 선택해 방 유지보수 내역을 PDF로 출력합니다</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* 월/연 토글 */}
+              <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
+                {([["month", "월별"], ["year", "연별"]] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setMaintScope(key)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                      maintScope === key ? "bg-violet-500/20 text-violet-300" : "text-gray-500 hover:text-gray-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => printMaintenance(maintInPeriod, periodLabel, maintLabel)}
+                disabled={maintInPeriod.length === 0}
+                className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-[#1A1A1A] hover:text-white disabled:opacity-40"
+              >
+                <Printer size={13} />
+                PDF 출력 ({maintInPeriod.length})
+              </button>
+
+              {/* 기간 이동 */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => (maintScope === "month" ? prevMonth() : setYear((y) => y - 1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-[#1A1A1A] hover:text-white"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <h2 className="text-lg font-bold text-white">{periodLabel}</h2>
+                <button
+                  onClick={() => (maintScope === "month" ? nextMonth() : setYear((y) => y + 1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-[#1A1A1A] hover:text-white"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 표 */}
+          {maintInPeriod.length === 0 ? (
+            <p className="py-16 text-center text-sm text-gray-500">해당 기간에 유지보수 내역이 없습니다.</p>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-[#2A2A2A]">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#2A2A2A] bg-[#0D0D0D] text-xs text-gray-400">
+                    <th className="px-4 py-2.5 text-left font-medium">날짜</th>
+                    <th className="px-4 py-2.5 text-left font-medium">대상</th>
+                    <th className="px-4 py-2.5 text-left font-medium">항목</th>
+                    <th className="px-4 py-2.5 text-right font-medium">금액</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1E1E1E]">
+                  {maintInPeriod.map((r) => (
+                    <tr key={r.id} className="text-gray-200">
+                      <td className="px-4 py-2.5 text-gray-400">{r.date}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="font-semibold text-violet-300">{maintLabel(r)}</span>
+                      </td>
+                      <td className="px-4 py-2.5">{r.details.join(", ")}</td>
+                      <td className="px-4 py-2.5 text-right font-medium">₩{r.amount.toLocaleString("ko-KR")}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t border-[#2A2A2A] bg-[#0D0D0D] font-semibold text-white">
+                    <td className="px-4 py-2.5" colSpan={3}>합계 ({maintInPeriod.length}건)</td>
+                    <td className="px-4 py-2.5 text-right text-violet-300">₩{maintTotal.toLocaleString("ko-KR")}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "occupancy" && (
+        <div className="rounded-2xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
+          {/* 헤더 */}
+          <div className="mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-indigo-400" />
+              <div>
+                <h2 className="text-sm font-semibold text-white">입실 현황표</h2>
+                <p className="text-xs text-gray-500">
+                  오늘 기준 전체 방 현황 · 전체 {occupancyRows.length}실 · 입실중 {occupancyRows.filter((r) => r.status === "occupied").length} · 공실 {occupancyRows.filter((r) => r.status === "vacant").length} · 예정 {occupancyRows.filter((r) => r.status === "contract").length}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => printOccupancy(occupancyRows)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-[#1A1A1A] hover:text-white"
+            >
+              <Printer size={13} />PDF 출력 (한 장)
+            </button>
+          </div>
+
+          {/* 미리보기 표 */}
+          <div className="overflow-hidden rounded-xl border border-[#2A2A2A]">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#2A2A2A] bg-[#0D0D0D] text-xs text-gray-400">
+                  <th className="px-3 py-2 text-left font-medium">호실</th>
+                  <th className="px-3 py-2 text-left font-medium">이름</th>
+                  <th className="px-3 py-2 text-center font-medium">상태</th>
+                  <th className="px-3 py-2 text-left font-medium">입실일</th>
+                  <th className="px-3 py-2 text-left font-medium">만료일</th>
+                  <th className="px-3 py-2 text-right font-medium">월세</th>
+                  <th className="px-3 py-2 text-center font-medium">납부일</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#1E1E1E]">
+                {occupancyRows.map((r) => (
+                  <tr key={r.roomId} className={r.status === "vacant" ? "text-gray-600" : "text-gray-200"}>
+                    <td className="px-3 py-1.5 font-semibold text-indigo-300">{r.roomId}</td>
+                    <td className="px-3 py-1.5">{r.name}</td>
+                    <td className="px-3 py-1.5 text-center">
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                        r.status === "occupied" ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-300"
+                        : r.status === "vacant" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                        : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                      }`}>
+                        {STATUS_LABEL[r.status]}
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5">{r.moveIn}</td>
+                    <td className="px-3 py-1.5">{r.moveOut}</td>
+                    <td className="px-3 py-1.5 text-right">{r.rent}</td>
+                    <td className="px-3 py-1.5 text-center">{r.dueDay}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {selectedDate && (
         <DayModal

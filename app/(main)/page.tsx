@@ -1,13 +1,17 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check, Banknote, CalendarX, Repeat, Wrench } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, Pencil, Trash2, X, Check, Banknote, CalendarX, Repeat, Wrench, GripVertical } from 'lucide-react';
 import {
   fetchTodos, insertTodo, updateTodo, deleteTodoById, type DbTodo,
   fetchRecurringTodos, insertRecurringTodo, updateRecurringTodo, deleteRecurringTodo, type DbRecurringTodo,
-  fetchAllMaintenanceRecords, type DbMaintenanceRecord,
+  fetchAllMaintenanceRecords, insertMaintenanceRecord, deleteMaintenanceRecord, type DbMaintenanceRecord,
+  fetchAllRentPayments, type DbRentPayment,
+  fetchCommonSpaces, insertCommonSpace, deleteCommonSpace, type DbCommonSpace,
 } from '@/app/lib/supabase-data';
 import { useRooms } from '@/app/context/RoomsContext';
+import { DEFAULT_DETAIL_OPTIONS, DETAIL_OPTIONS_LS_KEY } from '@/app/components/OptionsManagerModal';
+import { effectiveDueDay } from '@/app/lib/utils';
 
 // ──────────── 타입 ────────────
 
@@ -17,7 +21,11 @@ type Todo = {
   text: string;
   done: boolean;
   color: string;
+  sortOrder: number | null;
 };
+
+/** 월세 납부 대상자 + 그 달 납부 여부 */
+type RentReminder = { name: string; paid: boolean };
 
 type RecurringTodo = {
   id: string;
@@ -71,7 +79,7 @@ function getFirstDayOfWeek(year: number, month: number) {
   return new Date(year, month - 1, 1).getDay();
 }
 function fromDb(db: DbTodo): Todo {
-  return { id: db.id, date: db.date, text: db.text, done: db.done, color: db.color ?? 'gray' };
+  return { id: db.id, date: db.date, text: db.text, done: db.done, color: db.color ?? 'gray', sortOrder: db.sort_order };
 }
 function fromDbRecurring(db: DbRecurringTodo): RecurringTodo {
   return {
@@ -128,6 +136,82 @@ function ColorPicker({ selected, onChange }: { selected: string; onChange: (c: s
           className={`w-4 h-4 rounded-full transition-transform ${dotClass(c)} ${selected === c ? 'ring-2 ring-white/60 scale-125' : 'hover:scale-110'}`}
         />
       ))}
+    </div>
+  );
+}
+
+// ──────────── 공용 공간 관리 모달 ────────────
+
+function CommonSpaceManagerModal({
+  commonSpaces, onAdd, onDelete, onClose,
+}: {
+  commonSpaces: DbCommonSpace[];
+  onAdd: (name: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    const v = name.trim();
+    if (!v || saving) return;
+    setSaving(true);
+    try {
+      await onAdd(v);
+      setName('');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="flex w-full max-w-sm flex-col rounded-2xl border border-[#2A2A2A] bg-[#111] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
+          <div className="flex items-center gap-2">
+            <Wrench size={16} className="text-violet-400" />
+            <h2 className="text-base font-semibold text-white">공용 공간 관리</h2>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="max-h-72 flex-1 overflow-y-auto p-4 space-y-2">
+          {commonSpaces.length === 0 && (
+            <p className="py-6 text-center text-sm text-gray-500">등록된 공용 공간이 없습니다.</p>
+          )}
+          {commonSpaces.map((s) => (
+            <div key={s.id} className="flex items-center gap-2 rounded-xl border border-[#2A2A2A] bg-[#161616] px-4 py-2.5">
+              <Wrench size={13} className="shrink-0 text-violet-400" />
+              <span className="flex-1 text-sm text-white">{s.name}</span>
+              <button onClick={() => onDelete(s.id)} className="rounded p-1 text-gray-500 hover:text-rose-400 hover:bg-[#222] transition-colors">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-[#2A2A2A] p-4">
+          <div className="flex gap-2">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+              placeholder="예: 공용주방, 세탁실"
+              className="flex-1 rounded-xl border border-[#2A2A2A] bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-gray-600 outline-none focus:border-violet-500 transition-colors"
+            />
+            <button
+              onClick={submit}
+              disabled={!name.trim() || saving}
+              className="flex items-center gap-1.5 rounded-xl bg-violet-500 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-400 transition-colors disabled:opacity-40"
+            >
+              <Plus size={15} />추가
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -414,27 +498,82 @@ function RecurringTodoManagerModal({
 
 function TodoModal({
   date, todos, recurringTodos, rentReminders, expiryReminders, maintenanceRecords,
-  onAdd, onEdit, onDelete, onToggle, onColorChange, onClose,
+  roomIds, commonSpaces, detailOptions,
+  onAdd, onEdit, onDelete, onToggle, onColorChange, onReorder, onAddMaintenance, onDeleteMaintenance, onAddDetailOption, onClose,
 }: {
   date: string;
   todos: Todo[];
   recurringTodos: RecurringTodo[];
-  rentReminders: string[];
+  rentReminders: RentReminder[];
   expiryReminders: string[];
   maintenanceRecords: DbMaintenanceRecord[];
+  roomIds: string[];
+  commonSpaces: DbCommonSpace[];
+  detailOptions: string[];
   onAdd: (text: string, color: string) => Promise<void>;
   onEdit: (id: string, text: string, color: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onToggle: (id: string) => Promise<void>;
   onColorChange: (id: string, color: string) => Promise<void>;
+  onReorder: (orderedIds: string[]) => Promise<void>;
+  onAddMaintenance: (target: { roomId?: string; commonSpaceId?: string }, amount: number, details: string[]) => Promise<void>;
+  onDeleteMaintenance: (id: string) => Promise<void>;
+  onAddDetailOption: (v: string) => void;
   onClose: () => void;
 }) {
   const [input, setInput] = useState('');
   const [newColor, setNewColor] = useState<string>('indigo');
+
+  // 유지보수 입력 — mode: 'room'(호실) | 'common'(공용 공간)
+  const [maintMode, setMaintMode] = useState<'room' | 'common' | null>(null);
+  const [maintTarget, setMaintTarget] = useState(''); // room id 또는 common space id
+  const [maintDetails, setMaintDetails] = useState<string[]>([]);
+  const [maintCustom, setMaintCustom] = useState('');
+  const [showMaintCustom, setShowMaintCustom] = useState(false);
+  const [maintAmount, setMaintAmount] = useState('');
+  const [maintSaving, setMaintSaving] = useState(false);
+
+  const commonSpaceName = (id: string | null) => commonSpaces.find((s) => s.id === id)?.name ?? '공용 공간';
+  const maintLabel = (m: DbMaintenanceRecord) => m.common_space_id ? commonSpaceName(m.common_space_id) : `${m.room_id}호`;
+
+  function openMaint(mode: 'room' | 'common') {
+    setMaintMode(mode); setMaintTarget(''); setMaintDetails([]); setMaintCustom(''); setShowMaintCustom(false); setMaintAmount('');
+  }
+  function resetMaint() {
+    setMaintMode(null); setMaintTarget(''); setMaintDetails([]); setMaintCustom(''); setShowMaintCustom(false); setMaintAmount('');
+  }
+  async function submitMaint() {
+    if (!maintTarget || maintDetails.length === 0 || maintSaving) return;
+    setMaintSaving(true);
+    try {
+      const target = maintMode === 'common' ? { commonSpaceId: maintTarget } : { roomId: maintTarget };
+      await onAddMaintenance(target, Number(maintAmount) || 0, maintDetails);
+      resetMaint();
+    } finally {
+      setMaintSaving(false);
+    }
+  }
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [editColor, setEditColor] = useState<string>('gray');
   const [adding, setAdding] = useState(false);
+
+  // 할일 순서 변경 (드래그 + 화살표)
+  const [dragId, setDragId] = useState<string | null>(null);
+  function moveTodo(fromIdx: number, toIdx: number) {
+    if (toIdx < 0 || toIdx >= todos.length || fromIdx === toIdx) return;
+    const ids = todos.map(t => t.id);
+    const [m] = ids.splice(fromIdx, 1);
+    ids.splice(toIdx, 0, m);
+    onReorder(ids);
+  }
+  function dropOn(targetIdx: number) {
+    if (!dragId) return;
+    const fromIdx = todos.findIndex(t => t.id === dragId);
+    setDragId(null);
+    if (fromIdx === -1) return;
+    moveTodo(fromIdx, targetIdx);
+  }
 
   const [y, m, d] = date.split('-');
   const label = `${y}년 ${parseInt(m)}월 ${parseInt(d)}일`;
@@ -474,9 +613,36 @@ function TodoModal({
           {todos.length === 0 && (
             <p className="py-4 text-center text-sm text-gray-500">등록된 할일이 없습니다.</p>
           )}
-          {todos.map((todo) => (
-            <div key={todo.id} className="rounded-xl border border-[#2A2A2A] bg-[#161616] overflow-hidden">
+          {todos.map((todo, idx) => (
+            <div
+              key={todo.id}
+              draggable={editId !== todo.id}
+              onDragStart={() => setDragId(todo.id)}
+              onDragEnd={() => setDragId(null)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => dropOn(idx)}
+              className={`rounded-xl border bg-[#161616] overflow-hidden transition-colors ${
+                dragId === todo.id ? 'border-indigo-500 opacity-60' : 'border-[#2A2A2A]'
+              }`}
+            >
               <div className="flex items-center gap-2 px-3 py-2.5">
+                {/* 드래그 핸들 + 순서 화살표 */}
+                <div className="flex shrink-0 items-center">
+                  <span className="cursor-grab text-gray-600 hover:text-gray-400" title="드래그해서 순서 변경">
+                    <GripVertical size={14} />
+                  </span>
+                  <div className="flex flex-col">
+                    <button onClick={() => moveTodo(idx, idx - 1)} disabled={idx === 0}
+                      className="text-gray-600 hover:text-indigo-400 disabled:opacity-25 disabled:hover:text-gray-600">
+                      <ChevronUp size={12} />
+                    </button>
+                    <button onClick={() => moveTodo(idx, idx + 1)} disabled={idx === todos.length - 1}
+                      className="text-gray-600 hover:text-indigo-400 disabled:opacity-25 disabled:hover:text-gray-600">
+                      <ChevronDown size={12} />
+                    </button>
+                  </div>
+                </div>
+
                 {/* 완료 체크 */}
                 <button
                   onClick={() => onToggle(todo.id)}
@@ -557,10 +723,18 @@ function TodoModal({
         {rentReminders.length > 0 && (
           <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-500/80">월세 납부일</p>
-            {rentReminders.map((name) => (
-              <div key={name} className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
-                <Banknote size={13} className="shrink-0 text-amber-400" />
-                <span className="text-sm text-amber-200">{name} 월세 납부 필요</span>
+            {rentReminders.map((r) => (
+              <div key={r.name}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+                  r.paid ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-rose-500/20 bg-rose-500/10'
+                }`}>
+                <Banknote size={13} className={`shrink-0 ${r.paid ? 'text-emerald-400' : 'text-rose-400'}`} />
+                <span className={`flex-1 text-sm ${r.paid ? 'text-emerald-200' : 'text-rose-200'}`}>{r.name}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  r.paid ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                }`}>
+                  {r.paid ? '납부 완료' : '미납'}
+                </span>
               </div>
             ))}
           </div>
@@ -580,22 +754,162 @@ function TodoModal({
         )}
 
         {/* 유지보수 */}
-        {maintenanceRecords.length > 0 && (
-          <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
+        <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
+          <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500/80">유지보수</p>
-            {maintenanceRecords.map((m) => (
-              <div key={m.id} className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-2">
-                <Wrench size={13} className="shrink-0 text-violet-400" />
-                <span className="flex-1 text-sm text-violet-200">
-                  {m.room_id}호 {m.details.join(', ')}
-                </span>
-                <span className="shrink-0 text-xs font-semibold text-violet-300">
-                  ₩{m.amount.toLocaleString('ko-KR')}
-                </span>
+            {maintMode === null && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => openMaint('room')}
+                  className="flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300 hover:bg-violet-500/20 transition-colors"
+                >
+                  <Plus size={11} />추가
+                </button>
+                <button
+                  onClick={() => openMaint('common')}
+                  className="flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300 hover:bg-violet-500/20 transition-colors"
+                >
+                  <Plus size={11} />공용 공간 이력 추가
+                </button>
               </div>
-            ))}
+            )}
           </div>
-        )}
+
+          {maintenanceRecords.map((m) => (
+            <div key={m.id} className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-2">
+              <Wrench size={13} className="shrink-0 text-violet-400" />
+              <span className="flex-1 text-sm text-violet-200">
+                {maintLabel(m)} {m.details.join(', ')}
+              </span>
+              <span className="shrink-0 text-xs font-semibold text-violet-300">
+                ₩{m.amount.toLocaleString('ko-KR')}
+              </span>
+              <button
+                onClick={() => onDeleteMaintenance(m.id)}
+                className="shrink-0 rounded p-0.5 text-gray-500 hover:text-rose-400 hover:bg-[#222] transition-colors"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+
+          {maintMode !== null && (
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#161616] p-3 space-y-2.5">
+              <p className="text-[11px] font-semibold text-violet-300">
+                {maintMode === 'common' ? '공용 공간 이력 추가' : '유지보수 추가'}
+              </p>
+              {/* 대상 선택 */}
+              {maintMode === 'room' ? (
+                <select
+                  value={maintTarget}
+                  onChange={(e) => setMaintTarget(e.target.value)}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-1.5 text-sm text-white outline-none focus:border-violet-500"
+                >
+                  <option value="">호실 선택</option>
+                  {roomIds.map((r) => <option key={r} value={r}>{r}호</option>)}
+                </select>
+              ) : commonSpaces.length === 0 ? (
+                <p className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-2 text-xs text-gray-500">
+                  등록된 공용 공간이 없습니다. 상단 &lsquo;공용 공간&rsquo; 버튼에서 먼저 등록하세요.
+                </p>
+              ) : (
+                <select
+                  value={maintTarget}
+                  onChange={(e) => setMaintTarget(e.target.value)}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-1.5 text-sm text-white outline-none focus:border-violet-500"
+                >
+                  <option value="">공용 공간 선택</option>
+                  {commonSpaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              )}
+
+              {/* 선택된 항목 칩 */}
+              {maintDetails.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {maintDetails.map((d) => (
+                    <span key={d} className="flex items-center gap-1 rounded-md bg-violet-500/20 px-2 py-0.5 text-xs text-violet-200">
+                      {d}
+                      <button onClick={() => setMaintDetails((prev) => prev.filter((x) => x !== d))} className="text-violet-300/70 hover:text-white">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* 항목 선택 (직접 입력 포함) */}
+              {!showMaintCustom ? (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') { setShowMaintCustom(true); setMaintCustom(''); }
+                    else if (e.target.value) setMaintDetails((prev) => prev.includes(e.target.value) ? prev : [...prev, e.target.value]);
+                  }}
+                  className="w-full rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-1.5 text-sm text-white outline-none focus:border-violet-500"
+                >
+                  <option value="">항목 선택</option>
+                  {detailOptions.filter((d) => !maintDetails.includes(d)).map((d) => <option key={d} value={d}>{d}</option>)}
+                  <option value="__custom__">+ 직접 입력</option>
+                </select>
+              ) : (
+                <div className="flex gap-1.5">
+                  <input
+                    autoFocus
+                    value={maintCustom}
+                    onChange={(e) => setMaintCustom(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && maintCustom.trim()) {
+                        const v = maintCustom.trim();
+                        setMaintDetails((prev) => prev.includes(v) ? prev : [...prev, v]);
+                        if (!detailOptions.includes(v)) onAddDetailOption(v);
+                        setMaintCustom(''); setShowMaintCustom(false);
+                      }
+                      if (e.key === 'Escape') { setMaintCustom(''); setShowMaintCustom(false); }
+                    }}
+                    placeholder="직접 입력 후 Enter"
+                    className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-1.5 text-sm text-white placeholder:text-gray-600 outline-none focus:border-violet-500"
+                  />
+                  <button
+                    onClick={() => { const v = maintCustom.trim(); if (v) { setMaintDetails((prev) => prev.includes(v) ? prev : [...prev, v]); if (!detailOptions.includes(v)) onAddDetailOption(v); } setMaintCustom(''); setShowMaintCustom(false); }}
+                    className="shrink-0 rounded-lg bg-violet-500/20 px-2.5 text-xs font-semibold text-violet-300 hover:bg-violet-500/30 transition-colors"
+                  >
+                    추가
+                  </button>
+                  <button
+                    onClick={() => { setMaintCustom(''); setShowMaintCustom(false); }}
+                    className="shrink-0 flex items-center justify-center rounded-lg border border-[#2A2A2A] px-2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
+
+              {/* 금액 */}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  step={1000}
+                  value={maintAmount}
+                  onChange={(e) => setMaintAmount(e.target.value)}
+                  placeholder="금액"
+                  className="flex-1 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-1.5 text-sm text-white placeholder:text-gray-600 outline-none focus:border-violet-500"
+                />
+                <span className="shrink-0 text-xs text-gray-500">원</span>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button onClick={resetMaint} className="rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-xs text-gray-400 hover:text-white transition-colors">취소</button>
+                <button
+                  onClick={submitMaint}
+                  disabled={!maintTarget || maintDetails.length === 0 || maintSaving}
+                  className="rounded-lg bg-violet-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-400 transition-colors disabled:opacity-40"
+                >
+                  {maintSaving ? '저장 중…' : '저장'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Add input */}
         <div className="sticky bottom-0 mt-auto border-t border-[#2A2A2A] bg-[#111] px-6 py-4 space-y-3">
@@ -636,10 +950,23 @@ export default function TodoListPage() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [recurringTodos, setRecurringTodos] = useState<RecurringTodo[]>([]);
   const [maintenanceRecords, setMaintenanceRecords] = useState<DbMaintenanceRecord[]>([]);
+  const [rentPayments, setRentPayments] = useState<DbRentPayment[]>([]);
+  const [commonSpaces, setCommonSpaces] = useState<DbCommonSpace[]>([]);
+  const [showCommonSpaceModal, setShowCommonSpaceModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [viewFilter, setViewFilter] = useState<'all' | 'todo' | 'rent' | 'expiry' | 'maintenance'>('all');
   const [showRecurringModal, setShowRecurringModal] = useState(false);
-  const { contracts } = useRooms();
+  const { contracts, rooms } = useRooms();
+  const [detailOptions, setDetailOptions] = useState<string[]>(DEFAULT_DETAIL_OPTIONS);
+
+  const roomIds = useMemo(() => [...rooms].map((r) => r.id).sort((a, b) => a.localeCompare(b)), [rooms]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DETAIL_OPTIONS_LS_KEY);
+      if (saved) setDetailOptions(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }, []);
 
   const loadTodos = useCallback(async () => {
     const data = await fetchTodos();
@@ -656,9 +983,35 @@ export default function TodoListPage() {
     setMaintenanceRecords(data);
   }, []);
 
+  const loadRentPayments = useCallback(async () => {
+    const data = await fetchAllRentPayments();
+    setRentPayments(data);
+  }, []);
+
+  const loadCommonSpaces = useCallback(async () => {
+    const data = await fetchCommonSpaces();
+    setCommonSpaces(data);
+  }, []);
+
   useEffect(() => { loadTodos(); }, [loadTodos]);
   useEffect(() => { loadRecurringTodos(); }, [loadRecurringTodos]);
   useEffect(() => { loadMaintenance(); }, [loadMaintenance]);
+  useEffect(() => { loadRentPayments(); }, [loadRentPayments]);
+  useEffect(() => { loadCommonSpaces(); }, [loadCommonSpaces]);
+
+  const maintLabel = useCallback((m: DbMaintenanceRecord) => {
+    if (m.common_space_id) return commonSpaces.find((s) => s.id === m.common_space_id)?.name ?? '공용 공간';
+    return `${m.room_id}호`;
+  }, [commonSpaces]);
+
+  // (contract_id|YYYY-MM) → 그 달에 납부(paid) 여부
+  const paidKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of rentPayments) {
+      if (p.status === 'paid') set.add(`${p.contract_id}|${p.month}`);
+    }
+    return set;
+  }, [rentPayments]);
 
   // 날짜별 유지보수 기록
   const maintenanceByDate = useMemo(() => {
@@ -693,22 +1046,22 @@ export default function TodoListPage() {
     return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, [...v]]));
   }, [contracts, year, month]);
 
-  // 해당 월의 날짜별 월세 납부 대상자 이름 목록
+  // 해당 월의 날짜별 월세 납부 대상자 + 납부 여부
   const rentRemindersByDate = useMemo(() => {
-    const map: Record<string, Set<string>> = {};
+    const map: Record<string, RentReminder[]> = {};
     const displayMonth = `${year}-${String(month).padStart(2, '0')}`;
     for (const c of contracts) {
       if (c.status !== 'scheduled') continue;
       const moveIn = c.actual_move_in_date;
       if (!moveIn) continue;
       if (moveIn.slice(0, 7) > displayMonth) continue;
-      const dueDay = Math.min(c.payment_due_day ?? new Date(moveIn).getDate(), daysInMonth);
+      const dueDay = effectiveDueDay(c.payment_due_day ?? new Date(moveIn).getDate(), year, month);
       const dateKey = toDateKey(year, month, dueDay);
-      if (!map[dateKey]) map[dateKey] = new Set();
-      map[dateKey].add(c.name);
+      const paid = paidKeys.has(`${c.id}|${displayMonth}`);
+      (map[dateKey] ??= []).push({ name: c.name, paid });
     }
-    return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, [...v]]));
-  }, [contracts, year, month, daysInMonth]);
+    return map;
+  }, [contracts, year, month, daysInMonth, paidKeys]);
 
   function prevMonth() {
     if (month === 1) { setYear(y => y - 1); setMonth(12); }
@@ -719,12 +1072,34 @@ export default function TodoListPage() {
     else setMonth(m => m + 1);
   }
 
-  function todosFor(date: string) { return todos.filter(t => t.date === date); }
+  function todosFor(date: string) {
+    return todos
+      .filter(t => t.date === date)
+      .sort((a, b) => {
+        const ao = a.sortOrder, bo = b.sortOrder;
+        if (ao != null && bo != null) return ao - bo;
+        if (ao != null) return -1;   // 순서 지정된 것 먼저
+        if (bo != null) return 1;
+        return 0;                    // 둘 다 없으면 기존(생성) 순서 유지
+      });
+  }
 
   async function addTodo(text: string, color: string) {
     if (!selectedDate) return;
-    const created = await insertTodo({ date: selectedDate, text, color });
+    // 그 날짜의 마지막 순서 뒤에 추가
+    const dayTodos = todosFor(selectedDate);
+    const maxOrder = dayTodos.reduce((mx, t) => t.sortOrder != null && t.sortOrder > mx ? t.sortOrder : mx, dayTodos.length - 1);
+    const created = await insertTodo({ date: selectedDate, text, color, sort_order: maxOrder + 1 });
     setTodos(prev => [...prev, fromDb(created)]);
+  }
+
+  /** 특정 날짜의 할일 순서를 orderedIds 순으로 재배치 (0..n으로 저장) */
+  async function reorderTodos(orderedIds: string[]) {
+    setTodos(prev => prev.map(t => {
+      const idx = orderedIds.indexOf(t.id);
+      return idx >= 0 ? { ...t, sortOrder: idx } : t;
+    }));
+    await Promise.all(orderedIds.map((id, i) => updateTodo(id, { sort_order: i })));
   }
   async function editTodo(id: string, text: string, color: string) {
     const updated = await updateTodo(id, { text, color });
@@ -774,6 +1149,38 @@ export default function TodoListPage() {
     setRecurringTodos(prev => prev.filter(r => r.id !== id));
   }
 
+  async function addMaintenance(target: { roomId?: string; commonSpaceId?: string }, amount: number, details: string[]) {
+    if (!selectedDate) return;
+    const saved = await insertMaintenanceRecord({
+      room_id: target.roomId ?? null,
+      common_space_id: target.commonSpaceId ?? null,
+      date: selectedDate, amount, details,
+    });
+    setMaintenanceRecords(prev => [...prev, saved]);
+  }
+  async function deleteMaintenance(id: string) {
+    await deleteMaintenanceRecord(id);
+    setMaintenanceRecords(prev => prev.filter(r => r.id !== id));
+  }
+  async function addCommonSpace(name: string) {
+    const saved = await insertCommonSpace(name);
+    setCommonSpaces(prev => [...prev, saved]);
+  }
+  async function removeCommonSpace(id: string) {
+    await deleteCommonSpace(id);
+    setCommonSpaces(prev => prev.filter(s => s.id !== id));
+    // 해당 공용 공간의 유지보수 기록도 DB에서 cascade 삭제되므로 목록에서 제거
+    setMaintenanceRecords(prev => prev.filter(r => r.common_space_id !== id));
+  }
+  function addDetailOption(v: string) {
+    setDetailOptions((prev) => {
+      if (prev.includes(v)) return prev;
+      const next = [...prev, v];
+      try { localStorage.setItem(DETAIL_OPTIONS_LS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
@@ -817,8 +1224,15 @@ export default function TodoListPage() {
             ))}
           </div>
 
-          {/* 오른쪽: 반복 설정 + 월 이동 */}
+          {/* 오른쪽: 공용 공간 + 반복 설정 + 월 이동 */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowCommonSpaceModal(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 py-1.5 text-xs font-medium text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors"
+            >
+              <Wrench size={13} />
+              공용 공간
+            </button>
             <button
               onClick={() => setShowRecurringModal(true)}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 py-1.5 text-xs font-medium text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors"
@@ -897,9 +1311,15 @@ export default function TodoListPage() {
                   {show('rent') && dayRentReminders.length > 0 && (
                     <div className={`flex flex-col gap-1 ${divider(dayTodos.length > 0 || dayRecurring.length > 0)}`}>
                       {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-600/80">월세</span>}
-                      {dayRentReminders.map((name) => (
-                        <div key={`rent-${name}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-amber-500/15 text-amber-300 border border-amber-500/20">
-                          {name} 납부
+                      {dayRentReminders.map((r) => (
+                        <div key={`rent-${r.name}`}
+                          className={`flex items-center justify-between gap-1 truncate rounded px-1.5 py-1 text-xs leading-tight border ${
+                            r.paid
+                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20'
+                              : 'bg-rose-500/15 text-rose-300 border-rose-500/20'
+                          }`}>
+                          <span className="truncate">{r.name}</span>
+                          <span className="shrink-0 font-semibold">{r.paid ? '납부' : '미납'}</span>
                         </div>
                       ))}
                     </div>
@@ -920,7 +1340,7 @@ export default function TodoListPage() {
                       {dayMaintenance.map((m) => (
                         <div key={`mt-${m.id}`} className="flex items-center gap-1 truncate rounded px-1.5 py-1 text-xs leading-tight bg-violet-500/15 text-violet-300 border border-violet-500/20">
                           <Wrench size={9} className="shrink-0 opacity-70" />
-                          <span className="truncate">{m.room_id}호 {m.details.join(', ')}</span>
+                          <span className="truncate">{maintLabel(m)} {m.details.join(', ')}</span>
                         </div>
                       ))}
                     </div>
@@ -940,11 +1360,18 @@ export default function TodoListPage() {
           rentReminders={rentRemindersByDate[selectedDate] ?? []}
           expiryReminders={contractExpiryRemindersByDate[selectedDate] ?? []}
           maintenanceRecords={maintenanceByDate[selectedDate] ?? []}
+          roomIds={roomIds}
+          commonSpaces={commonSpaces}
+          detailOptions={detailOptions}
           onAdd={addTodo}
           onEdit={editTodo}
           onDelete={deleteTodo}
           onToggle={toggleTodo}
           onColorChange={changeTodoColor}
+          onReorder={reorderTodos}
+          onAddMaintenance={addMaintenance}
+          onDeleteMaintenance={deleteMaintenance}
+          onAddDetailOption={addDetailOption}
           onClose={() => setSelectedDate(null)}
         />
       )}
@@ -956,6 +1383,15 @@ export default function TodoListPage() {
           onAdd={addRecurringTodo}
           onUpdate={editRecurringTodo}
           onDelete={deleteRecurringTodoHandler}
+        />
+      )}
+
+      {showCommonSpaceModal && (
+        <CommonSpaceManagerModal
+          commonSpaces={commonSpaces}
+          onAdd={addCommonSpace}
+          onDelete={removeCommonSpace}
+          onClose={() => setShowCommonSpaceModal(false)}
         />
       )}
     </main>

@@ -6,7 +6,7 @@ import { type MaintenanceRecord } from '@/app/lib/mock-data';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 import { useRooms } from '@/app/context/RoomsContext';
 import RoomListModal, { type RoomModalType } from '@/app/components/RoomListModal';
-import { fetchAllMaintenanceRecords, fetchAllRentPayments, type DbRentPayment } from '@/app/lib/supabase-data';
+import { fetchAllMaintenanceRecords, fetchAllRentPayments, fetchCommonSpaces, type DbRentPayment, type DbCommonSpace } from '@/app/lib/supabase-data';
 
 // ──────────── 헬퍼 ────────────
 
@@ -242,6 +242,59 @@ function BarChart({ data, height = 140, onBarClick }: {
   );
 }
 
+// ──────────── 컴포넌트: 월별 유지보수 지출 추이 ────────────
+
+function MaintenanceTrend() {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [records, setRecords] = useState<{ date: string; amount: number }[]>([]);
+
+  useEffect(() => {
+    fetchAllMaintenanceRecords()
+      .then((rows) => setRecords(rows.map((r) => ({ date: r.date, amount: r.amount }))))
+      .catch(console.error);
+  }, []);
+
+  const now = new Date();
+  const monthly: MonthData[] = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1;
+    const value = records
+      .filter((r) => {
+        const [y, mm] = r.date.split('-').map(Number);
+        return y === year && mm === m;
+      })
+      .reduce((s, r) => s + r.amount, 0);
+    const isCurrent = year === now.getFullYear() && m === now.getMonth() + 1;
+    return {
+      label: `${m}월`, year, month: m, value,
+      color: isCurrent ? '#a78bfa' : '#7c3aed',
+      isCurrent, rows: [],
+    };
+  });
+
+  const total = monthly.reduce((s, d) => s + d.value, 0);
+
+  return (
+    <div className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-white">월별 유지보수 지출 추이</h2>
+          <p className="mt-0.5 text-xs text-gray-500">{year}년 합계 <span className="font-semibold text-violet-300">₩{total.toLocaleString('ko-KR')}</span></p>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setYear((y) => y - 1)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+            <ChevronLeft size={15} />
+          </button>
+          <span className="w-16 text-center text-sm font-semibold text-white">{year}년</span>
+          <button onClick={() => setYear((y) => y + 1)} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+      <BarChart data={monthly} height={160} onBarClick={() => {}} />
+    </div>
+  );
+}
+
 // ──────────── 컴포넌트: MaintenanceGrid ────────────
 
 const DETAIL_COLOR: Record<string, string> = {
@@ -257,31 +310,47 @@ const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','
 function MaintenanceGrid() {
   const { effectiveRooms } = useEffectiveRooms();
   const [year, setYear] = useState(new Date().getFullYear());
+  // 대상 키(방 id 또는 공용 공간 id) → 기록
   const [allRecords, setAllRecords] = useState<Record<string, MaintenanceRecord[]>>({});
+  const [commonSpaces, setCommonSpaces] = useState<DbCommonSpace[]>([]);
 
   useEffect(() => {
-    fetchAllMaintenanceRecords().then((rows) => {
+    Promise.all([fetchAllMaintenanceRecords(), fetchCommonSpaces()]).then(([recs, spaces]) => {
       const grouped: Record<string, MaintenanceRecord[]> = {};
-      for (const r of rows) {
-        grouped[r.room_id] = [...(grouped[r.room_id] ?? []), { id: r.id, date: r.date, amount: r.amount, details: r.details }];
+      for (const r of recs) {
+        const key = r.common_space_id ?? r.room_id;
+        if (!key) continue;
+        grouped[key] = [...(grouped[key] ?? []), { id: r.id, date: r.date, amount: r.amount, details: r.details }];
       }
       setAllRecords(grouped);
+      setCommonSpaces(spaces);
     }).catch(console.error);
   }, []);
 
-  const roomsWithData = effectiveRooms.filter(room => {
-    const records = allRecords[room.id] ?? [];
-    return records.some(r => r.date.startsWith(String(year)));
-  });
+  function hasYearData(key: string) {
+    return (allRecords[key] ?? []).some(r => r.date.startsWith(String(year)));
+  }
 
-  const rows = roomsWithData.length > 0 ? roomsWithData : [];
+  // 방(있는 것) + 공용 공간(있는 것)을 행으로
+  const rows: { key: string; label: string }[] = [
+    ...effectiveRooms.filter(room => hasYearData(room.id)).map(room => ({ key: room.id, label: `${room.id}호` })),
+    ...commonSpaces.filter(s => hasYearData(s.id)).map(s => ({ key: s.id, label: s.name })),
+  ];
 
-  function recordsFor(roomId: string, month: number) {
-    return (allRecords[roomId] ?? []).filter(r => {
+  function recordsFor(key: string, month: number) {
+    return (allRecords[key] ?? []).filter(r => {
       const [y, m] = r.date.split('-').map(Number);
       return y === year && m === month;
     });
   }
+
+  function yearTotal(key: string) {
+    return (allRecords[key] ?? [])
+      .filter(r => r.date.startsWith(String(year)))
+      .reduce((s, r) => s + r.amount, 0);
+  }
+
+  const grandTotal = rows.reduce((s, row) => s + yearTotal(row.key), 0);
 
   return (
     <div className="rounded-xl border border-[#2A2A2A] bg-[#111] shadow-sm overflow-hidden">
@@ -289,7 +358,7 @@ function MaintenanceGrid() {
       <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-4">
         <div>
           <h2 className="text-base font-semibold text-white">연간 유지보수 현황</h2>
-          <p className="mt-0.5 text-xs text-gray-500">방별 유지보수 및 비품 교체 이력</p>
+          <p className="mt-0.5 text-xs text-gray-500">방 · 공용 공간 유지보수 및 비품 교체 이력</p>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -317,21 +386,22 @@ function MaintenanceGrid() {
           <table className="w-full text-sm" style={{ minWidth: 900 }}>
             <thead>
               <tr className="border-b border-[#2A2A2A] bg-[#0E0E0E]">
-                <th className="sticky left-0 z-10 bg-[#0E0E0E] w-16 px-4 py-3 text-left text-xs font-semibold text-gray-500">호실</th>
+                <th className="sticky left-0 z-10 bg-[#0E0E0E] w-16 px-4 py-3 text-left text-xs font-semibold text-gray-500">대상</th>
                 {MONTHS.map(m => (
                   <th key={m} className="px-2 py-3 text-center text-xs font-semibold text-gray-500 min-w-[80px]">{m}</th>
                 ))}
+                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 min-w-[90px]">합계</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((room, ri) => (
-                <tr key={room.id} className={`border-b border-[#1A1A1A] ${ri % 2 === 0 ? 'bg-[#0C0C0C]' : 'bg-[#0A0A0A]'}`}>
+              {rows.map((row, ri) => (
+                <tr key={row.key} className={`border-b border-[#1A1A1A] ${ri % 2 === 0 ? 'bg-[#0C0C0C]' : 'bg-[#0A0A0A]'}`}>
                   <td className="sticky left-0 z-10 px-4 py-2 font-semibold text-gray-200 text-sm whitespace-nowrap"
                     style={{ backgroundColor: ri % 2 === 0 ? '#0C0C0C' : '#0A0A0A' }}>
-                    {room.id}호
+                    {row.label}
                   </td>
                   {MONTHS.map((_, mi) => {
-                    const recs = recordsFor(room.id, mi + 1);
+                    const recs = recordsFor(row.key, mi + 1);
                     return (
                       <td key={mi} className="px-1.5 py-2 align-top">
                         {recs.length > 0 && (
@@ -353,8 +423,19 @@ function MaintenanceGrid() {
                       </td>
                     );
                   })}
+                  <td className="px-3 py-2 text-right align-top text-sm font-semibold text-emerald-400 whitespace-nowrap">
+                    ₩{yearTotal(row.key).toLocaleString('ko-KR')}
+                  </td>
                 </tr>
               ))}
+              {/* 총합 */}
+              <tr className="border-t-2 border-[#2A2A2A] bg-[#0E0E0E]">
+                <td className="sticky left-0 z-10 bg-[#0E0E0E] px-4 py-2.5 text-sm font-bold text-white">총합</td>
+                <td colSpan={12} />
+                <td className="px-3 py-2.5 text-right text-sm font-bold text-emerald-400 whitespace-nowrap">
+                  ₩{grandTotal.toLocaleString('ko-KR')}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -560,6 +641,9 @@ export default function StatsPage() {
         <p className="mt-2 text-center text-[11px] text-gray-600">막대를 클릭하면 해당 월 상세를 볼 수 있습니다.</p>
         </div>
       </div>
+
+      {/* 월별 유지보수 지출 추이 */}
+      <MaintenanceTrend />
 
       {/* 연간 유지보수 현황 */}
       <MaintenanceGrid />

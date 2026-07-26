@@ -14,8 +14,8 @@ const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
   { href: '/residents', icon: Users, label: '입실자 관리' },
   { href: '/calendar', icon: CalendarRange, label: '연간 캘린더' },
-  { href: '/stats', icon: BarChart2, label: '통계' },
   { href: '/print', icon: Printer, label: '출력' },
+  { href: '/stats', icon: BarChart2, label: '통계' },
 ];
 
 export default function Sidebar({ collapsed }: SidebarProps) {

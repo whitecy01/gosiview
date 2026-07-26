@@ -1,3 +1,18 @@
+/** 해당 연·월의 마지막 날 (2월=28/29, 4·6·9·11월=30, 나머지=31) */
+export function lastDayOfMonth(year: number, month1: number): number {
+  return new Date(year, month1, 0).getDate();
+}
+
+/**
+ * 월세 납부일을 해당 월에 맞게 보정합니다.
+ * 납부일이 그 달의 마지막 날보다 크면 마지막 날로 clamp합니다.
+ * 예: 납부일 31 → 2월 28(29), 6월 30, 7월 31
+ * @param month1 1~12
+ */
+export function effectiveDueDay(dueDay: number, year: number, month1: number): number {
+  return Math.min(dueDay, lastDayOfMonth(year, month1));
+}
+
 export function formatPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 11);
   if (digits.length < 4) return digits;
