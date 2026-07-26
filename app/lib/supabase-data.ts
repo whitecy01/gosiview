@@ -350,6 +350,7 @@ export type DbTodo = {
   text: string;
   done: boolean;
   color: string;
+  sort_order: number | null;
   created_at: string;
 };
 
@@ -359,19 +360,20 @@ export async function fetchTodos(): Promise<DbTodo[]> {
     .from('todos')
     .select('*')
     .order('date', { ascending: true })
+    .order('sort_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true });
   if (error) throw error;
   return data as DbTodo[];
 }
 
-export async function insertTodo(input: { date: string; text: string; color: string }): Promise<DbTodo> {
+export async function insertTodo(input: { date: string; text: string; color: string; sort_order?: number }): Promise<DbTodo> {
   const supabase = createClient();
   const { data, error } = await supabase.from('todos').insert(input).select().single();
   if (error) throw error;
   return data as DbTodo;
 }
 
-export async function updateTodo(id: string, input: Partial<{ text: string; done: boolean; color: string }>): Promise<DbTodo> {
+export async function updateTodo(id: string, input: Partial<{ text: string; done: boolean; color: string; sort_order: number }>): Promise<DbTodo> {
   const supabase = createClient();
   const { data, error } = await supabase.from('todos').update(input).eq('id', id).select().single();
   if (error) throw error;
@@ -384,11 +386,47 @@ export async function deleteTodoById(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ──────────── 공용 공간 ────────────
+
+export type DbCommonSpace = {
+  id: string;
+  name: string;
+  created_at: string;
+};
+
+export async function fetchCommonSpaces(): Promise<DbCommonSpace[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('common_spaces')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data as DbCommonSpace[];
+}
+
+export async function insertCommonSpace(name: string): Promise<DbCommonSpace> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('common_spaces')
+    .insert({ name })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as DbCommonSpace;
+}
+
+export async function deleteCommonSpace(id: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from('common_spaces').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ──────────── 유지보수 이력 ────────────
 
 export type DbMaintenanceRecord = {
   id: string;
-  room_id: string;
+  room_id: string | null;
+  common_space_id: string | null;
   date: string;
   amount: number;
   details: string[];
@@ -407,7 +445,8 @@ export async function fetchAllMaintenanceRecords(): Promise<DbMaintenanceRecord[
 }
 
 export async function insertMaintenanceRecord(input: {
-  room_id: string;
+  room_id?: string | null;
+  common_space_id?: string | null;
   date: string;
   amount: number;
   details: string[];
@@ -415,7 +454,13 @@ export async function insertMaintenanceRecord(input: {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('maintenance_records')
-    .insert(input)
+    .insert({
+      room_id: input.room_id ?? null,
+      common_space_id: input.common_space_id ?? null,
+      date: input.date,
+      amount: input.amount,
+      details: input.details,
+    })
     .select()
     .single();
   if (error) throw error;

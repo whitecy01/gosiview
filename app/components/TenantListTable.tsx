@@ -23,6 +23,7 @@ import {
   fetchAllRentPayments,
   type DbRentPayment,
 } from "../lib/supabase-data";
+import { effectiveDueDay } from "../lib/utils";
 
 
 function formatPhone(raw: string): string {
@@ -32,14 +33,16 @@ function formatPhone(raw: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
-/** 월세 납부일 계산: payment_due_day 우선, 없으면 입실일 기준 */
+/** 월세 납부일 계산: payment_due_day 우선, 없으면 입실일 기준. 말일 초과 시 그 달 마지막 날로 보정 */
 function getRentDueInfo(moveInDate: string | null, today: Date, paymentDueDay?: number | null): { day: number; nextDue: Date; daysUntil: number } | null {
   if (!moveInDate && !paymentDueDay) return null;
   const day = paymentDueDay ?? (moveInDate ? new Date(moveInDate).getDate() : 1);
-  const thisMonthDue = new Date(today.getFullYear(), today.getMonth(), day);
+  const y = today.getFullYear();
+  const m = today.getMonth(); // 0-based
+  const thisMonthDue = new Date(y, m, effectiveDueDay(day, y, m + 1));
   const nextDue = thisMonthDue >= today
     ? thisMonthDue
-    : new Date(today.getFullYear(), today.getMonth() + 1, day);
+    : new Date(y, m + 1, effectiveDueDay(day, y, m + 2));
   const daysUntil = Math.round((nextDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   return { day, nextDue, daysUntil };
 }
@@ -842,7 +845,7 @@ function RoomManagementModal({
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#2A2A2A] bg-[#0E0E0E] shadow-2xl max-h-[88vh] flex flex-col">
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-5xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#2A2A2A] bg-[#0E0E0E] shadow-2xl max-h-[90vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#2A2A2A] px-6 py-5 shrink-0">
@@ -957,16 +960,16 @@ function RoomManagementModal({
               <p className="text-sm text-gray-500">{viewYear}년 관리 이력이 없습니다.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {MONTH_NAMES.map((name, mi) => {
                 const month = mi + 1;
                 const monthRecords = recordsForMonth(month);
                 const isEmpty = monthRecords.length === 0;
                 return (
-                  <div key={month} className={`rounded-xl border p-3 flex flex-col gap-2 min-h-[100px] ${isEmpty ? "border-[#1A1A1A] bg-[#0C0C0C]" : "border-[#2A2A2A] bg-[#161616]"}`}>
+                  <div key={month} className={`rounded-xl border p-3.5 flex flex-col gap-2 min-h-[130px] ${isEmpty ? "border-[#1A1A1A] bg-[#0C0C0C]" : "border-[#2A2A2A] bg-[#161616]"}`}>
                     <div className="flex items-center justify-between">
-                      <span className={`text-xs font-bold ${isEmpty ? "text-gray-700" : "text-amber-400"}`}>{name}</span>
-                      {!isEmpty && <span className="text-[10px] text-gray-500">{monthRecords.length}건</span>}
+                      <span className={`text-sm font-bold ${isEmpty ? "text-gray-700" : "text-amber-400"}`}>{name}</span>
+                      {!isEmpty && <span className="text-xs text-gray-500">{monthRecords.length}건</span>}
                     </div>
                     {!isEmpty && (
                       <div className="flex flex-col gap-1.5">
@@ -974,7 +977,7 @@ function RoomManagementModal({
                           const day = record.date.split("-")[2];
                           const isEditing = editingId === record.id;
                           return (
-                            <div key={record.id} className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1.5">
+                            <div key={record.id} className="rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-2.5 py-2">
                               {isEditing ? (
                                 <div className="space-y-2">
                                   <div className="grid grid-cols-2 gap-1.5">
@@ -1047,21 +1050,21 @@ function RoomManagementModal({
                                 </div>
                               ) : (
                                 <>
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[10px] text-gray-500">{parseInt(day)}일</span>
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-[10px] font-semibold text-emerald-400">₩{record.amount.toLocaleString("ko-KR")}</span>
-                                      <button onClick={() => startEdit(record)} className="flex h-4 w-4 items-center justify-center rounded text-gray-700 hover:text-indigo-400 transition-colors">
-                                        <Pencil className="h-2.5 w-2.5" />
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-xs text-gray-400">{parseInt(day)}일</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-semibold text-emerald-400">₩{record.amount.toLocaleString("ko-KR")}</span>
+                                      <button onClick={() => startEdit(record)} className="flex h-5 w-5 items-center justify-center rounded text-gray-600 hover:text-indigo-400 transition-colors">
+                                        <Pencil className="h-3 w-3" />
                                       </button>
-                                      <button onClick={() => record.id && onDelete(record.id)} className="flex h-4 w-4 items-center justify-center rounded text-gray-700 hover:text-rose-400 transition-colors">
-                                        <Trash2 className="h-2.5 w-2.5" />
+                                      <button onClick={() => record.id && onDelete(record.id)} className="flex h-5 w-5 items-center justify-center rounded text-gray-600 hover:text-rose-400 transition-colors">
+                                        <Trash2 className="h-3 w-3" />
                                       </button>
                                     </div>
                                   </div>
                                   <div className="flex flex-wrap gap-1">
                                     {record.details.map((d) => (
-                                      <span key={d} className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${DETAIL_COLOR[d] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
+                                      <span key={d} className={`text-xs font-medium px-2 py-0.5 rounded border ${DETAIL_COLOR[d] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
                                         {d}
                                       </span>
                                     ))}
@@ -1123,6 +1126,7 @@ export default function TenantListTable() {
     fetchAllMaintenanceRecords().then((rows) => {
       const grouped: Record<string, MaintenanceRecord[]> = {};
       for (const r of rows) {
+        if (!r.room_id) continue; // 공용 공간 기록은 방 모달에서 제외
         grouped[r.room_id] = [...(grouped[r.room_id] ?? []), { id: r.id, date: r.date, amount: r.amount, details: r.details }];
       }
       setMaintenanceData(grouped);
@@ -1165,9 +1169,11 @@ export default function TenantListTable() {
         cur.setMonth(cur.getMonth() + 1);
       }
 
-      // 이번 달 납부일이 지났는데 미납이면 미납으로 표시
+      // 이번 달 납부일이 지났는데 미납이면 미납으로 표시 (납부일은 말일로 보정)
       if (!set.has(c.id) && moveIn.slice(0, 7) <= currentMonth) {
-        const dueDay = c.payment_due_day ?? new Date(moveIn).getDate();
+        const rawDay = c.payment_due_day ?? new Date(moveIn).getDate();
+        const [cy, cm] = currentMonth.split('-').map(Number);
+        const dueDay = effectiveDueDay(rawDay, cy, cm);
         if (todayDay >= dueDay && !paidMonths.has(currentMonth)) {
           set.add(c.id);
         }
