@@ -159,6 +159,30 @@ export async function updateRoomPrice(roomId: string, monthlyPrice: number): Pro
   if (error) throw error;
 }
 
+/**
+ * 특정 방에 현재 입실 중이지만 확정 퇴실일이 없는 계약을 반환합니다.
+ * 새 예약/입실자를 추가하기 전에, 이 사람이 있으면 먼저 퇴실 처리해야
+ * "이전 입실자가 조용히 사라지는" 문제를 막을 수 있습니다.
+ */
+export function findOccupantNeedingMoveOut(
+  contracts: DbContract[],
+  roomId: string,
+  todayStr: string,
+): DbContract | null {
+  const active = contracts
+    .filter((c) => {
+      if (c.room_id !== roomId || c.status !== 'scheduled') return false;
+      const moveIn = (c.actual_move_in_date ?? '').slice(0, 10);
+      if (!moveIn || moveIn > todayStr) return false;          // 아직 입실 안 함
+      if (c.actual_move_out_date) return false;                 // 이미 확정 퇴실일 있음
+      const end = c.contract_start_end?.slice(0, 10);
+      if (end && end < todayStr) return false;                  // 계약 만료 지남
+      return true;
+    })
+    .sort((a, b) => (b.actual_move_in_date ?? '').localeCompare(a.actual_move_in_date ?? ''));
+  return active[0] ?? null;
+}
+
 export async function deleteContract(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from('contracts').delete().eq('id', id);

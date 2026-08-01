@@ -26,6 +26,17 @@ export const CHANGELOG_SEEN_KEY = "gosi_changelog_seen";
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026.08.01",
+    date: "2026-08-01",
+    changes: [
+      {
+        page: "입실자 관리",
+        type: "수정",
+        text: "예약(예정 입실)이나 신규 입실자를 등록할 때, 그 방에 현재 입실자가 있고 확정 퇴실일이 없으면 먼저 퇴실일을 지정하도록 안내합니다. 예전엔 예정자만 넣으면 이전 입실자가 이력에서 사라지는 문제가 있었습니다.",
+      },
+    ],
+  },
+  {
     version: "2026.07.27",
     date: "2026-07-27",
     changes: [
