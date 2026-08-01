@@ -5,6 +5,8 @@ import { X, UserPlus, CheckCircle2, ChevronDown, Settings } from 'lucide-react';
 import { useRooms } from '@/app/context/RoomsContext';
 import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 import { SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, PURPOSES_LS_KEY, AGENCIES_LS_KEY } from '@/app/components/OptionsManagerModal';
+import { findOccupantNeedingMoveOut, type DbContract } from '@/app/lib/supabase-data';
+import MoveOutGuardDialog from '@/app/components/MoveOutGuardDialog';
 
 interface NewResidentModalProps {
   onClose: () => void;
@@ -24,8 +26,9 @@ function formatPhone(raw: string): string {
 
 
 export default function NewResidentModal({ onClose, initialRoomId = '' }: NewResidentModalProps) {
-  const { addContract } = useRooms();
-  const { effectiveRooms } = useEffectiveRooms();
+  const { addContract, editContract, contracts } = useRooms();
+  const { effectiveRooms, todayStr } = useEffectiveRooms();
+  const [moveOutGuard, setMoveOutGuard] = useState<{ occupant: DbContract } | null>(null);
 
   const [allPurposes, setAllPurposes] = useState<string[]>(DEFAULT_PURPOSES);
   const [allAgencies, setAllAgencies] = useState<string[]>(DEFAULT_AGENCIES);
@@ -101,32 +104,43 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
   const moveInError = !!(actualMoveInDate && contractMoveInDate && actualMoveInDate < contractMoveInDate);
   const canSubmit = !!(roomId && name && phone && gender && birthDate && contractMoveInDate && actualMoveInDate) && !moveInError;
 
+  async function insertResident() {
+    await addContract({
+      room_id: roomId,
+      name,
+      phone,
+      gender: gender as '남' | '여',
+      birth_date: birthDate || null,
+      purpose: purpose || null,
+      real_estate_agency: realEstateAgency || null,
+      contract_start_date: contractMoveInDate,
+      contract_start_end: contractEndDate || null,
+      contract_months: contractMonths ? Number(contractMonths) : null,
+      actual_move_in_date: actualMoveInDate || null,
+      actual_move_out_date: moveOutDate || null,
+      monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
+      contract_deposit: contractDeposit ? Number(contractDeposit) : null,
+      earnest_money: earnestMoney ? Number(earnestMoney) : null,
+      deposit_total: contractDeposit ? Number(contractDeposit) : null,
+      status: 'scheduled',
+    });
+  }
+
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!canSubmit || saving) return;
 
+    // 현재 입실자에게 확정 퇴실일이 없으면 먼저 퇴실 처리 (A안)
+    const occupant = findOccupantNeedingMoveOut(contracts, roomId, todayStr);
+    if (occupant) {
+      setMoveOutGuard({ occupant });
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     try {
-      await addContract({
-        room_id: roomId,
-        name,
-        phone,
-        gender: gender as '남' | '여',
-        birth_date: birthDate || null,
-        purpose: purpose || null,
-        real_estate_agency: realEstateAgency || null,
-        contract_start_date: contractMoveInDate,
-        contract_start_end: contractEndDate || null,
-        contract_months: contractMonths ? Number(contractMonths) : null,
-        actual_move_in_date: actualMoveInDate || null,
-        actual_move_out_date: moveOutDate || null,
-        monthly_rent: rentAmount ? Number(rentAmount) * 10000 : null,
-        contract_deposit: contractDeposit ? Number(contractDeposit) : null,
-        earnest_money: earnestMoney ? Number(earnestMoney) : null,
-        deposit_total: contractDeposit ? Number(contractDeposit) : null,
-        status: 'scheduled',
-      });
+      await insertResident();
       setSubmitted(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : '저장 중 오류가 발생했습니다.');
@@ -508,6 +522,32 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
       )}
       {optionsTarget === 'agency' && (
         <SingleOptionManagerModal title="부동산" items={allAgencies} onChange={updateAgencies} onClose={() => setOptionsTarget(null)} />
+      )}
+      {moveOutGuard && (
+        <MoveOutGuardDialog
+          roomId={roomId}
+          occupantName={moveOutGuard.occupant.name}
+          defaultDate={actualMoveInDate || todayStr}
+          onConfirm={async (moveOutDateVal) => {
+            setSaving(true);
+            setSaveError(null);
+            try {
+              await editContract(moveOutGuard.occupant.id, {
+                actual_move_out_date: moveOutDateVal,
+                status: 'completed',
+              });
+              await insertResident();
+              setMoveOutGuard(null);
+              setSubmitted(true);
+            } catch (err) {
+              setSaveError(err instanceof Error ? err.message : '저장 중 오류가 발생했습니다.');
+              setMoveOutGuard(null);
+            } finally {
+              setSaving(false);
+            }
+          }}
+          onCancel={() => setMoveOutGuard(null)}
+        />
       )}
     </div>
   );

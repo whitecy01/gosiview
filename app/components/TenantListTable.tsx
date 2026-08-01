@@ -21,9 +21,12 @@ import {
   updateMaintenanceRecord,
   deleteMaintenanceRecord,
   fetchAllRentPayments,
+  findOccupantNeedingMoveOut,
   type DbRentPayment,
+  type DbContract,
 } from "../lib/supabase-data";
 import { effectiveDueDay } from "../lib/utils";
+import MoveOutGuardDialog from "./MoveOutGuardDialog";
 
 
 function formatPhone(raw: string): string {
@@ -1092,6 +1095,8 @@ export default function TenantListTable() {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<'list' | 'floor'>('list');
   const [scheduledRoom, setScheduledRoom] = useState<Room | null>(null);
+  // 예약 추가 가드: 현재 입실자 퇴실 처리 필요
+  const [moveOutGuard, setMoveOutGuard] = useState<{ roomId: string; record: ScheduledResident; occupant: DbContract } | null>(null);
   const [managementRoom, setManagementRoom] = useState<Room | null>(null);
   const [showOptionsManager, setShowOptionsManager] = useState(false);
   const [managedPurposes, setManagedPurposes] = useState<string[]>(DEFAULT_PURPOSES);
@@ -1239,7 +1244,7 @@ export default function TenantListTable() {
     return result;
   }, [contracts, todayStr]);
 
-  async function handleAddScheduled(roomId: string, record: ScheduledResident) {
+  async function insertScheduled(roomId: string, record: ScheduledResident) {
     await addContract({
       room_id: roomId,
       name: record.name,
@@ -1259,6 +1264,16 @@ export default function TenantListTable() {
       deposit_total: record.contractDeposit ?? null,
       status: 'scheduled',
     });
+  }
+
+  async function handleAddScheduled(roomId: string, record: ScheduledResident) {
+    // 현재 입실자에게 확정 퇴실일이 없으면 먼저 퇴실 처리하도록 막는다 (A안)
+    const occupant = findOccupantNeedingMoveOut(contracts, roomId, todayStr);
+    if (occupant) {
+      setMoveOutGuard({ roomId, record, occupant });
+      return; // 예약은 가드 확인 후에 추가
+    }
+    await insertScheduled(roomId, record);
   }
 
   // scheduledData와 동일한 필터(미래 예약만)로 인덱스 정합성 유지
@@ -1651,6 +1666,24 @@ export default function TenantListTable() {
             localStorage.setItem(DETAIL_OPTIONS_LS_KEY, JSON.stringify(next));
           }}
           onClose={() => setManagementRoom(null)}
+        />
+      )}
+
+      {moveOutGuard && (
+        <MoveOutGuardDialog
+          roomId={moveOutGuard.roomId}
+          occupantName={moveOutGuard.occupant.name}
+          defaultDate={moveOutGuard.record.actualMoveInDate ?? todayStr}
+          onConfirm={async (moveOutDate) => {
+            // 현재 입실자 퇴실 처리 후, 대기 중이던 예약 추가
+            await editContract(moveOutGuard.occupant.id, {
+              actual_move_out_date: moveOutDate,
+              status: 'completed',
+            });
+            await insertScheduled(moveOutGuard.roomId, moveOutGuard.record);
+            setMoveOutGuard(null);
+          }}
+          onCancel={() => setMoveOutGuard(null)}
         />
       )}
     </>
