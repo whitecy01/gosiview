@@ -27,6 +27,9 @@ type Todo = {
 /** 월세 납부 대상자 + 그 달 납부 여부 */
 type RentReminder = { name: string; paid: boolean };
 
+/** 계약 만료 예정 알림 (몇 개월 전인지 포함) */
+type ExpiryReminder = { name: string; months: number };
+
 type RecurringTodo = {
   id: string;
   text: string;
@@ -505,7 +508,7 @@ function TodoModal({
   todos: Todo[];
   recurringTodos: RecurringTodo[];
   rentReminders: RentReminder[];
-  expiryReminders: string[];
+  expiryReminders: ExpiryReminder[];
   maintenanceRecords: DbMaintenanceRecord[];
   roomIds: string[];
   commonSpaces: DbCommonSpace[];
@@ -743,11 +746,12 @@ function TodoModal({
         {/* 계약 만료 알림 */}
         {expiryReminders.length > 0 && (
           <div className="border-b border-[#2A2A2A] px-6 py-3 space-y-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-500/80">계약 만료 1개월 전</p>
-            {expiryReminders.map((name) => (
-              <div key={name} className="flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-500/80">계약 만료 예정</p>
+            {expiryReminders.map((r) => (
+              <div key={`${r.name}-${r.months}`} className="flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2">
                 <CalendarX size={13} className="shrink-0 text-rose-400" />
-                <span className="text-sm text-rose-200">{name} 계약 만료 예정 (1개월 후)</span>
+                <span className="flex-1 text-sm text-rose-200">{r.name} 계약 만료 예정</span>
+                <span className="shrink-0 rounded-full bg-rose-500/20 px-2 py-0.5 text-xs font-semibold text-rose-300">{r.months}개월 전</span>
               </div>
             ))}
           </div>
@@ -1027,23 +1031,25 @@ export default function TodoListPage() {
   const firstDay = getFirstDayOfWeek(year, month);
   const todayKey = toDateKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
-  // 해당 월의 날짜별 계약 만료 1개월 전 알림
+  // 해당 월의 날짜별 계약 만료 1·2개월 전 알림
   const contractExpiryRemindersByDate = useMemo(() => {
-    const map: Record<string, Set<string>> = {};
+    const map: Record<string, ExpiryReminder[]> = {};
     for (const c of contracts) {
       if (c.status !== 'scheduled') continue;
       if (!c.contract_start_end) continue;
       if (c.actual_move_out_date) continue;
       const expiryDate = new Date(c.contract_start_end + 'T00:00:00');
-      const reminderDate = new Date(expiryDate);
-      reminderDate.setMonth(reminderDate.getMonth() - 1);
-      if (reminderDate.getFullYear() === year && reminderDate.getMonth() + 1 === month) {
-        const dateKey = toDateKey(year, month, reminderDate.getDate());
-        if (!map[dateKey]) map[dateKey] = new Set();
-        map[dateKey].add(c.name);
+      // 2개월 전, 1개월 전 각각 확인
+      for (const monthsBefore of [2, 1]) {
+        const reminderDate = new Date(expiryDate);
+        reminderDate.setMonth(reminderDate.getMonth() - monthsBefore);
+        if (reminderDate.getFullYear() === year && reminderDate.getMonth() + 1 === month) {
+          const dateKey = toDateKey(year, month, reminderDate.getDate());
+          (map[dateKey] ??= []).push({ name: c.name, months: monthsBefore });
+        }
       }
     }
-    return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, [...v]]));
+    return map;
   }, [contracts, year, month]);
 
   // 해당 월의 날짜별 월세 납부 대상자 + 납부 여부
@@ -1327,9 +1333,9 @@ export default function TodoListPage() {
                   {show('expiry') && dayExpiryReminders.length > 0 && (
                     <div className={`flex flex-col gap-1 ${divider(dayTodos.length > 0 || dayRecurring.length > 0 || dayRentReminders.length > 0)}`}>
                       {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-600/80">만료 예정</span>}
-                      {dayExpiryReminders.map((name) => (
-                        <div key={`expiry-${name}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-rose-500/15 text-rose-300 border border-rose-500/20">
-                          {name} 만료 1개월 전
+                      {dayExpiryReminders.map((r) => (
+                        <div key={`expiry-${r.name}-${r.months}`} className="truncate rounded px-1.5 py-1 text-xs leading-tight bg-rose-500/15 text-rose-300 border border-rose-500/20">
+                          {r.name} 만료 {r.months}개월 전
                         </div>
                       ))}
                     </div>
