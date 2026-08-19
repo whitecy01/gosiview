@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History, Settings, LayoutGrid, List } from "lucide-react";
-import { OptionsManagerModal, SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, DEFAULT_DETAIL_OPTIONS, PURPOSES_LS_KEY, AGENCIES_LS_KEY, DETAIL_OPTIONS_LS_KEY } from "./OptionsManagerModal";
+import { OptionsManagerModal, SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, DEFAULT_DETAIL_OPTIONS, DEFAULT_DEDUCTION_REASONS, PURPOSES_LS_KEY, AGENCIES_LS_KEY, DETAIL_OPTIONS_LS_KEY, DEDUCTION_REASONS_LS_KEY } from "./OptionsManagerModal";
 import {
   ROOM_TYPE_INFO,
   type Room,
@@ -1102,6 +1102,7 @@ export default function TenantListTable() {
   const [managedPurposes, setManagedPurposes] = useState<string[]>(DEFAULT_PURPOSES);
   const [managedAgencies, setManagedAgencies] = useState<string[]>(DEFAULT_AGENCIES);
   const [managedDetailOptions, setManagedDetailOptions] = useState<string[]>(DEFAULT_DETAIL_OPTIONS);
+  const [managedDeductionReasons, setManagedDeductionReasons] = useState<string[]>(DEFAULT_DEDUCTION_REASONS);
   const { effectiveRooms, today, todayStr } = useEffectiveRooms();
   const { contracts, addContract, editContract, removeContract } = useRooms();
   const [maintenanceData, setMaintenanceData] = useState<Record<string, MaintenanceRecord[]>>({});
@@ -1115,6 +1116,8 @@ export default function TenantListTable() {
       if (a) setManagedAgencies(JSON.parse(a));
       const d = localStorage.getItem(DETAIL_OPTIONS_LS_KEY);
       if (d) setManagedDetailOptions(JSON.parse(d));
+      const dr = localStorage.getItem(DEDUCTION_REASONS_LS_KEY);
+      if (dr) setManagedDeductionReasons(JSON.parse(dr));
     } catch { /* ignore */ }
   }, []);
 
@@ -1632,9 +1635,11 @@ export default function TenantListTable() {
           purposes={managedPurposes}
           agencies={managedAgencies}
           detailOptions={managedDetailOptions}
+          deductionReasons={managedDeductionReasons}
           onPurposesChange={updatePurposes}
           onAgenciesChange={updateAgencies}
           onDetailOptionsChange={(v) => { setManagedDetailOptions(v); localStorage.setItem(DETAIL_OPTIONS_LS_KEY, JSON.stringify(v)); }}
+          onDeductionReasonsChange={(v) => { setManagedDeductionReasons(v); localStorage.setItem(DEDUCTION_REASONS_LS_KEY, JSON.stringify(v)); }}
           onClose={() => setShowOptionsManager(false)}
         />
       )}

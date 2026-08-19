@@ -1,25 +1,30 @@
 'use client';
 
-import { Building2, CalendarRange, LayoutDashboard, Users, LogOut, ListTodo, BarChart2, Printer } from 'lucide-react';
+import { Building2, CalendarRange, LayoutDashboard, Users, LogOut, ListTodo, BarChart2, Printer, UserCog } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/app/lib/supabase/client';
+import { useRole } from '@/app/context/useRole';
 
 interface SidebarProps {
   collapsed: boolean;
 }
 
+// adminOnly: 사장·원장만 노출 (관리자에게 미노출)
 const NAV_ITEMS = [
   { href: '/', icon: ListTodo, label: 'Todo List' },
   { href: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
   { href: '/residents', icon: Users, label: '입실자 관리' },
   { href: '/calendar', icon: CalendarRange, label: '연간 캘린더' },
   { href: '/print', icon: Printer, label: '출력' },
-  { href: '/stats', icon: BarChart2, label: '통계' },
+  { href: '/stats', icon: BarChart2, label: '통계', adminOnly: true },
+  { href: '/accounts', icon: UserCog, label: '계정 관리', adminOnly: true },
 ];
 
 export default function Sidebar({ collapsed }: SidebarProps) {
   const router = useRouter();
+  const { isAdmin } = useRole();
+  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -50,7 +55,7 @@ export default function Sidebar({ collapsed }: SidebarProps) {
 
         {/* Navigation */}
         <ul className="flex-1 space-y-1 px-2 font-medium">
-          {NAV_ITEMS.map(({ href, icon: Icon, label }) => (
+          {navItems.map(({ href, icon: Icon, label }) => (
             <li key={href}>
               <Link
                 href={href}

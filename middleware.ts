@@ -54,6 +54,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
+  // 권한 가드: /stats, /accounts 는 사장·원장·개발자만 (총무 차단)
+  const path = request.nextUrl.pathname;
+  const adminOnly = path.startsWith('/stats') || path.startsWith('/accounts');
+  if (user && adminOnly) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    const isAdmin = profile?.role === '사장' || profile?.role === '원장' || profile?.role === '개발자';
+    if (!isAdmin) {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+  }
+
   return supabaseResponse;
 }
 

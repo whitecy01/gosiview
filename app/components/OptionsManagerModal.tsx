@@ -6,9 +6,11 @@ import { X, Plus, Pencil, Trash2, Settings } from "lucide-react";
 export const PURPOSES_LS_KEY = "gosi_purposes";
 export const AGENCIES_LS_KEY = "gosi_agencies";
 export const DETAIL_OPTIONS_LS_KEY = "gosi_detail_options";
+export const DEDUCTION_REASONS_LS_KEY = "gosi_deduction_reasons";
 export const DEFAULT_PURPOSES = ["공시생(임용)", "공시생(일행)", "공시생(소방)", "공시생(경찰)", "세무·회계·계리", "취준생", "수능", "직장"];
 export const DEFAULT_AGENCIES = ["부동산 A", "부동산 B", "부동산 C", "직거래"];
 export const DEFAULT_DETAIL_OPTIONS = ["도배", "매트리스교체", "에어컨청소", "전구교체", "장판교체", "화장실청소"];
+export const DEFAULT_DEDUCTION_REASONS = ["차임", "미납", "공과금정산", "도배", "타일", "시설손상"];
 
 function OptionSection({ title, items, onChange }: { title: string; items: string[]; onChange: (v: string[]) => void }) {
   const [editIdx, setEditIdx] = useState<number | null>(null);
@@ -98,11 +100,12 @@ export function SingleOptionManagerModal({
 
 // 거주 목적 + 부동산 + 관리 항목 통합 모달 (입실자 목록 헤더 버튼용)
 export function OptionsManagerModal({
-  purposes, agencies, detailOptions, onPurposesChange, onAgenciesChange, onDetailOptionsChange, onClose,
+  purposes, agencies, detailOptions, deductionReasons,
+  onPurposesChange, onAgenciesChange, onDetailOptionsChange, onDeductionReasonsChange, onClose,
 }: {
-  purposes: string[]; agencies: string[]; detailOptions: string[];
+  purposes: string[]; agencies: string[]; detailOptions: string[]; deductionReasons: string[];
   onPurposesChange: (v: string[]) => void; onAgenciesChange: (v: string[]) => void;
-  onDetailOptionsChange: (v: string[]) => void;
+  onDetailOptionsChange: (v: string[]) => void; onDeductionReasonsChange: (v: string[]) => void;
   onClose: () => void;
 }) {
   return (
@@ -123,6 +126,8 @@ export function OptionsManagerModal({
           <OptionSection title="부동산" items={agencies} onChange={onAgenciesChange} />
           <div className="border-t border-[#2A2A2A]" />
           <OptionSection title="관리 항목" items={detailOptions} onChange={onDetailOptionsChange} />
+          <div className="border-t border-[#2A2A2A]" />
+          <OptionSection title="보증금 차감 이유" items={deductionReasons} onChange={onDeductionReasonsChange} />
         </div>
       </div>
     </div>

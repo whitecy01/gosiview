@@ -21,7 +21,6 @@ import {
   RESIDENT_DETAIL_BY_ROOM,
   type ResidentDetail,
   type RentPayment,
-  type DepositDeductionReason,
   type RentPaymentMethod,
   type ResidencePurpose,
   type RealEstateAgency,
@@ -30,7 +29,7 @@ import {
 import { useRooms } from "@/app/context/RoomsContext";
 import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
 import { formatPhone } from "@/app/lib/utils";
-import { SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, PURPOSES_LS_KEY, AGENCIES_LS_KEY } from "@/app/components/OptionsManagerModal";
+import { SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, DEFAULT_DEDUCTION_REASONS, PURPOSES_LS_KEY, AGENCIES_LS_KEY, DEDUCTION_REASONS_LS_KEY } from "@/app/components/OptionsManagerModal";
 import {
   fetchDeductions,
   insertDeduction,
@@ -50,10 +49,6 @@ import { fromDbCash, toDbCashInput } from "@/app/lib/cash-succession";
 
 // ────────────── 상수 ──────────────
 
-
-const DEDUCTION_REASONS: DepositDeductionReason[] = [
-  "차임", "미납", "공과금정산", "도배", "타일", "시설손상",
-];
 
 const PAYMENT_METHODS: RentPaymentMethod[] = [
   "이체(자진발급)", "이체", "현금",
@@ -182,6 +177,8 @@ export default function ResidentDetailPage() {
   // 기본 정보 수정 모드
   const [allPurposes, setAllPurposes] = useState<string[]>(DEFAULT_PURPOSES);
   const [allAgencies, setAllAgencies] = useState<string[]>(DEFAULT_AGENCIES);
+  const [allDeductionReasons, setAllDeductionReasons] = useState<string[]>(DEFAULT_DEDUCTION_REASONS);
+  const [deductionCustom, setDeductionCustom] = useState(false);
 
   useEffect(() => {
     try {
@@ -189,8 +186,15 @@ export default function ResidentDetailPage() {
       const a = localStorage.getItem(AGENCIES_LS_KEY);
       if (p) setAllPurposes(JSON.parse(p));
       if (a) setAllAgencies(JSON.parse(a));
+      const dr = localStorage.getItem(DEDUCTION_REASONS_LS_KEY);
+      if (dr) setAllDeductionReasons(JSON.parse(dr));
     } catch { /* ignore */ }
   }, []);
+
+  function updateDeductionReasons(v: string[]) {
+    setAllDeductionReasons(v);
+    try { localStorage.setItem(DEDUCTION_REASONS_LS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+  }
 
   // 메모 (기본 정보와 독립 섹션)
   const [editingMemo, setEditingMemo] = useState(false);
@@ -205,7 +209,7 @@ export default function ResidentDetailPage() {
   const [editGender, setEditGender] = useState<'남' | '여' | null>(null);
   const [purposeCustom, setPurposeCustom] = useState(false);
   const [agencyCustom, setAgencyCustom] = useState(false);
-  const [optionsTarget, setOptionsTarget] = useState<'purpose' | 'agency' | null>(null);
+  const [optionsTarget, setOptionsTarget] = useState<'purpose' | 'agency' | 'deduction' | null>(null);
   const [infoSaving, setInfoSaving] = useState(false);
   const [infoSaveError, setInfoSaveError] = useState<string | null>(null);
 
@@ -228,7 +232,7 @@ export default function ResidentDetailPage() {
   const [showDepForm, setShowDepForm] = useState(false);
   const [depDate, setDepDate] = useState(new Date().toISOString().slice(0, 10));
   const [depAmount, setDepAmount] = useState("");
-  const [depReason, setDepReason] = useState<DepositDeductionReason>("차임");
+  const [depReason, setDepReason] = useState<string>("차임");
 
   // 보증금 반환
   const [showReturnForm, setShowReturnForm] = useState(false);
@@ -413,19 +417,24 @@ export default function ResidentDetailPage() {
 
   async function addDeduction() {
     if (!activeContract || !depDate || !depAmount) return;
+    const reason = depReason.trim();
+    if (!reason) return;
     const amount = Number(depAmount);
     const saved = await insertDeduction({
       contract_id: activeContract.id,
       date: depDate,
       amount,
-      reason: depReason,
+      reason,
     });
     setDbDeductions((prev) => [...prev, saved]);
+    // 직접 입력한 이유는 옵션 목록에도 저장
+    if (!allDeductionReasons.includes(reason)) updateDeductionReasons([...allDeductionReasons, reason]);
     // deposit_total = 잔여 보증금, 차감 시 줄어듦
     const newTotal = (detail?.depositTotal ?? 0) - amount;
     setDetail((prev) => prev ? { ...prev, depositTotal: newTotal } : prev);
     await editContract(activeContract.id, { deposit_total: newTotal });
     setDepAmount("");
+    setDeductionCustom(false);
     setShowDepForm(false);
   }
 
@@ -1133,10 +1142,40 @@ export default function ResidentDetailPage() {
                     <input type="number" value={depAmount} onChange={(e) => setDepAmount(e.target.value)} placeholder="50000" className={INPUT} />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs text-gray-400">차감 이유</label>
-                    <select value={depReason} onChange={(e) => setDepReason(e.target.value as DepositDeductionReason)} className={INPUT}>
-                      {DEDUCTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                    </select>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs text-gray-400">차감 이유</label>
+                      <button type="button" onClick={() => setOptionsTarget('deduction')}
+                        className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-rose-400 transition-colors">
+                        <Settings className="h-3 w-3" />옵션 관리
+                      </button>
+                    </div>
+                    {deductionCustom ? (
+                      <div className="flex gap-1.5">
+                        <input
+                          autoFocus
+                          value={depReason}
+                          onChange={(e) => setDepReason(e.target.value)}
+                          placeholder="직접 입력"
+                          className={INPUT}
+                        />
+                        <button type="button" onClick={() => { setDeductionCustom(false); setDepReason(allDeductionReasons[0] ?? ""); }}
+                          className="shrink-0 flex items-center justify-center h-9 w-9 rounded-lg border border-[#2A2A2A] text-gray-500 hover:text-white transition-colors">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        value={depReason}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') { setDeductionCustom(true); setDepReason(""); }
+                          else setDepReason(e.target.value);
+                        }}
+                        className={INPUT}
+                      >
+                        {allDeductionReasons.map((r) => <option key={r} value={r}>{r}</option>)}
+                        <option value="__custom__">+ 직접 입력</option>
+                      </select>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
@@ -1909,6 +1948,14 @@ export default function ResidentDetailPage() {
           title="부동산"
           items={allAgencies}
           onChange={updateAgencies}
+          onClose={() => setOptionsTarget(null)}
+        />
+      )}
+      {optionsTarget === 'deduction' && (
+        <SingleOptionManagerModal
+          title="보증금 차감 이유"
+          items={allDeductionReasons}
+          onChange={updateDeductionReasons}
           onClose={() => setOptionsTarget(null)}
         />
       )}
