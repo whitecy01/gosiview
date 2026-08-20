@@ -27,6 +27,16 @@ export default function LoginPage() {
       return;
     }
 
+    // 로그인 기록 남기기 (실패해도 진행)
+    try {
+      await fetch('/api/access-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'login' }),
+      });
+      sessionStorage.setItem('access_logged', '1'); // 접속 기록 중복 방지
+    } catch { /* ignore */ }
+
     router.push('/');
     router.refresh();
   }

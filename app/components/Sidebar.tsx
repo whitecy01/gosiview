@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, CalendarRange, LayoutDashboard, Users, LogOut, ListTodo, BarChart2, Printer, UserCog } from 'lucide-react';
+import { Building2, CalendarRange, LayoutDashboard, Users, LogOut, ListTodo, BarChart2, Printer, UserCog, History } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/app/lib/supabase/client';
@@ -10,21 +10,25 @@ interface SidebarProps {
   collapsed: boolean;
 }
 
-// adminOnly: 사장·원장만 노출 (관리자에게 미노출)
-const NAV_ITEMS = [
+// 공용 기능 (모든 계정)
+const GENERAL_ITEMS = [
   { href: '/', icon: ListTodo, label: 'Todo List' },
   { href: '/dashboard', icon: LayoutDashboard, label: '대시보드' },
   { href: '/residents', icon: Users, label: '입실자 관리' },
   { href: '/calendar', icon: CalendarRange, label: '연간 캘린더' },
   { href: '/print', icon: Printer, label: '출력' },
-  { href: '/stats', icon: BarChart2, label: '통계', adminOnly: true },
-  { href: '/accounts', icon: UserCog, label: '계정 관리', adminOnly: true },
+];
+
+// 관리자 전용 (사장·원장·개발자만)
+const ADMIN_ITEMS = [
+  { href: '/stats', icon: BarChart2, label: '통계' },
+  { href: '/accounts', icon: UserCog, label: '계정 관리' },
+  { href: '/login-history', icon: History, label: '로그인 이력' },
 ];
 
 export default function Sidebar({ collapsed }: SidebarProps) {
   const router = useRouter();
   const { isAdmin } = useRole();
-  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -54,22 +58,55 @@ export default function Sidebar({ collapsed }: SidebarProps) {
         </Link>
 
         {/* Navigation */}
-        <ul className="flex-1 space-y-1 px-2 font-medium">
-          {navItems.map(({ href, icon: Icon, label }) => (
-            <li key={href}>
-              <Link
-                href={href}
-                className={`group flex items-center rounded-lg p-2 text-white hover:bg-[#1A1A1A] transition-colors ${
-                  collapsed ? 'justify-center' : ''
-                }`}
-                title={collapsed ? label : undefined}
-              >
-                <Icon className="h-5 w-5 shrink-0 text-gray-400 transition duration-75 group-hover:text-white" />
-                {!collapsed && <span className="ml-3 whitespace-nowrap">{label}</span>}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <nav className="flex-1 space-y-6 px-2 font-medium">
+          {/* 운영 기능 (모든 계정) */}
+          <div>
+            {!collapsed && (
+              <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-gray-500">운영</p>
+            )}
+            <ul className="space-y-1">
+              {GENERAL_ITEMS.map(({ href, icon: Icon, label }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className={`group flex items-center rounded-lg p-2 text-white hover:bg-[#1A1A1A] transition-colors ${
+                      collapsed ? 'justify-center' : ''
+                    }`}
+                    title={collapsed ? label : undefined}
+                  >
+                    <Icon className="h-5 w-5 shrink-0 text-gray-400 transition duration-75 group-hover:text-white" />
+                    {!collapsed && <span className="ml-3 whitespace-nowrap">{label}</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* 관리자 전용 (사장·원장·개발자) */}
+          {isAdmin && (
+            <div>
+              {!collapsed
+                ? <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-amber-500/80">관리자 전용</p>
+                : <div className="mx-2 mb-1 border-t border-[#2A2A2A]" />}
+              <ul className="space-y-1">
+                {ADMIN_ITEMS.map(({ href, icon: Icon, label }) => (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      className={`group flex items-center rounded-lg p-2 text-white hover:bg-[#1A1A1A] transition-colors ${
+                        collapsed ? 'justify-center' : ''
+                      }`}
+                      title={collapsed ? label : undefined}
+                    >
+                      <Icon className="h-5 w-5 shrink-0 text-gray-400 transition duration-75 group-hover:text-white" />
+                      {!collapsed && <span className="ml-3 whitespace-nowrap">{label}</span>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </nav>
 
         {/* Bottom */}
         <ul className="space-y-1 border-t border-[#2A2A2A] px-2 pt-4 font-medium">

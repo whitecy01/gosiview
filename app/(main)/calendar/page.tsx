@@ -7,6 +7,7 @@ import { useEffectiveRooms } from '@/app/context/useEffectiveRooms';
 import RoomListModal, { type RoomModalType } from '@/app/components/RoomListModal';
 import RoomDetailDrawer from '@/app/components/RoomDetailDrawer';
 import ContractDetailPanel from '@/app/components/ContractDetailPanel';
+import OccupancyTrendChart, { type TrendUnit } from '@/app/components/OccupancyTrendChart';
 
 // ──────────── 상수 ────────────
 
@@ -65,6 +66,7 @@ function getBarGeometry(
   moveOutDate: string | null,
   timelineStart: Date,
   timelineEnd: Date,
+  dayWidth: number = DAY_WIDTH,
 ) {
   if (!moveInDate || !moveOutDate) return null;
 
@@ -80,8 +82,8 @@ function getBarGeometry(
   const endIdx = Math.round((clampedEnd.getTime() - timelineStart.getTime()) / 86400000);
 
   return {
-    left: startIdx * DAY_WIDTH,
-    width: Math.max((endIdx - startIdx + 1) * DAY_WIDTH, DAY_WIDTH),
+    left: startIdx * dayWidth,
+    width: Math.max((endIdx - startIdx + 1) * dayWidth, dayWidth),
   };
 }
 
@@ -130,22 +132,30 @@ type CalendarGridProps = {
   today: Date;
   pastTenantsMap: Record<string, TenantBar[]>;
   futureTenantsMap: Record<string, TenantBar[]>;
+  dayWidth: number;
+  unit: TrendUnit;
+  hideFloorSeparator?: boolean;
 };
 
 function CalendarGrid({
   visibleFloors, onSelectRoom, onSelectPastTenant, effectiveRooms,
   allMonths, yearGroups, timelineStart, timelineEnd,
-  totalDays, today, pastTenantsMap, futureTenantsMap,
+  totalDays, today, pastTenantsMap, futureTenantsMap, dayWidth, unit,
+  hideFloorSeparator = false,
 }: CalendarGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayOffset = useMemo(() => getTodayOffset(today, timelineStart, timelineEnd), [today, timelineStart, timelineEnd]);
-  const totalWidth = totalDays * DAY_WIDTH;
-  const HEADER_H = MONTH_H + DAY_H;
+  const totalWidth = totalDays * dayWidth;
+  // 단위에 따라 헤더/격자 굵기 조절
+  const showDayHeader = unit === 'day' || unit === 'week';   // 일별 칸·격자
+  const showDayNumbers = unit === 'day';                     // 날짜 숫자
+  const showMonthLabel = unit !== 'year';                    // N월 텍스트
+  const HEADER_H = MONTH_H + (showDayHeader ? DAY_H : 0);
 
   useEffect(() => {
     if (scrollRef.current && todayOffset !== null) {
       const el = scrollRef.current;
-      const centerX = todayOffset * DAY_WIDTH - el.clientWidth / 2;
+      const centerX = todayOffset * dayWidth - el.clientWidth / 2;
       el.scrollLeft = Math.max(0, centerX);
     }
   }, [todayOffset]);
@@ -166,19 +176,34 @@ function CalendarGrid({
             >
               호수
             </div>
-            {allMonths.map((m, i) => (
-              <div
-                key={i}
-                className="relative flex flex-col items-center justify-center gap-0.5 border-r border-[#222222]"
-                style={{ width: m.days * DAY_WIDTH, minWidth: m.days * DAY_WIDTH, borderRightColor: m.month === 12 ? '#444' : '#222' }}
-              >
-                <span className="text-sm font-semibold text-indigo-400 leading-none">{m.year}</span>
-                <span className="text-base font-bold text-gray-200 leading-none">{m.month}월</span>
-              </div>
-            ))}
+            {unit === 'year'
+              ? yearGroups.map((yg) => (
+                  <div
+                    key={yg.year}
+                    className="relative flex items-center justify-center border-r border-[#444]"
+                    style={{ width: yg.totalDays * dayWidth, minWidth: yg.totalDays * dayWidth }}
+                  >
+                    <span className="text-base font-bold text-indigo-300 leading-none">{yg.year}</span>
+                  </div>
+                ))
+              : allMonths.map((m, i) => (
+                  <div
+                    key={i}
+                    className="relative flex flex-col items-center justify-center gap-0.5 border-r border-[#222222] overflow-hidden"
+                    style={{ width: m.days * dayWidth, minWidth: m.days * dayWidth, borderRightColor: m.month === 12 ? '#444' : '#222' }}
+                  >
+                    {(showMonthLabel && m.month === 1) || dayWidth >= 5
+                      ? <span className="text-[11px] font-semibold text-indigo-400 leading-none">{m.year}</span>
+                      : null}
+                    {showMonthLabel && (
+                      <span className="text-sm font-bold text-gray-200 leading-none whitespace-nowrap">{m.month}월</span>
+                    )}
+                  </div>
+                ))}
           </div>
 
-          {/* ── Day header ── */}
+          {/* ── Day header (일·주 단위에서만) ── */}
+          {showDayHeader && (
           <div
             className="flex sticky z-20 border-b border-[#222222]"
             style={{ top: MONTH_H, height: DAY_H, backgroundColor: '#0D0D0D' }}
@@ -194,20 +219,24 @@ function CalendarGrid({
                 const dayIdx = m.startDay + d;
                 const isToday = todayOffset === dayIdx;
                 const isFirst = day === 1;
+                // 주 단위에선 날짜 숫자를 7일마다만 표시 (빽빽함 방지)
+                const showNum = showDayNumbers || d % 7 === 0;
 
                 return (
                   <div
                     key={`${mi}-${day}`}
                     className="relative flex items-center justify-center shrink-0"
                     style={{
-                      width: DAY_WIDTH,
+                      width: dayWidth,
                       borderRight: `1px solid ${isLastOfMonth ? (m.month === 12 ? '#444' : '#333') : '#1e1e1e'}`,
                       backgroundColor: isToday ? 'rgba(239,68,68,0.12)' : undefined,
                     }}
                   >
-                    <span style={{ fontSize: 8, color: isFirst ? '#e5e7eb' : isToday ? '#fca5a5' : '#555' }}>
-                      {day}
-                    </span>
+                    {showNum && (
+                      <span style={{ fontSize: 8, color: isFirst ? '#e5e7eb' : isToday ? '#fca5a5' : '#555' }}>
+                        {day}
+                      </span>
+                    )}
                     {isToday && (
                       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[2px] h-1.5 rounded-t-full bg-rose-500" />
                     )}
@@ -216,6 +245,7 @@ function CalendarGrid({
               })
             )}
           </div>
+          )}
 
           {/* ── Rows by floor ── */}
           {visibleFloors.map((floor) => {
@@ -224,7 +254,7 @@ function CalendarGrid({
 
             return (
               <div key={floor}>
-                {/* Floor separator */}
+                {!hideFloorSeparator && (
                 <div
                   className="flex items-center sticky z-10 border-b border-[#222222]"
                   style={{ height: FLOOR_ROW_H, backgroundColor: '#0F0F0F', top: HEADER_H }}
@@ -243,22 +273,23 @@ function CalendarGrid({
                       <div
                         key={yg.year}
                         className="absolute top-0 bottom-0"
-                        style={{ left: (yg.startDay + yg.totalDays) * DAY_WIDTH, width: 1, backgroundColor: '#444' }}
+                        style={{ left: (yg.startDay + yg.totalDays) * dayWidth, width: 1, backgroundColor: '#444' }}
                       />
                     ))}
                     {todayOffset !== null && (
                       <div
                         className="absolute top-0 bottom-0"
-                        style={{ left: todayOffset * DAY_WIDTH, width: DAY_WIDTH, backgroundColor: 'rgba(239,68,68,0.08)' }}
+                        style={{ left: todayOffset * dayWidth, width: dayWidth, backgroundColor: 'rgba(239,68,68,0.08)' }}
                       />
                     )}
                   </div>
                 </div>
+                )}
 
                 {/* Room rows */}
                 {effectiveRooms.filter((r) => r.floor === floor).map((room, ri) => {
                   const effectiveMoveOut = room.moveOutDate ?? timelineEnd.toISOString().slice(0, 10);
-                  const bar = getBarGeometry(room.moveInDate, effectiveMoveOut, timelineStart, timelineEnd);
+                  const bar = getBarGeometry(room.moveInDate, effectiveMoveOut, timelineStart, timelineEnd, dayWidth);
                   const isEven = ri % 2 === 0;
                   const rentLabel = fmtRent(room.monthlyRent);
                   const pastTenants: TenantBar[] = pastTenantsMap[room.id] ?? [];
@@ -296,33 +327,44 @@ function CalendarGrid({
                         className="relative flex-none"
                         style={{
                           width: totalWidth,
-                          backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent ${DAY_WIDTH - 1}px, #1a1a1a ${DAY_WIDTH - 1}px, #1a1a1a ${DAY_WIDTH}px)`,
+                          // 일 단위에서만 하루 격자, 그 외엔 격자 없음
+                          backgroundImage: showDayNumbers
+                            ? `repeating-linear-gradient(90deg, transparent, transparent ${dayWidth - 1}px, #1a1a1a ${dayWidth - 1}px, #1a1a1a ${dayWidth}px)`
+                            : undefined,
                         }}
                       >
-                        {/* 월 구분선 */}
-                        {allMonths.slice(0, -1).map((m, i) => (
-                          <div
-                            key={i}
-                            className="absolute top-0 bottom-0"
-                            style={{
-                              left: (m.startDay + m.days) * DAY_WIDTH,
-                              width: 1,
-                              backgroundColor: m.month === 12 ? '#444' : '#2a2a2a',
-                            }}
-                          />
-                        ))}
+                        {/* 구분선: 월 이하 단위면 월 구분선, 년 단위면 연 구분선만 */}
+                        {unit === 'year'
+                          ? yearGroups.slice(0, -1).map((yg) => (
+                              <div
+                                key={yg.year}
+                                className="absolute top-0 bottom-0"
+                                style={{ left: (yg.startDay + yg.totalDays) * dayWidth, width: 1, backgroundColor: '#444' }}
+                              />
+                            ))
+                          : allMonths.slice(0, -1).map((m, i) => (
+                              <div
+                                key={i}
+                                className="absolute top-0 bottom-0"
+                                style={{
+                                  left: (m.startDay + m.days) * dayWidth,
+                                  width: 1,
+                                  backgroundColor: m.month === 12 ? '#444' : '#2a2a2a',
+                                }}
+                              />
+                            ))}
 
                         {/* 오늘 컬럼 */}
                         {todayOffset !== null && (
                           <div
                             className="absolute top-0 bottom-0 z-[5] pointer-events-none"
-                            style={{ left: todayOffset * DAY_WIDTH, width: DAY_WIDTH, backgroundColor: 'rgba(239,68,68,0.08)' }}
+                            style={{ left: todayOffset * dayWidth, width: dayWidth, backgroundColor: 'rgba(239,68,68,0.08)' }}
                           />
                         )}
 
                         {/* 과거 입실자 바 */}
                         {pastTenants.map((pt, pti) => {
-                          const ptBar = getBarGeometry(pt.moveInDate, pt.moveOutDate, timelineStart, timelineEnd);
+                          const ptBar = getBarGeometry(pt.moveInDate, pt.moveOutDate, timelineStart, timelineEnd, dayWidth);
                           if (!ptBar) return null;
                           const ptRent = fmtRent(pt.monthlyRent ?? null);
                           const c = PAST_BAR;
@@ -364,7 +406,7 @@ function CalendarGrid({
 
                         {/* 예정 입실자 바 */}
                         {futureTenants.map((ft, fti) => {
-                          const ftBar = getBarGeometry(ft.moveInDate, ft.moveOutDate, timelineStart, timelineEnd);
+                          const ftBar = getBarGeometry(ft.moveInDate, ft.moveOutDate, timelineStart, timelineEnd, dayWidth);
                           if (!ftBar) return null;
                           const ftRent = fmtRent(ft.monthlyRent ?? null);
                           const fc = FUTURE_BAR;
@@ -511,10 +553,17 @@ export default function CalendarPage() {
   const totalDays = useMemo(() => allMonths.reduce((s, m) => s + m.days, 0), [allMonths]);
   const yearGroups = useMemo(() => buildYearGroups(TIMELINE_START_YEAR, TIMELINE_END_YEAR, allMonths), [TIMELINE_START_YEAR, TIMELINE_END_YEAR, allMonths]);
 
-  const [selectedFloors, setSelectedFloors] = useState<Set<FloorNumber>>(new Set(FLOORS));
   const [activeModal, setActiveModal] = useState<RoomModalType>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [detailContract, setDetailContract] = useState<DbContract | null>(null);
+
+  // 뷰: 입실 추이(라인) / 간트(막대)
+  const [view, setView] = useState<'trend' | 'gantt'>('trend');
+  const [trendUnit, setTrendUnit] = useState<TrendUnit>('month');
+  // 간트 확대: 하루당 픽셀(dayWidth)이 기준, 단위는 폭에서 파생 (헤더/격자 굵기)
+  const [dayWidth, setDayWidth] = useState(8);
+  const ganttUnit: TrendUnit = dayWidth >= 16 ? 'day' : dayWidth >= 6 ? 'week' : dayWidth >= 2.5 ? 'month' : 'year';
+  const UNIT_WIDTH: Record<TrendUnit, number> = { day: 24, week: 8, month: 3.5, year: 1.1 };
 
   // contractId로 DbContract 빠른 조회
   const contractsById = useMemo(() => {
@@ -560,63 +609,120 @@ export default function CalendarPage() {
   }, [todayStr]);
 
   const modalRooms = activeModal ? effectiveRooms.filter((r) => r.status === activeModal) : [];
-  const visibleFloors = FLOORS.filter((f) => selectedFloors.has(f));
+  // 층 선택: 전체 또는 특정 층만
+  const [floorFilter, setFloorFilter] = useState<'all' | FloorNumber>('all');
+  const visibleFloors = floorFilter === 'all' ? FLOORS : [floorFilter];
 
-  function toggleFloor(floor: FloorNumber) {
-    setSelectedFloors((prev) => {
-      const next = new Set(prev);
-      if (next.has(floor)) {
-        if (next.size === 1) return prev;
-        next.delete(floor);
-      } else {
-        next.add(floor);
-      }
-      return next;
-    });
-  }
-
-  function toggleAll() {
-    setSelectedFloors(
-      selectedFloors.size === FLOORS.length ? new Set([FLOORS[0]]) : new Set(FLOORS)
-    );
-  }
+  // 마우스 휠로 확대/축소 (위=확대, 아래=축소). shift+휠은 가로 스크롤 유지
+  const ganttWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ganttWrapRef.current;
+    if (!el || view !== 'gantt') return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.shiftKey || e.ctrlKey || e.metaKey) return; // 가로 스크롤/브라우저 확대는 그대로
+      if (Math.abs(e.deltaY) < 1) return;
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      setDayWidth((w) => Math.min(36, Math.max(0.6, w * factor)));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [view]);
 
   return (
     <main className="w-full space-y-5">
-      {/* Floor filter + 범례 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={toggleAll}
-          className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
-            selectedFloors.size === FLOORS.length
-              ? 'bg-white text-black border-white'
-              : 'bg-transparent text-gray-400 border-[#2A2A2A] hover:border-gray-500 hover:text-white'
-          }`}
-        >
-          전체
-        </button>
-
-        <div className="w-px h-5 bg-[#2A2A2A]" />
-
-        {FLOORS.map((floor, fi) => {
-          const accent = FLOOR_ACCENTS[fi];
-          const active = selectedFloors.has(floor);
-          return (
+      {/* 뷰 전환 + 단위/줌 컨트롤 */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
+          {([['trend', '입실 추이'], ['gantt', '입실 현황']] as const).map(([key, label]) => (
             <button
-              key={floor}
-              onClick={() => toggleFloor(floor)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all"
-              style={{
-                backgroundColor: active ? `${accent}22` : 'transparent',
-                borderColor: active ? accent : '#2A2A2A',
-                color: active ? accent : '#9ca3af',
-              }}
+              key={key}
+              onClick={() => setView(key)}
+              className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                view === key ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:text-gray-300'
+              }`}
             >
-              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: active ? accent : '#2A2A2A' }} />
-              {floor}층
+              {label}
             </button>
-          );
-        })}
+          ))}
+        </div>
+
+        {view === 'trend' ? (
+          <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
+            {([['day', '일'], ['week', '주'], ['month', '월'], ['year', '년']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTrendUnit(key)}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                  trendUnit === key ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="hidden text-xs text-gray-500 sm:inline">휠로 확대·축소</span>
+            <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
+              {([['day', '일'], ['week', '주'], ['month', '월'], ['year', '년']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setDayWidth(UNIT_WIDTH[key])}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    ganttUnit === key ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {view === 'trend' && (
+        <OccupancyTrendChart
+          contracts={allContracts}
+          totalRooms={effectiveRooms.length}
+          timelineStart={timelineStart}
+          timelineEnd={timelineEnd}
+          unit={trendUnit}
+          today={today}
+        />
+      )}
+
+      {/* Floor filter + 범례 (간트 뷰에서만) */}
+      {view === 'gantt' && (
+      <div className="flex flex-wrap items-center gap-2">
+        {/* 층 선택 */}
+        <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
+          <button
+            onClick={() => setFloorFilter('all')}
+            className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+              floorFilter === 'all' ? 'bg-white text-black' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            전체
+          </button>
+          {FLOORS.map((floor, fi) => {
+            const accent = FLOOR_ACCENTS[fi];
+            const active = floorFilter === floor;
+            return (
+              <button
+                key={floor}
+                onClick={() => setFloorFilter(floor)}
+                className="rounded-md px-3 py-1 text-xs font-semibold transition-colors"
+                style={{
+                  backgroundColor: active ? `${accent}26` : 'transparent',
+                  color: active ? accent : '#6b7280',
+                }}
+              >
+                {floor}층
+              </button>
+            );
+          })}
+        </div>
 
         <div className="w-px h-5 bg-[#2A2A2A]" />
 
@@ -640,22 +746,44 @@ export default function CalendarPage() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* 타임라인 */}
-      <CalendarGrid
-        visibleFloors={visibleFloors}
-        onSelectRoom={setSelectedRoom}
-        onSelectPastTenant={handleSelectPastTenant}
-        effectiveRooms={effectiveRooms}
-        allMonths={allMonths}
-        yearGroups={yearGroups}
-        timelineStart={timelineStart}
-        timelineEnd={timelineEnd}
-        totalDays={totalDays}
-        today={today}
-        pastTenantsMap={pastTenantsMap}
-        futureTenantsMap={futureTenantsMap}
-      />
+      {/* 타임라인 (간트) — 층별 섹션 */}
+      {view === 'gantt' && (
+        <div ref={ganttWrapRef} className="space-y-6">
+          {visibleFloors.map((floor, fi) => {
+            const accent = FLOOR_ACCENTS[FLOORS.indexOf(floor)];
+            return (
+              <section key={floor} className="space-y-2">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: accent }} />
+                  <h3 className="text-sm font-bold tracking-wide" style={{ color: accent }}>{floor}층</h3>
+                  <span className="text-xs text-gray-600">
+                    {effectiveRooms.filter((r) => r.floor === floor).length}개 방
+                  </span>
+                </div>
+                <CalendarGrid
+                  visibleFloors={[floor]}
+                  onSelectRoom={setSelectedRoom}
+                  onSelectPastTenant={handleSelectPastTenant}
+                  effectiveRooms={effectiveRooms}
+                  allMonths={allMonths}
+                  yearGroups={yearGroups}
+                  timelineStart={timelineStart}
+                  timelineEnd={timelineEnd}
+                  totalDays={totalDays}
+                  today={today}
+                  pastTenantsMap={pastTenantsMap}
+                  futureTenantsMap={futureTenantsMap}
+                  dayWidth={dayWidth}
+                  unit={ganttUnit}
+                  hideFloorSeparator
+                />
+              </section>
+            );
+          })}
+        </div>
+      )}
 
       <RoomListModal
         type={activeModal}
