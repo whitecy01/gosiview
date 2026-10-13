@@ -16,6 +16,8 @@ import {
   X,
   Settings,
   StickyNote,
+  Zap,
+  Flame,
 } from "lucide-react";
 import {
   RESIDENT_DETAIL_BY_ROOM,
@@ -29,7 +31,7 @@ import {
 import { useRooms } from "@/app/context/RoomsContext";
 import { useEffectiveRooms } from "@/app/context/useEffectiveRooms";
 import { formatPhone } from "@/app/lib/utils";
-import { SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, DEFAULT_DEDUCTION_REASONS, PURPOSES_LS_KEY, AGENCIES_LS_KEY, DEDUCTION_REASONS_LS_KEY } from "@/app/components/OptionsManagerModal";
+import { SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, DEFAULT_DEDUCTION_REASONS, DEFAULT_PAYMENT_METHODS, PURPOSES_LS_KEY, AGENCIES_LS_KEY, DEDUCTION_REASONS_LS_KEY, PAYMENT_METHODS_LS_KEY, readOptions } from "@/app/components/OptionsManagerModal";
 import {
   fetchDeductions,
   insertDeduction,
@@ -49,10 +51,6 @@ import { fromDbCash, toDbCashInput } from "@/app/lib/cash-succession";
 
 // ────────────── 상수 ──────────────
 
-
-const PAYMENT_METHODS: RentPaymentMethod[] = [
-  "이체(자진발급)", "이체", "현금",
-];
 
 const REASON_COLOR: Record<string, string> = {
   차임: "bg-violet-500/10 text-violet-400 border-violet-500/20",
@@ -80,6 +78,17 @@ function fmtDate(d: string) {
 function fmtMonthKo(m: string) {
   const [y, mo] = m.split("-");
   return `${y}년 ${parseInt(mo)}월`;
+}
+
+/** 계량기 수치를 천 단위로 (소수점은 그대로) */
+function fmtMeter(v: number | undefined) {
+  return v == null ? "-" : v.toLocaleString("ko-KR", { maximumFractionDigits: 3 });
+}
+
+/** 사용량 = 퇴실 시 − 입실 시. 둘 중 하나라도 없으면 "-" */
+function fmtMeterUsage(inVal: number | undefined, outVal: number | undefined) {
+  if (inVal == null || outVal == null) return "-";
+  return fmtMeter(outVal - inVal);
 }
 
 // ────────────── 공통 스타일 ──────────────
@@ -170,6 +179,11 @@ export default function ResidentDetailPage() {
       rentPayments,
       cashSuccessions: [],
       memo: activeContract?.memo ?? undefined,
+      rentMemo: activeContract?.rent_memo ?? undefined,
+      electricMeterIn: activeContract?.electric_meter_in ?? undefined,
+      electricMeterOut: activeContract?.electric_meter_out ?? undefined,
+      gasMeterIn: activeContract?.gas_meter_in ?? undefined,
+      gasMeterOut: activeContract?.gas_meter_out ?? undefined,
       contractMonths: activeContract?.contract_months ?? undefined,
     });
   }
@@ -179,6 +193,8 @@ export default function ResidentDetailPage() {
   const [allAgencies, setAllAgencies] = useState<string[]>(DEFAULT_AGENCIES);
   const [allDeductionReasons, setAllDeductionReasons] = useState<string[]>(DEFAULT_DEDUCTION_REASONS);
   const [deductionCustom, setDeductionCustom] = useState(false);
+  const [allPaymentMethods, setAllPaymentMethods] = useState<string[]>(DEFAULT_PAYMENT_METHODS);
+  const [methodCustom, setMethodCustom] = useState(false);
 
   useEffect(() => {
     try {
@@ -186,9 +202,9 @@ export default function ResidentDetailPage() {
       const a = localStorage.getItem(AGENCIES_LS_KEY);
       if (p) setAllPurposes(JSON.parse(p));
       if (a) setAllAgencies(JSON.parse(a));
-      const dr = localStorage.getItem(DEDUCTION_REASONS_LS_KEY);
-      if (dr) setAllDeductionReasons(JSON.parse(dr));
     } catch { /* ignore */ }
+    setAllDeductionReasons(readOptions(DEDUCTION_REASONS_LS_KEY, DEFAULT_DEDUCTION_REASONS));
+    setAllPaymentMethods(readOptions(PAYMENT_METHODS_LS_KEY, DEFAULT_PAYMENT_METHODS));
   }, []);
 
   function updateDeductionReasons(v: string[]) {
@@ -196,10 +212,21 @@ export default function ResidentDetailPage() {
     try { localStorage.setItem(DEDUCTION_REASONS_LS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
   }
 
+  function updatePaymentMethods(v: string[]) {
+    setAllPaymentMethods(v);
+    try { localStorage.setItem(PAYMENT_METHODS_LS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+  }
+
   // 메모 (기본 정보와 독립 섹션)
   const [editingMemo, setEditingMemo] = useState(false);
   const [memoDraft, setMemoDraft] = useState("");
   const [memoSaving, setMemoSaving] = useState(false);
+
+  // 월세 납부 관리 섹션 메모
+  const [editingRentMemo, setEditingRentMemo] = useState(false);
+  const [rentMemoDraft, setRentMemoDraft] = useState("");
+  const [rentMemoSaving, setRentMemoSaving] = useState(false);
+  const [rentMemoError, setRentMemoError] = useState<string | null>(null);
 
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState<Partial<ResidentDetail>>({});
@@ -209,7 +236,7 @@ export default function ResidentDetailPage() {
   const [editGender, setEditGender] = useState<'남' | '여' | null>(null);
   const [purposeCustom, setPurposeCustom] = useState(false);
   const [agencyCustom, setAgencyCustom] = useState(false);
-  const [optionsTarget, setOptionsTarget] = useState<'purpose' | 'agency' | 'deduction' | null>(null);
+  const [optionsTarget, setOptionsTarget] = useState<'purpose' | 'agency' | 'deduction' | 'method' | null>(null);
   const [infoSaving, setInfoSaving] = useState(false);
   const [infoSaveError, setInfoSaveError] = useState<string | null>(null);
 
@@ -233,6 +260,7 @@ export default function ResidentDetailPage() {
   const [depDate, setDepDate] = useState(new Date().toISOString().slice(0, 10));
   const [depAmount, setDepAmount] = useState("");
   const [depReason, setDepReason] = useState<string>("차임");
+  const [depError, setDepError] = useState<string | null>(null);
 
   // 보증금 반환
   const [showReturnForm, setShowReturnForm] = useState(false);
@@ -306,6 +334,7 @@ export default function ResidentDetailPage() {
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<RentPaymentMethod>("이체");
   const [payStatus, setPayStatus] = useState<'paid' | 'upcoming' | 'overdue'>("paid");
+  const [payError, setPayError] = useState<string | null>(null);
 
   if (!room) {
     return (
@@ -365,6 +394,10 @@ export default function ResidentDetailPage() {
         purpose: infoForm.purpose || null,
         real_estate_agency: infoForm.realEstateAgency || null,
         contract_months: infoForm.contractMonths ?? null,
+        electric_meter_in: infoForm.electricMeterIn ?? null,
+        electric_meter_out: infoForm.electricMeterOut ?? null,
+        gas_meter_in: infoForm.gasMeterIn ?? null,
+        gas_meter_out: infoForm.gasMeterOut ?? null,
       });
 
       // DB 저장 성공 후 UI 반영
@@ -413,19 +446,49 @@ export default function ResidentDetailPage() {
     }
   }
 
+  // ── 월세 납부 메모 (기본 정보 메모와 별개) ──
+
+  async function saveRentMemo(value: string | null) {
+    if (!activeContract) return;
+    setRentMemoSaving(true);
+    setRentMemoError(null);
+    try {
+      await editContract(activeContract.id, { rent_memo: value });
+      setDetail((p) => p ? { ...p, rentMemo: value ?? undefined } : p);
+      setEditingRentMemo(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setRentMemoError(`저장에 실패했습니다: ${msg}`);
+    } finally {
+      setRentMemoSaving(false);
+    }
+  }
+
   // ── 보증금 차감 ──
 
   async function addDeduction() {
     if (!activeContract || !depDate || !depAmount) return;
     const reason = depReason.trim();
-    if (!reason) return;
+    if (!reason) {
+      setDepError("차감 이유를 입력해주세요.");
+      return;
+    }
     const amount = Number(depAmount);
-    const saved = await insertDeduction({
-      contract_id: activeContract.id,
-      date: depDate,
-      amount,
-      reason,
-    });
+    setDepError(null);
+    let saved: DbDepositDeduction;
+    try {
+      saved = await insertDeduction({
+        contract_id: activeContract.id,
+        date: depDate,
+        amount,
+        reason,
+      });
+    } catch (e) {
+      // 저장 실패를 조용히 삼키면 "저장이 안 된다"는 제보로만 드러난다. 화면에 표시한다.
+      const msg = e instanceof Error ? e.message : String(e);
+      setDepError(`저장에 실패했습니다: ${msg}`);
+      return;
+    }
     setDbDeductions((prev) => [...prev, saved]);
     // 직접 입력한 이유는 옵션 목록에도 저장
     if (!allDeductionReasons.includes(reason)) updateDeductionReasons([...allDeductionReasons, reason]);
@@ -586,31 +649,50 @@ export default function ResidentDetailPage() {
     const payment = detail.rentPayments[monthIdx];
     if (!payment) return;
     const effectivePaidAt = payStatus === 'paid' ? (payDate || null) : null;
-    await upsertRentPayment({
-      contract_id: activeContract.id,
-      month: payment.month,
-      amount: Number(payAmount),
-      paid_at: effectivePaidAt,
-      payment_method: payStatus === 'paid' ? payMethod : null,
-      status: payStatus,
-    });
+    const method = payMethod.trim();
+    // 납부완료일 때만 결제 방식을 저장한다 (미납·예정은 null).
+    if (payStatus === 'paid' && !method) {
+      setPayError("결제 방식을 입력해주세요.");
+      return;
+    }
+    const effectiveMethod = payStatus === 'paid' ? method : null;
+    setPayError(null);
+    try {
+      await upsertRentPayment({
+        contract_id: activeContract.id,
+        month: payment.month,
+        amount: Number(payAmount),
+        paid_at: effectivePaidAt,
+        payment_method: effectiveMethod,
+        status: payStatus,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setPayError(`저장에 실패했습니다: ${msg}`);
+      return;
+    }
+    // 직접 입력한 결제 방식은 옵션 목록에도 저장
+    if (effectiveMethod && !allPaymentMethods.includes(effectiveMethod)) {
+      updatePaymentMethods([...allPaymentMethods, effectiveMethod]);
+    }
     setDetail((prev) =>
       prev
         ? {
             ...prev,
             rentPayments: prev.rentPayments.map((p, i) =>
               i === monthIdx
-                ? { ...p, paidAt: effectivePaidAt, amount: Number(payAmount), paymentMethod: payStatus === 'paid' ? payMethod : null, status: payStatus }
+                ? { ...p, paidAt: effectivePaidAt, amount: Number(payAmount), paymentMethod: effectiveMethod, status: payStatus }
                 : p
             ),
           }
         : prev
     );
+    setMethodCustom(false);
     setPayingMonthIdx(null);
   }
 
+  // depositTotal 에는 이미 차감이 반영되어 있으므로 여기서 또 빼면 안 된다.
   const depositDeducted = dbDeductions.reduce((s, d) => s + d.amount, 0);
-  const depositRemaining = (detail?.depositTotal ?? 0) - depositDeducted;
 
   return (
     <main className="w-full space-y-6 pb-12">
@@ -697,7 +779,7 @@ export default function ResidentDetailPage() {
               /* ── 수정 폼 ── */
               <div className="p-6 space-y-5">
                 {/* 인적 사항 */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>
                     <label className="mb-1.5 block text-xs text-gray-400">이름</label>
                     <input
@@ -787,7 +869,7 @@ export default function ResidentDetailPage() {
                 {/* 계약 기간 */}
                 <div>
                   <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">계약 기간</p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-xs text-gray-400">계약일(문서 작성 날짜)</label>
                       <input
@@ -817,7 +899,7 @@ export default function ResidentDetailPage() {
                 {/* 실제 입·퇴실일 */}
                 <div>
                   <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">실제 입·퇴실</p>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
                       <label className="mb-1.5 block text-xs text-gray-400">입실일</label>
                       <input
@@ -878,7 +960,7 @@ export default function ResidentDetailPage() {
                     className={INPUT}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-xs text-gray-400">거주 목적</label>
@@ -954,6 +1036,48 @@ export default function ResidentDetailPage() {
                     )}
                   </div>
                 </div>
+
+                {/* 계량기 수치 */}
+                <div className="rounded-xl border border-[#2A2A2A] bg-[#0D0D0D] p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">계량기 수치</p>
+                  <div className="grid grid-cols-[52px_1fr_1fr_56px] items-end gap-2 sm:grid-cols-[72px_1fr_1fr_84px] sm:gap-3">
+                    <span className="pb-2 text-xs text-gray-500" />
+                    <label className="pb-1 text-[11px] text-gray-500">입실 시</label>
+                    <label className="pb-1 text-[11px] text-gray-500">퇴실 시</label>
+                    <label className="pb-1 text-[11px] text-gray-500">사용량</label>
+
+                    <span className="pb-2 text-xs font-medium text-gray-300">전기</span>
+                    <input
+                      type="number" step="any"
+                      value={infoForm.electricMeterIn ?? ""}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, electricMeterIn: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                      placeholder="12345" className={INPUT}
+                    />
+                    <input
+                      type="number" step="any"
+                      value={infoForm.electricMeterOut ?? ""}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, electricMeterOut: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                      placeholder="12900" className={INPUT}
+                    />
+                    <span className="pb-2 text-sm font-semibold text-amber-400">{fmtMeterUsage(infoForm.electricMeterIn, infoForm.electricMeterOut)}</span>
+
+                    <span className="pb-2 text-xs font-medium text-gray-300">도시가스</span>
+                    <input
+                      type="number" step="any"
+                      value={infoForm.gasMeterIn ?? ""}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, gasMeterIn: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                      placeholder="6789" className={INPUT}
+                    />
+                    <input
+                      type="number" step="any"
+                      value={infoForm.gasMeterOut ?? ""}
+                      onChange={(e) => setInfoForm((f) => ({ ...f, gasMeterOut: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                      placeholder="6820" className={INPUT}
+                    />
+                    <span className="pb-2 text-sm font-semibold text-amber-400">{fmtMeterUsage(infoForm.gasMeterIn, infoForm.gasMeterOut)}</span>
+                  </div>
+                </div>
+
                 {infoSaveError && (
                   <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{infoSaveError}</p>
                 )}
@@ -1016,6 +1140,15 @@ export default function ResidentDetailPage() {
                     <InfoField icon={<Calendar className="h-3.5 w-3.5" />} label="월세 납부일" value={`매월 ${detail.paymentDueDay}일`} highlight="indigo" />
                     <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="계약금" value={detail.earnestMoney != null ? `₩${detail.earnestMoney.toLocaleString("ko-KR")}` : "-"} />
                     <InfoField icon={<Banknote className="h-3.5 w-3.5" />} label="보증금" value={`₩${detail.contractDeposit.amount.toLocaleString("ko-KR")}`} />
+                  </FieldGroup>
+
+                  <FieldGroup title="계량기 수치">
+                    <InfoField icon={<Zap className="h-3.5 w-3.5" />} label="전기 (입실 시)" value={fmtMeter(detail.electricMeterIn)} />
+                    <InfoField icon={<Zap className="h-3.5 w-3.5" />} label="전기 (퇴실 시)" value={fmtMeter(detail.electricMeterOut)} />
+                    <InfoField icon={<Zap className="h-3.5 w-3.5" />} label="전기 사용량" value={fmtMeterUsage(detail.electricMeterIn, detail.electricMeterOut)} highlight="amber" />
+                    <InfoField icon={<Flame className="h-3.5 w-3.5" />} label="도시가스 (입실 시)" value={fmtMeter(detail.gasMeterIn)} />
+                    <InfoField icon={<Flame className="h-3.5 w-3.5" />} label="도시가스 (퇴실 시)" value={fmtMeter(detail.gasMeterOut)} />
+                    <InfoField icon={<Flame className="h-3.5 w-3.5" />} label="도시가스 사용량" value={fmtMeterUsage(detail.gasMeterIn, detail.gasMeterOut)} highlight="amber" />
                   </FieldGroup>
 
                   <FieldGroup title="기타">
@@ -1132,7 +1265,7 @@ export default function ResidentDetailPage() {
             {showDepForm && (
               <div className="border-b border-[#2A2A2A] bg-[#0E0E0E] px-6 py-4 space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-rose-400">차감 내역 추가</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div>
                     <label className="mb-1.5 block text-xs text-gray-400">날짜</label>
                     <input type="date" value={depDate} onChange={(e) => setDepDate(e.target.value)} className={INPUT} />
@@ -1154,7 +1287,7 @@ export default function ResidentDetailPage() {
                         <input
                           autoFocus
                           value={depReason}
-                          onChange={(e) => setDepReason(e.target.value)}
+                          onChange={(e) => { setDepReason(e.target.value); setDepError(null); }}
                           placeholder="직접 입력"
                           className={INPUT}
                         />
@@ -1167,6 +1300,7 @@ export default function ResidentDetailPage() {
                       <select
                         value={depReason}
                         onChange={(e) => {
+                          setDepError(null);
                           if (e.target.value === '__custom__') { setDeductionCustom(true); setDepReason(""); }
                           else setDepReason(e.target.value);
                         }}
@@ -1178,9 +1312,12 @@ export default function ResidentDetailPage() {
                     )}
                   </div>
                 </div>
+                {depError && (
+                  <p className="mt-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{depError}</p>
+                )}
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => setShowDepForm(false)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
-                  <button onClick={addDeduction} disabled={!depDate || !depAmount} className="rounded-lg bg-rose-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-40">저장</button>
+                  <button onClick={() => { setDepError(null); setShowDepForm(false); }} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
+                  <button onClick={addDeduction} disabled={!depDate || !depAmount || !depReason.trim()} className="rounded-lg bg-rose-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-40">저장</button>
                 </div>
               </div>
             )}
@@ -1271,14 +1408,15 @@ export default function ResidentDetailPage() {
               {detail.depositReturn.returned && (
                 <div className="px-6 pb-4 flex items-center gap-2">
                   <span className="text-xs text-gray-500">잔여 보증금</span>
-                  <span className="text-sm font-bold text-emerald-400">₩{depositRemaining.toLocaleString("ko-KR")}</span>
+                  <span className="text-sm font-bold text-emerald-400">₩{detail.depositTotal.toLocaleString("ko-KR")}</span>
                   <span className="text-xs text-gray-600">반환 완료</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* ── 월세 납부 관리 ── */}
+          {/* ── 월세 납부 관리 + 메모 ── */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
           <div className={CARD}>
             <div className={SECTION_HEADER}>
               <div>
@@ -1318,8 +1456,10 @@ export default function ResidentDetailPage() {
                           setPayingMonthIdx(i);
                           setPayDate(p.paidAt ?? new Date().toISOString().slice(0, 10));
                           setPayAmount(String(p.amount));
-                          setPayMethod((p.paymentMethod as RentPaymentMethod) ?? "이체");
+                          setPayMethod(p.paymentMethod ?? allPaymentMethods[0] ?? "");
                           setPayStatus(p.status);
+                          setMethodCustom(false);
+                          setPayError(null);
                         }}
                         className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
                           p.status === 'paid'
@@ -1333,7 +1473,7 @@ export default function ResidentDetailPage() {
                   </div>
                   {payingMonthIdx === i && (
                     <div className="border-t border-[#2A2A2A] bg-[#0E0E0E] px-6 pb-4 pt-3 space-y-3">
-                      <div className={`grid gap-3 ${payStatus === 'paid' ? 'grid-cols-4' : 'grid-cols-2'}`}>
+                      <div className={`grid gap-3 ${payStatus === 'paid' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
                         <div>
                           <label className="mb-1.5 block text-xs text-gray-400">납부 상태</label>
                           <select value={payStatus} onChange={(e) => setPayStatus(e.target.value as 'paid' | 'upcoming' | 'overdue')} className={INPUT}>
@@ -1353,23 +1493,128 @@ export default function ResidentDetailPage() {
                               <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className={INPUT} />
                             </div>
                             <div>
-                              <label className="mb-1.5 block text-xs text-gray-400">결제 방식</label>
-                              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as RentPaymentMethod)} className={INPUT}>
-                                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-                              </select>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-xs text-gray-400">결제 방식</label>
+                                <button type="button" onClick={() => setOptionsTarget('method')}
+                                  className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-indigo-400 transition-colors">
+                                  <Settings className="h-3 w-3" />옵션 관리
+                                </button>
+                              </div>
+                              {methodCustom ? (
+                                <div className="flex gap-1.5">
+                                  <input
+                                    autoFocus
+                                    value={payMethod}
+                                    onChange={(e) => { setPayMethod(e.target.value); setPayError(null); }}
+                                    placeholder="직접 입력"
+                                    className={INPUT}
+                                  />
+                                  <button type="button" onClick={() => { setMethodCustom(false); setPayMethod(allPaymentMethods[0] ?? ""); }}
+                                    className="shrink-0 flex items-center justify-center h-9 w-9 rounded-lg border border-[#2A2A2A] text-gray-500 hover:text-white transition-colors">
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <select
+                                  value={payMethod}
+                                  onChange={(e) => {
+                                    setPayError(null);
+                                    if (e.target.value === '__custom__') { setMethodCustom(true); setPayMethod(""); }
+                                    else setPayMethod(e.target.value);
+                                  }}
+                                  className={INPUT}
+                                >
+                                  {/* 과거에 저장된 값이 옵션에서 삭제됐어도 선택 상태가 비지 않게 함께 노출한다. */}
+                                  {(allPaymentMethods.includes(payMethod) ? allPaymentMethods : [payMethod, ...allPaymentMethods])
+                                    .filter(Boolean)
+                                    .map((m) => <option key={m} value={m}>{m}</option>)}
+                                  <option value="__custom__">+ 직접 입력</option>
+                                </select>
+                              )}
                             </div>
                           </>
                         )}
                       </div>
+                      {payError && (
+                        <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{payError}</p>
+                      )}
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => setPayingMonthIdx(null)} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
-                        <button onClick={() => addPayment(i)} disabled={!payAmount} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">저장</button>
+                        <button onClick={() => { setPayError(null); setMethodCustom(false); setPayingMonthIdx(null); }} className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white">취소</button>
+                        <button onClick={() => addPayment(i)} disabled={!payAmount || (payStatus === 'paid' && !payMethod.trim())} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">저장</button>
                       </div>
                     </div>
                   )}
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* 월세 납부 메모 (기본 정보 메모와 같은 배치) */}
+          <div className={`${CARD} self-start`}>
+            <div className={SECTION_HEADER}>
+              <div className="flex items-center gap-2">
+                <StickyNote className="h-4 w-4 text-amber-400" />
+                <h2 className="text-base font-semibold text-white">납부 메모</h2>
+              </div>
+              {!editingRentMemo && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => { setRentMemoDraft(detail.rentMemo ?? ""); setRentMemoError(null); setEditingRentMemo(true); }}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:text-white"
+                  >
+                    <Pencil className="h-3 w-3" />{detail.rentMemo ? "수정" : "작성"}
+                  </button>
+                  {detail.rentMemo && (
+                    <button
+                      onClick={() => saveRentMemo(null)}
+                      disabled={rentMemoSaving}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] text-gray-600 transition-colors hover:border-rose-500/40 hover:text-rose-400 disabled:opacity-40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6">
+              {editingRentMemo ? (
+                <div className="space-y-3">
+                  <textarea
+                    autoFocus
+                    rows={8}
+                    value={rentMemoDraft}
+                    onChange={(e) => setRentMemoDraft(e.target.value)}
+                    placeholder="월세 납부 관련 메모를 입력하세요"
+                    className={`${INPUT} resize-y`}
+                  />
+                  {rentMemoError && (
+                    <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{rentMemoError}</p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => { setEditingRentMemo(false); setRentMemoError(null); }}
+                      disabled={rentMemoSaving}
+                      className="rounded-lg border border-[#2A2A2A] px-4 py-2 text-xs text-gray-400 transition-colors hover:text-white disabled:opacity-40"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={() => saveRentMemo(rentMemoDraft.trim() || null)}
+                      disabled={!activeContract || rentMemoSaving}
+                      className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-400 disabled:opacity-40"
+                    >
+                      {rentMemoSaving ? "저장 중…" : "저장"}
+                    </button>
+                  </div>
+                </div>
+              ) : detail.rentMemo ? (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{detail.rentMemo}</p>
+              ) : (
+                <p className="py-8 text-center text-sm text-gray-500">작성된 메모가 없습니다.</p>
+              )}
+            </div>
+          </div>
           </div>
 
           {/* ── 현금 승계 ── */}
@@ -1412,7 +1657,7 @@ export default function ResidentDetailPage() {
                 {/* 청구 기간 */}
                 <div>
                   <p className="mb-2 text-xs text-gray-500 font-medium">청구기간</p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs text-gray-600">시작 (한전 고지서 기준)</label>
                       <input type="date" value={newCashForm.billingStart ?? ""} onChange={(e) => setNewCashForm(p => ({ ...p, billingStart: e.target.value }))} className={INPUT} />
@@ -1425,7 +1670,7 @@ export default function ResidentDetailPage() {
                 </div>
 
                 {/* 임대인 / 임차인 기간 */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <p className="mb-2 text-xs text-gray-500 font-medium">임대인 현금승계 기간</p>
                     <div className="grid grid-cols-2 gap-2">
@@ -1468,7 +1713,7 @@ export default function ResidentDetailPage() {
                       네이버 전기요금 계산기
                     </a>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
                       <p className="text-xs font-semibold text-sky-400">임대인</p>
                       <div>
@@ -1521,7 +1766,7 @@ export default function ResidentDetailPage() {
                 {/* 계좌 정보 */}
                 <div>
                   <p className="mb-2 text-xs text-gray-500 font-medium">계좌번호</p>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
                       <label className="mb-1 block text-xs text-gray-600">은행</label>
                       <input value={newCashForm.bankName ?? ""} onChange={(e) => setNewCashForm(p => ({ ...p, bankName: e.target.value }))} placeholder="신한" className={INPUT} />
@@ -1537,7 +1782,7 @@ export default function ResidentDetailPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-xs text-gray-600">납부 일자</label>
                     <input type="date" value={newCashForm.paymentDate ?? ""} onChange={(e) => setNewCashForm(p => ({ ...p, paymentDate: e.target.value }))} className={INPUT} />
@@ -1699,7 +1944,7 @@ export default function ResidentDetailPage() {
                       {sec === 'landlord' && (
                         <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-3">
                           <p className="text-xs font-semibold text-indigo-400">임대인 현금승계 기간</p>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
                               <label className="mb-1 block text-xs text-gray-600">시작</label>
                               <input type="date" value={sf.landlordStart ?? rec.landlordStart ?? ""} onChange={(e) => setCashSectionForm(p => ({ ...p, [i]: { ...sf, landlordStart: e.target.value } }))} className={INPUT} />
@@ -1720,7 +1965,7 @@ export default function ResidentDetailPage() {
                       {sec === 'tenant' && (
                         <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
                           <p className="text-xs font-semibold text-emerald-400">임차인 실 사용 기간</p>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
                               <label className="mb-1 block text-xs text-gray-600">시작</label>
                               <input type="date" value={sf.tenantStart ?? rec.tenantStart ?? ""} onChange={(e) => setCashSectionForm(p => ({ ...p, [i]: { ...sf, tenantStart: e.target.value } }))} className={INPUT} />
@@ -1746,7 +1991,7 @@ export default function ResidentDetailPage() {
                               <span className="text-[10px]">⚡</span>네이버 전기요금 계산기
                             </a>
                           </div>
-                          <div className="grid grid-cols-3 gap-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                             <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
                               <p className="text-xs font-semibold text-sky-400">임대인</p>
                               <div>
@@ -1805,7 +2050,7 @@ export default function ResidentDetailPage() {
                       {sec === 'account' && (
                         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
                           <p className="text-xs font-semibold text-amber-400">계좌번호</p>
-                          <div className="grid grid-cols-3 gap-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                             <div>
                               <label className="mb-1 block text-xs text-gray-600">은행</label>
                               <input value={sf.bankName ?? rec.bankName ?? ""} onChange={(e) => setCashSectionForm(p => ({ ...p, [i]: { ...sf, bankName: e.target.value } }))} placeholder="신한" className={INPUT} />
@@ -1819,7 +2064,7 @@ export default function ResidentDetailPage() {
                               <input value={sf.accountNumber ?? rec.accountNumber ?? ""} onChange={(e) => setCashSectionForm(p => ({ ...p, [i]: { ...sf, accountNumber: e.target.value } }))} placeholder="110-000-000000" className={INPUT} />
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
                               <label className="mb-1 block text-xs text-gray-600">납부 일자</label>
                               <input type="date" value={sf.paymentDate ?? rec.paymentDate ?? ""} onChange={(e) => setCashSectionForm(p => ({ ...p, [i]: { ...sf, paymentDate: e.target.value } }))} className={INPUT} />
@@ -1847,14 +2092,14 @@ export default function ResidentDetailPage() {
                             {/* 청구 기간 */}
                             <div>
                               <p className="mb-2 text-xs text-gray-500 font-medium">청구기간 (한전 고지서 기준)</p>
-                              <div className="grid grid-cols-2 gap-3">
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div><label className="mb-1 block text-xs text-gray-600">시작 (한전 고지서 기준)</label><input type="date" value={ff.billingStart ?? ""} onChange={(e) => set({ billingStart: e.target.value })} className={INPUT} /></div>
                                 <div><label className="mb-1 block text-xs text-gray-600">종료 (한전 고지서 기준)</label><input type="date" value={ff.billingEnd ?? ""} onChange={(e) => set({ billingEnd: e.target.value })} className={INPUT} /></div>
                               </div>
                             </div>
 
                             {/* 임대인 / 임차인 기간 */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                               <div>
                                 <p className="mb-2 text-xs text-gray-500 font-medium">임대인 현금승계 기간</p>
                                 <div className="grid grid-cols-2 gap-2">
@@ -1877,7 +2122,7 @@ export default function ResidentDetailPage() {
                                 <p className="text-xs text-gray-500 font-medium">금액 및 사용량</p>
                                 <a href="https://search.naver.com/search.naver?query=전기요금+계산기" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-md border border-green-500/30 bg-green-500/10 px-2 py-1 text-xs text-green-400 hover:bg-green-500/20 transition-colors"><span className="text-[10px]">⚡</span>네이버 전기요금 계산기</a>
                               </div>
-                              <div className="grid grid-cols-3 gap-3">
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3 space-y-2">
                                   <p className="text-xs font-semibold text-sky-400">임대인</p>
                                   <div><label className="mb-1 block text-xs text-gray-600">금액 (원)</label><input type="number" value={ff.landlordAmount ?? ""} onChange={(e) => { const v = e.target.value === "" ? undefined : Number(e.target.value); set({ landlordAmount: v, tenantAmount: v != null ? (ff.totalAmount ?? 0) - v : undefined }); }} placeholder="0" className={INPUT} /></div>
@@ -1906,7 +2151,7 @@ export default function ResidentDetailPage() {
                             {/* 계좌 정보 */}
                             <div>
                               <p className="mb-2 text-xs text-gray-500 font-medium">계좌번호</p>
-                              <div className="grid grid-cols-3 gap-3">
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 <div><label className="mb-1 block text-xs text-gray-600">은행</label><input value={ff.bankName ?? ""} onChange={(e) => set({ bankName: e.target.value })} placeholder="신한" className={INPUT} /></div>
                                 <div><label className="mb-1 block text-xs text-gray-600">예금주</label><input value={ff.accountHolder ?? ""} onChange={(e) => set({ accountHolder: e.target.value })} placeholder="홍길동" className={INPUT} /></div>
                                 <div><label className="mb-1 block text-xs text-gray-600">계좌번호</label><input value={ff.accountNumber ?? ""} onChange={(e) => set({ accountNumber: e.target.value })} placeholder="110-000-000000" className={INPUT} /></div>
@@ -1959,6 +2204,14 @@ export default function ResidentDetailPage() {
           onClose={() => setOptionsTarget(null)}
         />
       )}
+      {optionsTarget === 'method' && (
+        <SingleOptionManagerModal
+          title="결제 방식"
+          items={allPaymentMethods}
+          onChange={updatePaymentMethods}
+          onClose={() => setOptionsTarget(null)}
+        />
+      )}
     </main>
   );
 }
@@ -1982,13 +2235,14 @@ function InfoField({
   icon: React.ReactNode;
   label: string;
   value: string | null | undefined;
-  highlight?: "emerald" | "indigo";
+  highlight?: "emerald" | "indigo" | "amber";
 }) {
   const isEmpty = !value;
   const valueColor =
     isEmpty ? "text-gray-600" :
     highlight === "emerald" ? "text-emerald-400" :
     highlight === "indigo"  ? "text-indigo-400"  :
+    highlight === "amber"   ? "text-amber-400"   :
     "text-white";
 
   return (

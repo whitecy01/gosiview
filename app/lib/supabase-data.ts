@@ -33,6 +33,13 @@ export type DbContract = {
   deposit_returned: boolean;
   deposit_returned_at: string | null;
   memo: string | null;
+  /** 월세 납부 관리 섹션 전용 메모 (기본 정보 메모와 별개) */
+  rent_memo: string | null;
+  /** 계량기 수치 — 입실 시 / 퇴실 시 (사용량 = out - in) */
+  electric_meter_in: number | null;
+  electric_meter_out: number | null;
+  gas_meter_in: number | null;
+  gas_meter_out: number | null;
   contract_months: number | null;
   status: 'scheduled' | 'completed';
   created_at: string;
@@ -126,6 +133,11 @@ export type NewContractInput = {
   deposit_returned?: boolean;
   deposit_returned_at?: string | null;
   memo?: string | null;
+  rent_memo?: string | null;
+  electric_meter_in?: number | null;
+  electric_meter_out?: number | null;
+  gas_meter_in?: number | null;
+  gas_meter_out?: number | null;
   contract_months?: number | null;
   status: 'scheduled' | 'completed';
 };
@@ -274,6 +286,22 @@ export async function insertDeduction(input: {
   const { data, error } = await supabase
     .from('deposit_deductions')
     .insert(input)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as DbDepositDeduction;
+}
+
+export async function updateDeduction(id: string, input: {
+  date?: string;
+  amount?: number;
+  reason?: string;
+}): Promise<DbDepositDeduction> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('deposit_deductions')
+    .update(input)
+    .eq('id', id)
     .select()
     .single();
   if (error) throw error;

@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Search, CalendarDays, Wrench, ChevronRight, Plus, Trash2, Pencil, History, Settings, LayoutGrid, List } from "lucide-react";
-import { OptionsManagerModal, SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, DEFAULT_DETAIL_OPTIONS, DEFAULT_DEDUCTION_REASONS, PURPOSES_LS_KEY, AGENCIES_LS_KEY, DETAIL_OPTIONS_LS_KEY, DEDUCTION_REASONS_LS_KEY } from "./OptionsManagerModal";
+import { OptionsManagerModal, SingleOptionManagerModal, DEFAULT_PURPOSES, DEFAULT_AGENCIES, DEFAULT_DETAIL_OPTIONS, DEFAULT_DEDUCTION_REASONS, DEFAULT_PAYMENT_METHODS, PURPOSES_LS_KEY, AGENCIES_LS_KEY, DETAIL_OPTIONS_LS_KEY, DEDUCTION_REASONS_LS_KEY, PAYMENT_METHODS_LS_KEY, readOptions } from "./OptionsManagerModal";
 import {
   ROOM_TYPE_INFO,
   type Room,
@@ -699,7 +699,7 @@ function ScheduledInfoModal({
                             }
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                           <div className={`rounded-lg px-3 py-2 text-xs border ${isActualDiff ? 'bg-amber-500/10 border-amber-500/20' : 'bg-[#1A1A1A] border-transparent'}`}>
                             <span className="text-gray-500 block mb-0.5">입실일</span>
                             {r.actualMoveInDate
@@ -963,7 +963,7 @@ function RoomManagementModal({
               <p className="text-sm text-gray-500">{viewYear}년 관리 이력이 없습니다.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {MONTH_NAMES.map((name, mi) => {
                 const month = mi + 1;
                 const monthRecords = recordsForMonth(month);
@@ -1103,6 +1103,7 @@ export default function TenantListTable() {
   const [managedAgencies, setManagedAgencies] = useState<string[]>(DEFAULT_AGENCIES);
   const [managedDetailOptions, setManagedDetailOptions] = useState<string[]>(DEFAULT_DETAIL_OPTIONS);
   const [managedDeductionReasons, setManagedDeductionReasons] = useState<string[]>(DEFAULT_DEDUCTION_REASONS);
+  const [managedPaymentMethods, setManagedPaymentMethods] = useState<string[]>(DEFAULT_PAYMENT_METHODS);
   const { effectiveRooms, today, todayStr } = useEffectiveRooms();
   const { contracts, addContract, editContract, removeContract } = useRooms();
   const [maintenanceData, setMaintenanceData] = useState<Record<string, MaintenanceRecord[]>>({});
@@ -1116,9 +1117,9 @@ export default function TenantListTable() {
       if (a) setManagedAgencies(JSON.parse(a));
       const d = localStorage.getItem(DETAIL_OPTIONS_LS_KEY);
       if (d) setManagedDetailOptions(JSON.parse(d));
-      const dr = localStorage.getItem(DEDUCTION_REASONS_LS_KEY);
-      if (dr) setManagedDeductionReasons(JSON.parse(dr));
     } catch { /* ignore */ }
+    setManagedDeductionReasons(readOptions(DEDUCTION_REASONS_LS_KEY, DEFAULT_DEDUCTION_REASONS));
+    setManagedPaymentMethods(readOptions(PAYMENT_METHODS_LS_KEY, DEFAULT_PAYMENT_METHODS));
   }, []);
 
   function updatePurposes(v: string[]) {
@@ -1406,7 +1407,7 @@ export default function TenantListTable() {
             floors.map((f) => [f, filtered.filter((r) => r.floor === f).sort((a, b) => a.id.localeCompare(b.id))])
           );
           return (
-            <div className="grid grid-cols-3 gap-3 p-4">
+            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
               {floors.map((floor) => (
                 <div key={floor} className="flex-1 min-w-0 rounded-xl border border-[#2A2A2A] bg-[#0D0D0D] overflow-hidden">
                   {/* 층 헤더 */}
@@ -1636,10 +1637,12 @@ export default function TenantListTable() {
           agencies={managedAgencies}
           detailOptions={managedDetailOptions}
           deductionReasons={managedDeductionReasons}
+          paymentMethods={managedPaymentMethods}
           onPurposesChange={updatePurposes}
           onAgenciesChange={updateAgencies}
           onDetailOptionsChange={(v) => { setManagedDetailOptions(v); localStorage.setItem(DETAIL_OPTIONS_LS_KEY, JSON.stringify(v)); }}
           onDeductionReasonsChange={(v) => { setManagedDeductionReasons(v); localStorage.setItem(DEDUCTION_REASONS_LS_KEY, JSON.stringify(v)); }}
+          onPaymentMethodsChange={(v) => { setManagedPaymentMethods(v); localStorage.setItem(PAYMENT_METHODS_LS_KEY, JSON.stringify(v)); }}
           onClose={() => setShowOptionsManager(false)}
         />
       )}

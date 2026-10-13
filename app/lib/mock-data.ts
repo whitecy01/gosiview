@@ -193,7 +193,8 @@ export type DepositDeductionReason =
   | "타일"
   | "시설손상";
 
-export type RentPaymentMethod = "이체(자진발급)" | "이체" | "현금";
+/** 결제 방식은 옵션 관리에서 추가·수정하는 값이므로 고정 목록이 아니다. */
+export type RentPaymentMethod = string;
 
 export type DepositDeduction = {
   date: string;
@@ -250,6 +251,13 @@ export type ResidentDetail = {
   rentPayments: RentPayment[];
   cashSuccessions: CashSuccessionRecord[];
   memo?: string;
+  /** 월세 납부 관리 섹션 전용 메모 */
+  rentMemo?: string;
+  /** 계량기 수치 — 입실 시 / 퇴실 시 */
+  electricMeterIn?: number;
+  electricMeterOut?: number;
+  gasMeterIn?: number;
+  gasMeterOut?: number;
   contractMonths?: number;
 };
 

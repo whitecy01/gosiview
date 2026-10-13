@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { PanelLeftClose, PanelLeftOpen, UserPlus, LogOut, Bell } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, UserPlus, LogOut, Bell, Menu } from 'lucide-react';
 import { createClient } from '@/app/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import ChangelogModal from './ChangelogModal';
@@ -10,10 +10,12 @@ import { CHANGELOG_SEEN_KEY, LATEST_VERSION } from '@/app/lib/changelog';
 interface HeaderProps {
   collapsed: boolean;
   onToggle: () => void;
+  /** 모바일에서 사이드바 드로어 열기 */
+  onMobileMenu: () => void;
   onNewResident: () => void;
 }
 
-export default function Header({ collapsed, onToggle, onNewResident }: HeaderProps) {
+export default function Header({ collapsed, onToggle, onMobileMenu, onNewResident }: HeaderProps) {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -65,13 +67,23 @@ export default function Header({ collapsed, onToggle, onNewResident }: HeaderPro
   const initials = email ? email[0].toUpperCase() : '?';
 
   return (
-    <header className={`fixed top-0 z-30 border-b border-[#2A2A2A] bg-[#0A0A0A]/80 backdrop-blur-md transition-all duration-300 ${collapsed ? 'left-16' : 'left-64'} right-0`}>
-      <div className="flex h-16 items-center justify-between px-4 lg:px-6">
-        {/* Toggle */}
-        <div className="flex flex-1 items-center gap-3">
+    <header className={`fixed top-0 right-0 left-0 z-30 border-b border-[#2A2A2A] bg-[#0A0A0A]/80 backdrop-blur-md transition-all duration-300 ${collapsed ? 'lg:left-16' : 'lg:left-64'}`}>
+      <div className="flex h-16 items-center justify-between px-3 sm:px-4 lg:px-6">
+        {/* 왼쪽: 메뉴 / 사이드바 토글 */}
+        <div className="flex flex-1 items-center gap-2">
+          {/* 모바일 — 드로어 열기 */}
+          <button
+            onClick={onMobileMenu}
+            className="flex items-center justify-center rounded-lg p-2 text-gray-400 transition-colors hover:bg-[#1A1A1A] hover:text-white lg:hidden"
+            title="메뉴 열기"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+
+          {/* 데스크톱 — 접기/펼치기 */}
           <button
             onClick={onToggle}
-            className="flex items-center justify-center rounded-lg p-2 text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors"
+            className="hidden items-center justify-center rounded-lg p-2 text-gray-400 transition-colors hover:bg-[#1A1A1A] hover:text-white lg:flex"
             title={collapsed ? '사이드바 열기' : '사이드바 닫기'}
           >
             {collapsed
@@ -79,10 +91,13 @@ export default function Header({ collapsed, onToggle, onNewResident }: HeaderPro
               : <PanelLeftClose className="h-5 w-5" />
             }
           </button>
+
+          {/* 모바일에서는 사이드바가 숨어 있으니 로고로 현재 앱을 알려준다 */}
+          <span className="text-base font-semibold text-white lg:hidden">gosiview</span>
         </div>
 
-        {/* Right actions */}
-        <div className="flex items-center gap-4">
+        {/* 오른쪽 액션 */}
+        <div className="flex items-center gap-1 sm:gap-3 lg:gap-4">
           <button
             type="button"
             onClick={onNewResident}
@@ -90,6 +105,16 @@ export default function Header({ collapsed, onToggle, onNewResident }: HeaderPro
           >
             <UserPlus className="h-4 w-4" />
             신규 입실자 등록
+          </button>
+
+          {/* 모바일 — 아이콘만 (위 버튼이 sm 미만에서 숨으므로) */}
+          <button
+            type="button"
+            onClick={onNewResident}
+            title="신규 입실자 등록"
+            className="flex items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2 text-indigo-300 transition-colors hover:bg-indigo-500/20 sm:hidden"
+          >
+            <UserPlus className="h-4 w-4" />
           </button>
 
           {/* 업데이트 소식 */}

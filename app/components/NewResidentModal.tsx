@@ -434,7 +434,7 @@ export default function NewResidentModal({ onClose, initialRoomId = '' }: NewRes
             {/* 입실 정보 */}
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">입실 정보</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1.5">입실일 <span className="text-rose-400">*</span></label>
                   <input

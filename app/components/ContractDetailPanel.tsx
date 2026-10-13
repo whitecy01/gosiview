@@ -3,13 +3,18 @@
 import { useState, useEffect } from 'react';
 import {
   X, Loader2, Banknote, Home, CheckCircle2, XCircle,
-  User, Calendar, CreditCard, Zap, Pencil, Plus,
+  User, Calendar, CreditCard, Zap, Pencil, Plus, Trash2,
 } from 'lucide-react';
 import {
   fetchRentPayments, fetchDeductions, fetchCashSuccessions,
   updateContract, upsertRentPayment,
+  insertDeduction, updateDeduction, deleteDeductionById,
   type DbContract, type DbRentPayment, type DbDepositDeduction, type DbCashSuccession,
 } from '@/app/lib/supabase-data';
+import {
+  DEFAULT_PAYMENT_METHODS, PAYMENT_METHODS_LS_KEY,
+  DEFAULT_DEDUCTION_REASONS, DEDUCTION_REASONS_LS_KEY, readOptions,
+} from './OptionsManagerModal';
 
 // ── 헬퍼 ──
 
@@ -47,7 +52,6 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   overdue: '연체',
 };
 
-const PAYMENT_METHODS = ['이체(자진발급)', '이체', '현금'];
 
 const IN = 'w-full rounded border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-1.5 text-xs text-white outline-none focus:border-indigo-500 [color-scheme:dark]';
 
@@ -114,6 +118,75 @@ function EditButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+/** 보증금 차감 추가·수정 폼 (추가 / 행별 수정에서 같이 쓴다) */
+function DeductionForm({
+  date, onDateChange, amount, onAmountChange, reason, onReasonChange,
+  custom, onCustomChange, reasons, error, saving, onCancel, onSave,
+}: {
+  date: string; onDateChange: (v: string) => void;
+  amount: string; onAmountChange: (v: string) => void;
+  reason: string; onReasonChange: (v: string) => void;
+  custom: boolean; onCustomChange: (v: boolean) => void;
+  reasons: string[];
+  error: string | null;
+  saving: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="space-y-2.5">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <FormField label="날짜">
+          <input type="date" value={date} onChange={(e) => onDateChange(e.target.value)} className={IN} />
+        </FormField>
+        <FormField label="금액 (원)">
+          <input type="number" step={1000} value={amount} onChange={(e) => onAmountChange(e.target.value)} placeholder="50000" className={IN} />
+        </FormField>
+        <FormField label="차감 이유">
+          {custom ? (
+            <div className="flex gap-1">
+              <input autoFocus value={reason} onChange={(e) => onReasonChange(e.target.value)} placeholder="직접 입력" className={IN} />
+              <button
+                type="button"
+                onClick={() => { onCustomChange(false); onReasonChange(reasons[0] ?? ''); }}
+                className="shrink-0 rounded border border-[#2A2A2A] px-1.5 text-gray-500 hover:text-white"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ) : (
+            <select
+              value={reason}
+              onChange={(e) => {
+                if (e.target.value === '__custom__') { onCustomChange(true); onReasonChange(''); }
+                else onReasonChange(e.target.value);
+              }}
+              className={IN}
+            >
+              {/* 저장된 이유가 옵션에서 삭제됐어도 선택 상태가 비지 않게 함께 노출한다. */}
+              {(reasons.includes(reason) ? reasons : [reason, ...reasons])
+                .filter(Boolean)
+                .map((r) => <option key={r} value={r}>{r}</option>)}
+              <option value="__custom__">+ 직접 입력</option>
+            </select>
+          )}
+        </FormField>
+      </div>
+      {error && <p className="rounded bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-300">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} disabled={saving} className="rounded border border-[#2A2A2A] px-3 py-1.5 text-[11px] text-gray-400 hover:text-white disabled:opacity-40">취소</button>
+        <button
+          onClick={onSave}
+          disabled={saving || !date || !amount || !reason.trim()}
+          className="rounded bg-rose-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-400 disabled:opacity-40"
+        >
+          {saving ? '저장 중…' : '저장'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Grid2({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">{children}</div>;
 }
@@ -160,6 +233,23 @@ export default function ContractDetailPanel({ contract: initialContract, onClose
   const [payMethod, setPayMethod] = useState('이체');
   const [payStatus, setPayStatus] = useState<'paid' | 'upcoming' | 'overdue'>('paid');
   const [paySaving, setPaySaving] = useState(false);
+  // 결제 방식은 옵션 관리(입실자 관리)에서 바꾸는 값이므로 고정 목록을 쓰지 않는다.
+  const [paymentMethods, setPaymentMethods] = useState<string[]>(DEFAULT_PAYMENT_METHODS);
+
+  // 보증금 차감 추가·수정
+  const [depEditId, setDepEditId] = useState<string | null>(null); // 'new' = 추가 폼
+  const [depDate, setDepDate] = useState('');
+  const [depAmount, setDepAmount] = useState('');
+  const [depReason, setDepReason] = useState('');
+  const [depReasonCustom, setDepReasonCustom] = useState(false);
+  const [depSaving, setDepSaving] = useState(false);
+  const [depError, setDepError] = useState<string | null>(null);
+  const [deductionReasons, setDeductionReasons] = useState<string[]>(DEFAULT_DEDUCTION_REASONS);
+
+  useEffect(() => {
+    setPaymentMethods(readOptions(PAYMENT_METHODS_LS_KEY, DEFAULT_PAYMENT_METHODS));
+    setDeductionReasons(readOptions(DEDUCTION_REASONS_LS_KEY, DEFAULT_DEDUCTION_REASONS));
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -251,6 +341,93 @@ export default function ContractDetailPanel({ contract: initialContract, onClose
       setPayEditMonth(null);
     } finally {
       setPaySaving(false);
+    }
+  }
+
+  // ── 보증금 차감 ──
+  // deposit_total 은 '잔여 보증금'이므로 차감액이 변하면 그만큼 되돌려줘야 한다.
+
+  function startDepAdd() {
+    setDepEditId('new');
+    setDepDate(new Date().toISOString().slice(0, 10));
+    setDepAmount('');
+    setDepReason(deductionReasons[0] ?? '');
+    setDepReasonCustom(false);
+    setDepError(null);
+  }
+
+  function startDepEdit(d: DbDepositDeduction) {
+    setDepEditId(d.id);
+    setDepDate(d.date);
+    setDepAmount(String(d.amount));
+    setDepReason(d.reason);
+    setDepReasonCustom(false);
+    setDepError(null);
+  }
+
+  function closeDepForm() {
+    setDepEditId(null);
+    setDepReasonCustom(false);
+    setDepError(null);
+  }
+
+  /** 잔여 보증금을 delta 만큼 더한다 (차감 추가 시 음수) */
+  async function shiftDepositTotal(delta: number) {
+    if (delta === 0) return;
+    const updated = await updateContract(contract.id, {
+      deposit_total: (contract.deposit_total ?? 0) + delta,
+    });
+    applyUpdate(updated);
+  }
+
+  async function saveDeduction() {
+    const reason = depReason.trim();
+    const amount = Number(depAmount);
+    if (!depDate || !depAmount || !reason) {
+      setDepError('날짜·금액·이유를 모두 입력해주세요.');
+      return;
+    }
+    setDepSaving(true);
+    setDepError(null);
+    try {
+      if (depEditId === 'new') {
+        const saved = await insertDeduction({ contract_id: contract.id, date: depDate, amount, reason });
+        setDeductions((prev) => [...prev, saved].sort((a, b) => a.date.localeCompare(b.date)));
+        await shiftDepositTotal(-amount);
+      } else {
+        const before = deductions.find((d) => d.id === depEditId);
+        if (!before) return;
+        const saved = await updateDeduction(before.id, { date: depDate, amount, reason });
+        setDeductions((prev) => prev.map((d) => (d.id === saved.id ? saved : d)).sort((a, b) => a.date.localeCompare(b.date)));
+        await shiftDepositTotal(before.amount - amount);
+      }
+      // 직접 입력한 이유는 옵션 목록에도 저장
+      if (!deductionReasons.includes(reason)) {
+        const next = [...deductionReasons, reason];
+        setDeductionReasons(next);
+        try { localStorage.setItem(DEDUCTION_REASONS_LS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      }
+      closeDepForm();
+    } catch (e) {
+      setDepError(e instanceof Error ? e.message : '저장에 실패했습니다.');
+    } finally {
+      setDepSaving(false);
+    }
+  }
+
+  async function removeDeduction(d: DbDepositDeduction) {
+    if (!window.confirm(`${d.reason} ${fmtMoney(d.amount)} 차감을 삭제할까요?`)) return;
+    setDepSaving(true);
+    setDepError(null);
+    try {
+      await deleteDeductionById(d.id);
+      setDeductions((prev) => prev.filter((x) => x.id !== d.id));
+      await shiftDepositTotal(d.amount);
+      if (depEditId === d.id) closeDepForm();
+    } catch (e) {
+      setDepError(e instanceof Error ? e.message : '삭제에 실패했습니다.');
+    } finally {
+      setDepSaving(false);
     }
   }
 
@@ -544,7 +721,9 @@ export default function ContractDetailPanel({ contract: initialContract, onClose
                               </FormField>
                               <FormField label="결제 방식">
                                 <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} disabled={payStatus !== 'paid'} className={`${IN} disabled:opacity-40`}>
-                                  {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                                  {(paymentMethods.includes(payMethod) ? paymentMethods : [payMethod, ...paymentMethods])
+                                    .filter(Boolean)
+                                    .map((m) => <option key={m} value={m}>{m}</option>)}
                                 </select>
                               </FormField>
                             </div>
@@ -570,17 +749,80 @@ export default function ContractDetailPanel({ contract: initialContract, onClose
             </Section>
 
             {/* 보증금 차감 이력 */}
-            <Section icon={<XCircle className="h-3.5 w-3.5 text-rose-400" />} title={`보증금 차감 이력 (${deductions.length}건)`}>
+            <Section
+              icon={<XCircle className="h-3.5 w-3.5 text-rose-400" />}
+              title={`보증금 차감 이력 (${deductions.length}건)`}
+              action={
+                depEditId !== 'new' ? (
+                  <button
+                    onClick={startDepAdd}
+                    className="flex items-center gap-1 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-400 hover:bg-rose-500/20"
+                  >
+                    <Plus className="h-3 w-3" />차감 추가
+                  </button>
+                ) : undefined
+              }
+            >
+              {depEditId === 'new' && (
+                <div className="mb-3 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3">
+                  <DeductionForm
+                    date={depDate} onDateChange={setDepDate}
+                    amount={depAmount} onAmountChange={setDepAmount}
+                    reason={depReason} onReasonChange={setDepReason}
+                    custom={depReasonCustom} onCustomChange={setDepReasonCustom}
+                    reasons={deductionReasons}
+                    error={depError}
+                    saving={depSaving}
+                    onCancel={closeDepForm}
+                    onSave={saveDeduction}
+                  />
+                </div>
+              )}
+
               {deductions.length > 0 ? (
                 <>
                   <div className="divide-y divide-[#1E1E1E]">
                     {deductions.map((d) => (
-                      <div key={d.id} className="flex items-center justify-between py-2.5 px-1">
-                        <div>
-                          <p className="text-sm text-white">{d.reason}</p>
-                          <p className="text-xs text-gray-500">{fmtDate(d.date)}</p>
+                      <div key={d.id} className="px-1 py-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-white">{d.reason}</p>
+                            <p className="text-xs text-gray-500">{fmtDate(d.date)}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <p className="text-sm font-semibold text-rose-400">-{fmtMoney(d.amount)}</p>
+                            <button
+                              onClick={() => (depEditId === d.id ? closeDepForm() : startDepEdit(d))}
+                              className="flex h-6 w-6 items-center justify-center rounded border border-[#2A2A2A] text-gray-500 hover:text-white"
+                              title="수정"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => removeDeduction(d)}
+                              disabled={depSaving}
+                              className="flex h-6 w-6 items-center justify-center rounded border border-[#2A2A2A] text-gray-500 hover:border-rose-500/40 hover:text-rose-400 disabled:opacity-40"
+                              title="삭제"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-sm font-semibold text-rose-400">-{fmtMoney(d.amount)}</p>
+                        {depEditId === d.id && (
+                          <div className="mt-2.5 rounded-lg border border-[#2A2A2A] bg-[#0E0E0E] p-3">
+                            <DeductionForm
+                              date={depDate} onDateChange={setDepDate}
+                              amount={depAmount} onAmountChange={setDepAmount}
+                              reason={depReason} onReasonChange={setDepReason}
+                              custom={depReasonCustom} onCustomChange={setDepReasonCustom}
+                              reasons={deductionReasons}
+                              error={depError}
+                              saving={depSaving}
+                              onCancel={closeDepForm}
+                              onSave={saveDeduction}
+                            />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -589,9 +831,9 @@ export default function ContractDetailPanel({ contract: initialContract, onClose
                     <span className="text-sm font-bold text-rose-400">-{fmtMoney(totalDeducted)}</span>
                   </div>
                 </>
-              ) : (
+              ) : depEditId !== 'new' ? (
                 <p className="py-3 text-center text-xs text-gray-500">차감 이력이 없습니다.</p>
-              )}
+              ) : null}
             </Section>
 
             {/* 현금 승계 */}

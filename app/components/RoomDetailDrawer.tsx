@@ -33,12 +33,11 @@ import {
   type DbDepositDeduction,
 } from "@/app/lib/supabase-data";
 import { fromDbCash, toDbCashInput } from "@/app/lib/cash-succession";
-import { DEFAULT_PURPOSES, DEFAULT_AGENCIES, PURPOSES_LS_KEY, AGENCIES_LS_KEY } from "@/app/components/OptionsManagerModal";
+import { DEFAULT_PURPOSES, DEFAULT_AGENCIES, DEFAULT_PAYMENT_METHODS, PURPOSES_LS_KEY, AGENCIES_LS_KEY, PAYMENT_METHODS_LS_KEY, readOptions } from "@/app/components/OptionsManagerModal";
 
 // ────────────── 상수 ──────────────
 
 const DEDUCTION_REASONS: DepositDeductionReason[] = ["차임", "미납", "공과금정산", "도배", "타일", "시설손상"];
-const PAYMENT_METHODS: RentPaymentMethod[] = ["이체(자진발급)", "이체", "현금"];
 
 const REASON_COLOR: Record<string, string> = {
   차임: "bg-violet-500/10 text-violet-400 border-violet-500/20",
@@ -334,6 +333,8 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
   const [payDate, setPayDate] = useState("");
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<RentPaymentMethod>("이체");
+  // 결제 방식은 옵션 관리(입실자 관리)에서 바꾸는 값이므로 고정 목록을 쓰지 않는다.
+  const [paymentMethods, setPaymentMethods] = useState<string[]>(DEFAULT_PAYMENT_METHODS);
 
   useEffect(() => {
     try {
@@ -342,6 +343,7 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
       const a = localStorage.getItem(AGENCIES_LS_KEY);
       if (a) setAllAgencies(JSON.parse(a));
     } catch { /* ignore */ }
+    setPaymentMethods(readOptions(PAYMENT_METHODS_LS_KEY, DEFAULT_PAYMENT_METHODS));
   }, []);
 
   const isOpen = !!room;
@@ -985,7 +987,7 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                       </div>
                       {payingMonthIdx === i && (
                         <div className="border-t border-[#2A2A2A] bg-[#0E0E0E] px-5 pb-4 pt-3 space-y-3">
-                          <div className="grid grid-cols-3 gap-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                             <div>
                               <label className="mb-1.5 block text-xs text-gray-400">납부 날짜</label>
                               <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className={INPUT} />
@@ -996,8 +998,10 @@ export default function RoomDetailDrawer({ room, onClose }: Props) {
                             </div>
                             <div>
                               <label className="mb-1.5 block text-xs text-gray-400">결제 방식</label>
-                              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as RentPaymentMethod)} className={INPUT}>
-                                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className={INPUT}>
+                                {(paymentMethods.includes(payMethod) ? paymentMethods : [payMethod, ...paymentMethods])
+                                  .filter(Boolean)
+                                  .map((m) => <option key={m} value={m}>{m}</option>)}
                               </select>
                             </div>
                           </div>

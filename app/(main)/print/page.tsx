@@ -39,17 +39,41 @@ function getFirstDayOfWeek(year: number, month: number) {
 function fmtMoney(n: number | undefined) {
   return `₩${(n ?? 0).toLocaleString("ko-KR")}`;
 }
+/** "2026-09-02" → "2026년 9월 2일" */
+function fmtKoreanDate(d: string | null | undefined) {
+  if (!d) return "";
+  const [y, m, dd] = d.slice(0, 10).split("-");
+  if (!y || !m || !dd) return d;
+  return `${y}년 ${parseInt(m)}월 ${parseInt(dd)}일`;
+}
+
+/** 한 장에 들어갈 현금 승계 건수 */
+const CASH_ITEMS_PER_PAGE = 4;
+
+/** 현금 승계 안내 문구 — 건별로 함께 출력한다. */
+const CASH_NOTICE = `이번달 청구요금은 현금 승계만 가능하여 호림에서 직접 납부하고 있습니다.<br/>
+  다음달 부터는 임차인에게서 직접 납부하시면 됩니다.(종이 청구서 배부 예정)<br/>
+  실 사용 금액(형광펜 부분)만 저희 계좌로 입금 부탁드립니다. 감사합니다.`;
 
 /** 방 번호를 포함한 현금 승계 항목 */
 type CashItem = { id: string; roomId: string; name: string; rec: CashSuccessionRecord };
 
-function buildCashTableHtml(item: CashItem): string {
+/**
+ * 한 건의 현금 승계를 제목 + 안내 문구 + 표로 만든다.
+ * 문구는 건마다 넣되, 종이를 아끼기 위해 한 장에 CASH_ITEMS_PER_PAGE건씩 담는다.
+ */
+function buildCashTableHtml(item: CashItem, index: number, fallbackTitle: string): string {
   const { roomId, rec } = item;
   const td = 'style="border:1px solid #ccc;padding:6px 8px;"';
   const tdHl = 'style="border:1px solid #ccc;padding:6px 8px;background:#fffde7;"';
   const tdHlBold = 'style="border:1px solid #ccc;padding:6px 8px;background:#fffde7;font-weight:bold;"';
+  const heading = fmtKoreanDate(rec.billingEnd) || fallbackTitle;
+  // 한 장을 다 채우면 다음 장으로 넘긴다. 한 건이 두 장에 걸쳐 쪼개지지는 않게 한다.
+  const pageBreak = index > 0 && index % CASH_ITEMS_PER_PAGE === 0 ? "page-break-before:always;" : "";
   return `
-    <div style="margin-bottom:24px;">
+    <div style="margin-bottom:14px;page-break-inside:avoid;${pageBreak}">
+      <h2 style="font-size:14px;font-weight:bold;margin:0 0 3px;">전기 현금 승계 — ${heading}</h2>
+      <p style="margin:0 0 6px;font-size:10px;color:#555;line-height:1.45;">${CASH_NOTICE}</p>
       <table style="width:100%;border-collapse:collapse;font-size:11px;">
         <thead>
           <tr style="background:#f5f5f5;">
@@ -85,12 +109,9 @@ function printItems(items: CashItem[], title: string) {
   const win = window.open("", "_blank");
   if (!win) return;
   win.document.head.innerHTML = `<meta charset="utf-8"><title>${title}</title><style>${PRINT_STYLE}</style>`;
-  win.document.body.innerHTML = `
-    <h2>전기 현금 승계 — ${title}</h2>
-    <p>이번달 청구요금은 현금 승계만 가능하여 호림에서 직접 납부하고 있습니다.<br/>
-    다음달 부터는 임차인에게서 직접 납부하시면 됩니다.(종이 청구서 배부 예정)<br/>
-    실 사용 금액(형광펜 부분)만 저희 계좌로 입금 부탁드립니다. 감사합니다.</p>
-  ` + items.map(buildCashTableHtml).join("");
+  win.document.body.innerHTML = items
+    .map((item, i) => buildCashTableHtml(item, i, title))
+    .join("");
   win.focus();
   win.print();
 }

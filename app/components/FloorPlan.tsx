@@ -61,8 +61,8 @@ export default function FloorPlan() {
   return (
     <div>
       {/* Floor Plan Area */}
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111] p-3 shadow-sm sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-6">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-white">{currentFloor}층 도면</h2>
             {currentRealPlan && (
@@ -103,16 +103,17 @@ export default function FloorPlan() {
           </div>
         </div>
 
-        <div className="flex items-start gap-6">
-          {/* 도면 */}
-          <div className="flex min-w-0 flex-1 items-center justify-center">
-            <div className="w-full max-w-[1100px]">
+        {/* 모바일에서는 도면 옆에 목록을 두면 도면이 눌리므로 아래로 쌓는다. */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+          {/* 도면 — 폰에서는 좁아서 가로로 스크롤해서 본다 */}
+          <div className="-mx-2 flex min-w-0 flex-1 items-center justify-center overflow-x-auto px-2 lg:mx-0 lg:px-0">
+            <div className="w-full min-w-[520px] max-w-[1100px] lg:min-w-0">
               {renderFloor()}
             </div>
           </div>
 
           {/* 방 목록 */}
-          <aside className="w-64 shrink-0 overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#0D0D0D]">
+          <aside className="w-full shrink-0 overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#0D0D0D] lg:w-64">
             <div className="flex items-center justify-between border-b border-[#2A2A2A] bg-[#111] px-3 py-2.5">
               <span className="text-xs font-semibold text-gray-300">{currentFloor}층 입실 현황</span>
               <span className="text-[10px] text-gray-600">{rooms.length}개</span>
