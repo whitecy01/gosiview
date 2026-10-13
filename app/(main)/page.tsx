@@ -70,6 +70,11 @@ function dotClass(color: string) {
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
+/** 모바일 달력 칸에서 그 날 무엇이 있는지 알리는 점 */
+function DayDot({ color }: { color: string }) {
+  return <span className={`h-1.5 w-1.5 rounded-full ${color}`} />;
+}
+
 // ──────────── 헬퍼 ────────────
 
 function toDateKey(year: number, month: number, day: number) {
@@ -1198,11 +1203,11 @@ export default function TodoListPage() {
 
   return (
     <main className="w-full space-y-6">
-      <div className="rounded-2xl border border-[#2A2A2A] bg-[#111] p-6 shadow-sm">
+      <div className="rounded-2xl border border-[#2A2A2A] bg-[#111] p-3 shadow-sm sm:p-6">
         {/* Month navigation + filter */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
           {/* 필터 버튼 */}
-          <div className="flex items-center gap-1 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
+          <div className="flex items-center gap-1 self-start overflow-x-auto rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] p-1">
             {([
               { key: 'all',         label: '전체' },
               { key: 'todo',        label: '할일' },
@@ -1213,7 +1218,7 @@ export default function TodoListPage() {
               <button
                 key={key}
                 onClick={() => setViewFilter(key)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`shrink-0 rounded-md px-2 py-1.5 text-xs font-medium transition-colors sm:px-3 ${
                   viewFilter === key
                     ? key === 'rent'
                       ? 'bg-amber-500/20 text-amber-300'
@@ -1231,7 +1236,7 @@ export default function TodoListPage() {
           </div>
 
           {/* 오른쪽: 공용 공간 + 반복 설정 + 월 이동 */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               onClick={() => setShowCommonSpaceModal(true)}
               className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#0D0D0D] px-3 py-1.5 text-xs font-medium text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors"
@@ -1246,12 +1251,13 @@ export default function TodoListPage() {
               <Repeat size={13} />
               반복 설정
             </button>
-            <div className="flex items-center gap-3">
-              <button onClick={prevMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+            {/* 모바일에서는 한 줄을 통째로 써서 양쪽 끝 화살표를 누르기 쉽게 한다. */}
+            <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
+              <button onClick={prevMonth} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors sm:h-8 sm:w-8">
                 <ChevronLeft size={18} />
               </button>
-              <h2 className="text-lg font-bold text-white">{year}년 {month}월</h2>
-              <button onClick={nextMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors">
+              <h2 className="text-base font-bold text-white sm:text-lg">{year}년 {month}월</h2>
+              <button onClick={nextMonth} className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-[#1A1A1A] hover:text-white transition-colors sm:h-8 sm:w-8">
                 <ChevronRight size={18} />
               </button>
             </div>
@@ -1290,14 +1296,25 @@ export default function TodoListPage() {
               <button
                 key={idx}
                 onClick={() => setSelectedDate(dateKey)}
-                className="relative flex min-h-[160px] flex-col rounded-xl border border-[#1E1E1E] p-2 text-left transition-colors hover:border-indigo-500/40 hover:bg-[#161616]"
+                className="relative flex min-h-[68px] flex-col rounded-lg border border-[#1E1E1E] p-1 text-left transition-colors hover:border-indigo-500/40 hover:bg-[#161616] sm:min-h-[160px] sm:rounded-xl sm:p-2"
                 style={{ backgroundColor: isToday ? '#1a1a2e' : undefined, borderColor: isToday ? '#4f46e5' : undefined }}
               >
-                <span className="mb-1.5 text-sm font-semibold leading-none"
+                <span className="mb-1 text-xs font-semibold leading-none sm:mb-1.5 sm:text-sm"
                   style={{ color: isToday ? '#818cf8' : isSun ? '#f87171' : isSat ? '#60a5fa' : '#d1d5db' }}>
                   {day}
                 </span>
-                <div className="flex flex-col gap-0.5 flex-1">
+
+                {/* 모바일 — 칸이 좁아 글자가 뭉개지므로 색 점으로만 알린다. 자세한 내용은 날짜를 눌러서 본다. */}
+                <div className="flex flex-wrap gap-1 sm:hidden">
+                  {show('todo') && dayTodos.length + dayRecurring.length > 0 && <DayDot color="bg-indigo-400" />}
+                  {show('rent') && dayRentReminders.length > 0 && (
+                    <DayDot color={dayRentReminders.some((r) => !r.paid) ? 'bg-rose-400' : 'bg-emerald-400'} />
+                  )}
+                  {show('expiry') && dayExpiryReminders.length > 0 && <DayDot color="bg-rose-400" />}
+                  {show('maintenance') && dayMaintenance.length > 0 && <DayDot color="bg-violet-400" />}
+                </div>
+
+                <div className="hidden flex-1 flex-col gap-0.5 sm:flex">
                   {show('todo') && (dayTodos.length > 0 || dayRecurring.length > 0) && (
                     <div className="flex flex-col gap-1">
                       {viewFilter === 'all' && <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">할일</span>}

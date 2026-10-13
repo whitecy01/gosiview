@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { X, Sparkles, ArrowRight } from 'lucide-react';
 import { CHANGELOG, type Change, type ChangeType } from '@/app/lib/changelog';
 
 const TYPE_STYLE: Record<ChangeType, string> = {
@@ -18,11 +19,15 @@ function fmtDate(d: string) {
 
 /** 페이지 순서를 유지하며 변경 항목을 묶습니다. */
 function groupByPage(changes: Change[]) {
-  const groups: { page: string; items: Change[] }[] = [];
+  const groups: { page: string; href?: string; items: Change[] }[] = [];
   for (const c of changes) {
     const last = groups.find((g) => g.page === c.page);
-    if (last) last.items.push(c);
-    else groups.push({ page: c.page, items: [c] });
+    if (last) {
+      last.items.push(c);
+      last.href ??= c.href;
+    } else {
+      groups.push({ page: c.page, href: c.href, items: [c] });
+    }
   }
   return groups;
 }
@@ -30,7 +35,14 @@ function groupByPage(changes: Change[]) {
 export default function ChangelogModal({ onClose }: { onClose: () => void }) {
   // 헤더의 backdrop-blur가 fixed 요소의 기준이 되므로 body에 직접 렌더링합니다.
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
   useEffect(() => setMounted(true), []);
+
+  /** 해당 화면으로 이동하면서 모달을 닫습니다. */
+  function goTo(href: string) {
+    onClose();
+    router.push(href);
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -80,9 +92,20 @@ export default function ChangelogModal({ onClose }: { onClose: () => void }) {
                     {groupByPage(entry.changes).map((group) => (
                       <div key={group.page}>
                         <div className="mb-2 flex items-center gap-2">
-                          <span className="rounded-md bg-[#1F1F1F] px-2 py-1 text-xs font-semibold text-gray-200">
-                            {group.page}
-                          </span>
+                          {group.href ? (
+                            <button
+                              onClick={() => goTo(group.href!)}
+                              title={`${group.page} 화면으로 이동`}
+                              className="group/link flex items-center gap-1.5 rounded-md bg-[#1F1F1F] px-2 py-1 text-xs font-semibold text-gray-200 transition-colors hover:bg-indigo-500/20 hover:text-indigo-300"
+                            >
+                              {group.page}
+                              <ArrowRight className="h-3 w-3 text-gray-500 transition-colors group-hover/link:text-indigo-300" />
+                            </button>
+                          ) : (
+                            <span className="rounded-md bg-[#1F1F1F] px-2 py-1 text-xs font-semibold text-gray-200">
+                              {group.page}
+                            </span>
+                          )}
                           <div className="h-px flex-1 bg-[#2A2A2A]" />
                         </div>
                         <ul className="space-y-2.5 pl-1">
